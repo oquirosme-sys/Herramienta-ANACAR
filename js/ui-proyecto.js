@@ -39,6 +39,10 @@
 
   App.views.proyecto = function (view, R) {
     const p = Store.project, L = Store.catalog.listas;
+    // al abrir la herramienta el proyecto está en blanco: se ofrecen los guardados
+    if (!p.nombre && !p.numero && !p.tableros.length && Store.listaProyectos().length) {
+      view.appendChild(UI.card('Proyectos guardados en este navegador', App.proyectosGuardados(true), h('small', { class: 'muted' }, 'Abra uno para continuar o empiece este proyecto en blanco')));
+    }
     view.appendChild(h('div', { class: 'page-h' }, h('h2', null, 'Proyecto'), h('p', { class: 'muted' }, 'Indique los datos del proyecto, cuántos tableros tiene y de cuál se alimenta cada uno. Las caídas de voltaje y el cortocircuito se calculan en cascada desde la acometida.')));
 
     view.appendChild(h('div', { class: 'cols' },

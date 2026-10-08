@@ -53,7 +53,8 @@
       const box = U.clear(document.getElementById('actions'));
       const st = h('span', { class: 'save-status' + (Store.status === 'error' ? ' error' : '') }, Store.status === 'saving' ? 'Guardando…' : Store.status === 'error' ? 'No se pudo guardar en el navegador' : 'Guardado en este navegador');
       const menu = h('details', { class: 'menu' }, h('summary', { class: 'btn' }, 'Archivo ▾'), h('div', { class: 'menu-b' },
-        UI.btn('Nuevo proyecto', async () => { if (await UI.confirm('¿Empezar un proyecto nuevo? Exporte antes el actual si lo necesita.', 'Nuevo proyecto')) { Store.newProject(); App.go('proyecto'); App.render(); } }, 'ghost'),
+        UI.btn('Nuevo proyecto (en blanco)', () => { Store.newProject(); App.go('proyecto'); App.render(); UI.toast('Proyecto nuevo. El anterior quedó en Proyectos guardados.', 'ok'); }, 'ghost'),
+        UI.btn('Proyectos guardados…', () => App.proyectosGuardados(), 'ghost'),
         UI.btn('Abrir proyecto (.json)…', async () => { const f = await UI.pickFile('.json,application/json'); if (!f) return; try { Store.importProject(await UI.readText(f)); App.render(); UI.toast('Proyecto abierto', 'ok'); } catch (e) { UI.alert(e.message); } }, 'ghost'),
         UI.btn('Guardar proyecto (.json)', () => U.download(App.fileBase() + '.json', Store.exportProject(), 'application/json'), 'ghost'),
         h('hr'),
@@ -65,6 +66,19 @@
         ? UI.btn('Administrador ✓', async () => { if (await UI.confirm('¿Salir del modo administrador?', 'Salir', false)) { Auth.logout(); } }, 'admin-on', 'Salir del modo administrador')
         : UI.btn('Administrador', () => App.login(), 'ghost', 'Entrar como administrador para editar catálogos');
       box.append(st, menu, adm);
+    },
+    /** Lista de proyectos guardados en este navegador (abrir o eliminar). */
+    proyectosGuardados(contenedor) {
+      const lista = Store.listaProyectos(); let cerrar = null;
+      const tabla = lista.length ? h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Proyecto', 'N.º', 'Tableros', 'Modificado', ''].map(x => h('th', null, x)))),
+        h('tbody', null, lista.map(p => h('tr', { class: p.id === Store.project.id ? 'row-link' : '' }, h('td', null, h('b', null, p.nombre || '(sin nombre)')), h('td', null, p.numero || ''), h('td', { class: 'r' }, p.tableros),
+          h('td', null, String(p.modificado).replace('T', ' ').slice(0, 16)),
+          h('td', { class: 'acc' }, UI.btn(p.id === Store.project.id ? 'Abierto' : 'Abrir', () => { Store.abrirProyecto(p.id); App.go('proyecto'); App.render(); if (cerrar) cerrar(); }, 'small'),
+            UI.iconBtn('🗑', 'Eliminar', async () => { if (await UI.confirm('¿Eliminar el proyecto "' + (p.nombre || 'sin nombre') + '" de este navegador? Si no lo exportó a .json se pierde.', 'Eliminar')) { Store.eliminarProyecto(p.id); if (cerrar) cerrar(); App.render(); if (!contenedor) App.proyectosGuardados(); } }, 'danger')))))) 
+        : h('p', { class: 'muted' }, 'No hay proyectos guardados en este navegador.');
+      if (contenedor) return tabla;
+      cerrar = UI.modal('Proyectos guardados en este navegador', tabla, [{ label: 'Cerrar' }], { wide: true });
+      return null;
     },
     fileBase() { const p = Store.project; return ('ANACAR ' + (p.numero || '') + ' ' + (p.nombre || 'proyecto')).trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' '); },
     login() {

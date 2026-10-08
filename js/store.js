@@ -6,7 +6,9 @@
      Proyecto: datos generales + tableros[] → cada tablero con su alimentador (alim), circuitos[] y padreId (de quién se alimenta). */
 (function (g) {
   'use strict';
-  const K_PROJECT = 'anacar.proyecto.v1';
+  const K_PROJECT = 'anacar.proyecto.v1';      // versión anterior (un solo proyecto): se pasa a la lista
+  const K_PROYECTOS = 'anacar.proyectos.v1';    // { id: proyecto } guardados en este navegador
+  const K_ACTUAL = 'anacar.actual.v1';          // proyecto abierto en esta pestaña (sessionStorage)
   const K_CATALOG = 'anacar.catalogo.v1';
   const K_ADMINPW = 'anacar.adminhash.v1';
 
@@ -21,13 +23,36 @@
     onChange(fn) { listeners.push(fn); },
     _emit() { listeners.forEach(f => f(Store.status)); },
 
+    /** Al abrir la herramienta se empieza con un proyecto limpio; al recargar la pestaña se sigue con el que estaba abierto.
+        Los proyectos con contenido quedan en la lista de proyectos guardados de este navegador. */
     load() {
-      let p = null, c = null;
-      try { p = JSON.parse(localStorage.getItem(K_PROJECT)); } catch (e) { /* ignora */ }
+      let c = null;
       try { c = JSON.parse(localStorage.getItem(K_CATALOG)); } catch (e) { /* ignora */ }
       Store.catalog = c && c.detallesCarga && c.breakers ? c : Store.seedCatalog();
-      Store.project = p && p.tableros ? p : Store.emptyProject();
+      const lista = Store.proyectos();
+      try { // proyecto único de la versión anterior → lista
+        const viejo = JSON.parse(localStorage.getItem(K_PROJECT));
+        if (viejo && viejo.tableros) { if (!lista[viejo.id]) { lista[viejo.id] = viejo; localStorage.setItem(K_PROYECTOS, JSON.stringify(lista)); } localStorage.removeItem(K_PROJECT); }
+      } catch (e) { /* ignora */ }
+      let actual = null; try { actual = sessionStorage.getItem(K_ACTUAL); } catch (e) { /* ignora */ }
+      Store.project = actual && lista[actual] ? lista[actual] : Store.emptyProject();
       Store.migrate();
+    },
+    proyectos() { try { return JSON.parse(localStorage.getItem(K_PROYECTOS)) || {}; } catch (e) { return {}; } },
+    /** Lista para mostrar: los guardados, del más reciente al más antiguo. */
+    listaProyectos() {
+      return Object.values(Store.proyectos()).map(p => ({ id: p.id, nombre: p.nombre, numero: p.numero, tableros: (p.tableros || []).length, modificado: p.modificado || p.fecha || '' }))
+        .sort((a, b) => String(b.modificado).localeCompare(String(a.modificado)));
+    },
+    abrirProyecto(id) {
+      const p = Store.proyectos()[id]; if (!p) return false;
+      Store.flush(); Store.project = p; Store.migrate();
+      try { sessionStorage.setItem(K_ACTUAL, p.id); } catch (e) { /* ignora */ }
+      return true;
+    },
+    eliminarProyecto(id) {
+      const l = Store.proyectos(); delete l[id]; localStorage.setItem(K_PROYECTOS, JSON.stringify(l));
+      if (Store.project.id === id) Store.newProject();
     },
     seedCatalog() { const s = U.clone(window.SEED); s.marcas = Store.marcasDe(s); return s; },
     marcasDe(c) { return Array.from(new Set([].concat(c.tablerosCat.map(t => t.fabricante), c.breakers.map(b => b.marca), c.supresores.map(b => b.marca)).filter(Boolean))).sort(); },
@@ -205,7 +230,13 @@
     flush() {
       clearTimeout(saveTimer);
       try {
-        localStorage.setItem(K_PROJECT, JSON.stringify(Store.project));
+        const p = Store.project;
+        // un proyecto sin datos no se guarda en la lista (así la herramienta siempre arranca limpia)
+        if (p.nombre || p.numero || (p.tableros || []).length || (p.previstas || []).length) {
+          p.modificado = new Date().toISOString();
+          const l = Store.proyectos(); l[p.id] = p; localStorage.setItem(K_PROYECTOS, JSON.stringify(l));
+          try { sessionStorage.setItem(K_ACTUAL, p.id); } catch (e) { /* ignora */ }
+        }
         localStorage.setItem(K_CATALOG, JSON.stringify(Store.catalog));
         Store.status = 'ok';
       } catch (e) { Store.status = 'error'; }
@@ -217,7 +248,7 @@
       if (!p || !Array.isArray(p.tableros)) throw new Error('El archivo no es un proyecto de esta herramienta.');
       Store.project = p; Store.migrate(); Store.save();
     },
-    newProject() { Store.project = Store.emptyProject(); Store.save(); },
+    newProject() { Store.flush(); Store.project = Store.emptyProject(); try { sessionStorage.removeItem(K_ACTUAL); } catch (e) { /* ignora */ } Store._emit(); },
     exportCatalog() { return JSON.stringify({ tipo: 'anacar-catalogo', version: 1, catalogo: Store.catalog }, null, 1); },
     importCatalog(text) {
       const o = JSON.parse(text), c = o && (o.catalogo || o);

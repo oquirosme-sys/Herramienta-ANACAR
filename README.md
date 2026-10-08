@@ -26,6 +26,9 @@ Las hojas informativas u ocultas (`INSTRUCCIONES`, `CÓDIGO VBA`, `FACTORES POR 
 - El **cortocircuito** baja por cada alimentador (método punto a punto con las constantes C de la hoja DATOS). En el tablero principal se indica el Icc o se elige el transformador.
 - Si el derivado tiene otro voltaje (transformador de por medio), la caída y el Icc se reinician y se avisa.
 
+## Novedades 2026.1-web.5
+- **Arranca limpio**: cada vez que se abre la herramienta empieza con un proyecto en blanco. Los proyectos con datos quedan en *Archivo ▸ Proyectos guardados…* (y en la pantalla de inicio) para abrirlos o eliminarlos; al recargar la página se sigue con el proyecto abierto.
+
 ## Novedades 2026.1-web.4
 - **Excel con nombres definidos** para vincular en Revit: `TABLERO_<nombre>` en cada hoja de tablero (rango B1:AJ…, como la macro AsignarNombresTableros) y `TABLA_RESUMEN__TABLEROS_ELÉCTRICOS`, `DATOS_DEL_TABLERO`, `DATOS_DEL_SUPRESOR`, `DATOS_INTERRUPTOR_PRINCIPAL` en la tabla resumen.
 - **Porcentajes**: el aumento de calibre (0 % = sin aumento) y el factor de protección (125 %) se escriben en %.
@@ -73,7 +76,7 @@ Contraseña inicial: `sinergia-admin` (cámbiela en *Administración ▸ Segurid
 En una página estática esto **solo oculta** la edición; la restricción real se implementa en el paso 2 con Supabase Auth + Row Level Security.
 
 ## Datos (paso 1)
-Proyecto y catálogo se guardan en `localStorage` del navegador. Use *Archivo ▸ Guardar proyecto (.json)* y *Administración ▸ Exportar catálogo* para respaldar o compartir. El catálogo inicial sale del Excel (`js/data/seed.js`, generado automáticamente).
+Los proyectos (varios) y el catálogo se guardan en `localStorage` del navegador; el proyecto abierto en cada pestaña se recuerda en `sessionStorage`. Use *Archivo ▸ Guardar proyecto (.json)* y *Administración ▸ Exportar catálogo* para respaldar o compartir. El catálogo inicial sale del Excel (`js/data/seed.js`, generado automáticamente).
 
 ## Paso 2 (pendiente): Supabase
 Todo el acceso a datos pasa por `js/store.js`; ahí se reemplaza `localStorage` por Supabase. El modelo ya está separado en:
