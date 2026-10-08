@@ -9,6 +9,7 @@
   let NIVEL = 330;
   let conTabla = false;
   const anchoDatos = () => (conTabla ? 330 : 250);
+  const fasesPolos = r => (r.fases === 3 ? 3 : 2);
   const colorV = V => (V >= 440 ? '#c0392b' : V >= 230 ? '#1b7f4b' : '#0b5cab');
 
   /* ---------- transformador ---------- */
@@ -61,7 +62,7 @@
       const A = r.alim, tr = r.trafo; let y = y0;
       D.linea(x, y0, x, y1, 'u-lin', 'ALIMENTADOR');
       const bkA = circ ? circ.AF : A.AF139, b = circ ? circ.breaker : r.bkMain;
-      y += circ ? (conTabla ? 262 : 96) : 26;
+      y += circ ? (conTabla ? 262 : 96) + (r.padre && r.padre.alterna ? 40 : 0) : 26;
       interruptor(x, y, (bkA || '–') + ' A ' + (b ? (b.polos || '') + 'P ' + (b.unidad === 'STD' ? 'TM' : b.unidad || '') + ' · ' + (b.ref || b.modelo || '') : ''), b && b.sccrBajo, () => App.go('memoria', circ ? r.padre.tab.id : r.tab.id));
       if (tr) {
         y += 58;
@@ -86,15 +87,25 @@
       if (A.val && !A.val.ok) D.texto(cx, y + 30, '⚠ no cumple ampacidad corregida', 'u-t mal', 'TEXTO', al);
       // segunda acometida: generador o bypass → ATS / MTS / IP sobre la barra
       if (r.alterna) {
-        const ya = y1 - 46, al = r.alterna;
-        D.rect(x - 20, ya - 12, 40, 24, 'u-ats', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, ya + 4, al.equipo, 'u-t b', 'TEXTO', 'c');
-        const gx = x + 140;
-        D.linea(x + 20, ya, gx, ya, 'u-lin2', 'ALIMENTADOR'); D.linea(gx, ya, gx, ya - 70, 'u-lin2', 'ALIMENTADOR');
-        if (al.tipo === 'generador') { D.circulo(gx, ya - 86, 16, 'u-gen', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(gx, ya - 81, 'G', 'u-t b', 'TEXTO', 'c'); }
-        else D.texto(gx, ya - 76, '↑', 'u-t b', 'TEXTO', 'c');
-        D.texto(gx + 22, ya - 92, al.tipo === 'generador' ? (al.origen || 'Generador') + (al.xd ? " · X''d " + f1(al.xd) + ' %' : '') : 'Bypass desde ' + (al.origen || '?'), 'u-t b', 'TEXTO');
-        D.texto(gx + 8, ya - 34, al.fasesTxt + ' ' + al.mat + ' · ' + f1(al.longitud) + ' m · ΔV ' + f2(al.cv) + ' %', 'u-t', 'TEXTO');
-        D.texto(gx + 8, ya - 19, 'Icc ' + (al.iccA ? f2(al.iccA / 1000) + ' kA' : '—') + (al.carga !== null ? ' · carga ' + f1(al.carga * 100) + ' %' : ''), 'u-t', 'TEXTO');
+        // equipo de transferencia pegado a la barra del tablero; la rama alterna con su propia protección
+        const al = r.alterna, ya = y1 - 15;
+        D.rect(x - 22, ya - 12, 44, 24, 'u-ats', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, ya + 4, al.equipo, 'u-t b', 'TEXTO', 'c');
+        const gx = x + 140, yb2 = ya - 58;
+        D.linea(x + 22, ya, gx, ya, 'u-lin', 'ALIMENTADOR'); D.linea(gx, ya, gx, yb2 - 52, 'u-lin', 'ALIMENTADOR');
+        // interruptor de la rama alterna: el circuito del bypass en el tablero de origen o el principal del generador
+        const origen = al.tipo !== 'generador' ? Object.values(R.res).find(o => o.rows.some(z => z.c.respaldoDe === r.tab.id)) : null;
+        const cb = origen ? origen.rows.find(z => z.c.respaldoDe === r.tab.id) : null;
+        const bkTxt = cb ? (cb.AF || '–') + ' A ' + (cb.breaker ? cb.polosBreaker + 'P ' + (cb.breaker.ref || cb.breaker.modelo || '') : '') : (A.AF139 || '–') + ' A ' + (fasesPolos(r)) + 'P';
+        interruptor(gx, yb2, bkTxt, cb && cb.breaker && cb.breaker.sccrBajo, () => App.go('memoria', origen ? origen.tab.id : r.tab.id));
+        if (al.tipo === 'generador') {
+          D.circulo(gx, yb2 - 68, 16, 'u-gen', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(gx, yb2 - 63, 'G', 'u-t b', 'TEXTO', 'c');
+          D.texto(gx + 22, yb2 - 74, (al.origen || 'Generador') + (al.xd ? " · X''d " + f1(al.xd) + ' %' : ''), 'u-t b', 'TEXTO');
+        } else {
+          D.texto(gx + 10, yb2 - 60, 'BYPASS desde ' + (al.origen || '?'), 'u-t b', 'TEXTO');
+          if (cb) D.texto(gx + 10, yb2 - 45, 'circuito [' + cb.polos.join(',') + '] en ' + origen.nombre, 'u-t', 'TEXTO');
+        }
+        D.texto(gx + 8, ya - 26, al.fasesTxt + ' ' + al.mat + ' · ' + f1(al.longitud) + ' m · ΔV ' + f2(al.cv) + ' %', 'u-t', 'TEXTO');
+        D.texto(gx + 8, ya - 11, 'Icc ' + (al.iccA ? f2(al.iccA / 1000) + ' kA' : '—') + (al.carga !== null ? ' · carga ' + f1(al.carga * 100) + ' %' : ''), 'u-t', 'TEXTO');
       }
     }
 
@@ -120,16 +131,17 @@
       const xs = [], xi = []; let x = cx - ch / 2;
       hs.forEach(hj => { xi.push(x); xs.push(x + span[hj.tab.id] / 2); x += ancho[hj.tab.id] + GAP; });
       const xa = Math.min(cx - W / 2, ...xs), xb = Math.max(cx + W / 2, ...xs), tx = xb + 14, mal = r.avisos.length;
+      const o = r.alterna ? 40 : 0;   // con segunda acometida los datos van debajo de la barra (arriba está la rama alterna)
       D.barra(xa, xb, yb, colorV(r.V), () => App.go('memoria', r.tab.id), r.nombre);
-      D.texto(tx, yb - 22, r.nombre, 'u-n', 'TEXTO', null, () => App.go('memoria', r.tab.id));
-      if (conTabla) tablaDatos(r, tx, yb - 8);
+      D.texto(tx, yb - 22 + o, r.nombre, 'u-n', 'TEXTO', null, () => App.go('memoria', r.tab.id));
+      if (conTabla) tablaDatos(r, tx, yb - 8 + o);
       else {
-        D.texto(tx, yb - 6, r.tab.sistema + ' V · ' + (r.zapatas ? 'zapatas' : (r.alim.AF139 || '–') + ' A') + ' · ' + (r.cat ? r.cat.modelo : ''), 'u-t', 'TEXTO');
-        D.texto(tx, yb + 9, f2(r.W130) + ' kVA · ' + f2(r.alim.L139) + ' kVA dem.', 'u-t', 'TEXTO');
-        D.texto(tx, yb + 24, 'Bornes ' + f2(r.alim.AW139) + ' V · ΔV ' + f2(r.alim.AY139) + ' %', 'u-t' + (r.alim.AY139 > P.cvMaxAlim ? ' mal' : ''), 'TEXTO');
-        D.texto(tx, yb + 39, 'Icc ' + (r.iccKA ? f2(r.iccKA) + ' kA' : '—') + (r.iccFuente ? ' (' + r.iccFuente + ')' : ''), 'u-t b' + (r.bkMain && r.bkMain.sccrBajo ? ' mal' : ''), 'TEXTO');
-        if (mal) D.texto(tx, yb + 54, '⚠ ' + mal + ' aviso(s)', 'u-t warn', 'TEXTO', null, null, r.avisos.join('\n'));
-        D.boton(tx + 31, yb + (mal ? 70 : 55), '+ tablero', () => nuevoDerivado(r.tab));
+        D.texto(tx, yb - 6 + o, r.tab.sistema + ' V · ' + (r.zapatas ? 'zapatas' : (r.alim.AF139 || '–') + ' A') + ' · ' + (r.cat ? r.cat.modelo : ''), 'u-t', 'TEXTO');
+        D.texto(tx, yb + 9 + o, f2(r.W130) + ' kVA · ' + f2(r.alim.L139) + ' kVA dem.', 'u-t', 'TEXTO');
+        D.texto(tx, yb + 24 + o, 'Bornes ' + f2(r.alim.AW139) + ' V · ΔV ' + f2(r.alim.AY139) + ' %', 'u-t' + (r.alim.AY139 > P.cvMaxAlim ? ' mal' : ''), 'TEXTO');
+        D.texto(tx, yb + 39 + o, 'Icc ' + (r.iccKA ? f2(r.iccKA) + ' kA' : '—') + (r.iccFuente ? ' (' + r.iccFuente + ')' : ''), 'u-t b' + (r.bkMain && r.bkMain.sccrBajo ? ' mal' : ''), 'TEXTO');
+        if (mal) D.texto(tx, yb + 54 + o, '⚠ ' + mal + ' aviso(s)', 'u-t warn', 'TEXTO', null, null, r.avisos.join('\n'));
+        D.boton(tx + 31, yb + o + (mal ? 70 : 55), '+ tablero', () => nuevoDerivado(r.tab));
       }
       hs.forEach((hj, i) => {
         const yh = yb + NIVEL;

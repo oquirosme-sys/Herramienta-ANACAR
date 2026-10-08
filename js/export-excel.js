@@ -139,15 +139,25 @@
     const st = Styles(), sheets = [], used = {};
     const mk = n => { let b = n.replace(/[:\\/?*\[\]]/g, '-').slice(0, 28), nn = b, i = 2; while (used[nn.toLowerCase()]) nn = b.slice(0, 26) + '_' + i++; used[nn.toLowerCase()] = 1; const s = Sheet(nn, st); sheets.push(s); return s; };
     const lista = Resumen.ordenados(R);
+    // nombres definidos (como la macro AsignarNombresTableros) para vincular las tablas en Revit
+    const nombres = [], usadosN = {};
+    const ref = (s, G, c1, c2) => "'" + s.name.replace(/'/g, "''") + "'!$" + colName(c1) + '$' + (G.filas() ? 1 : 1) + ':$' + colName(c2) + '$' + G.filas();
+    const nombre = (n, s, G, c1, c2) => { let k = n.replace(/[^A-Za-z0-9_ÁÉÍÓÚÑáéíóúñ]/g, '_'); if (/^\d/.test(k)) k = 'T_' + k; let kk = k, i = 2; while (usadosN[kk.toUpperCase()]) kk = k + '_' + i++; usadosN[kk.toUpperCase()] = 1; nombres.push([kk, ref(s, G, c1, c2)]); };
+    const limpio = t => String(t || '').replace(/^TABLERO\s+/i, '').trim().replace(/[\s\-./\\]/g, '_').replace(/[^A-Za-z0-9_]/g, '');
     if (opts.memoria) {
       R.orden.filter(r => !opts.ids || opts.ids.includes(r.tab.id)).forEach(r => volcar(mk('MEMORIA ' + (r.tab.nombre || r.nombre)), memoriaGrid(r)));
     } else if (!opts.soloTipo) {
-      volcar(mk('TABLA RESUMEN'), Hoja.resumen(lista, Store.project.resumenSimple));
+      const sr = mk('TABLA RESUMEN'), gr = Hoja.resumen(lista, Store.project.resumenSimple); volcar(sr, gr);
+      nombre('TABLA_RESUMEN__TABLEROS_ELÉCTRICOS', sr, gr, Hoja.col('B'), Hoja.col('Y'));
+      if (!Store.project.resumenSimple) { nombre('DATOS_DEL_TABLERO', sr, gr, Hoja.col('Z'), Hoja.col('AG')); nombre('DATOS_DEL_SUPRESOR', sr, gr, Hoja.col('AH'), Hoja.col('AN')); nombre('DATOS_INTERRUPTOR_PRINCIPAL', sr, gr, Hoja.col('AO'), Hoja.col('AU')); }
       volcar(mk('TABLA RESUMEN (VERTICAL)'), Hoja.vertical(lista, Resumen.vertical, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS'));
       volcar(mk('TABLA RESUMEN DU(VERTICAL)'), Hoja.vertical(lista, Resumen.du, 'TABLA RESUMEN DU - TABLEROS ELÉCTRICOS'));
       volcar(mk('TABLA RESUMEN ORIGINAL'), Hoja.vertical(lista, Resumen.original, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS'));
     }
-    if (!opts.memoria) R.orden.filter(r => !opts.soloTipo || r.tab.tipo === opts.soloTipo).forEach(r => volcar(mk(r.tab.tipo + ' ' + (r.tab.nombre || r.nombre)), Hoja.tablero(r)));
+    if (!opts.memoria) R.orden.filter(r => !opts.soloTipo || r.tab.tipo === opts.soloTipo).forEach(r => {
+      const s = mk(r.tab.tipo + ' ' + (r.tab.nombre || r.nombre)), G = Hoja.tablero(r); volcar(s, G);
+      nombre('TABLERO_' + limpio(r.tab.nombre || r.nombre), s, G, Hoja.col('B'), Hoja.col('AJ'));
+    });
 
     const files = [], ct = [], wbRels = [];
     let nDraw = 0;
@@ -179,7 +189,7 @@
     files.unshift(
       { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + ct.join('') + '</Types>' },
       { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
-      { name: 'xl/workbook.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' + sheets.map((s, i) => '<sheet name="' + xe(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('') + '</sheets></workbook>' },
+      { name: 'xl/workbook.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' + sheets.map((s, i) => '<sheet name="' + xe(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('') + '</sheets>' + (nombres.length ? '<definedNames>' + nombres.map(([k, v]) => '<definedName name="' + xe(k) + '">' + xe(v) + '</definedName>').join('') + '</definedNames>' : '') + '</workbook>' },
       { name: 'xl/_rels/workbook.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + wbRels.join('') + '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
     );
     files.push({ name: 'xl/styles.xml', data: st.xml() });

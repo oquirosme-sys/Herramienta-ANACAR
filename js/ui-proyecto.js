@@ -53,6 +53,7 @@
         UI.field('Marca por defecto', UI.bind(p, 'marcaDefecto', Store.catalog.marcas, { fk: 'p:marca' }), 'Para elegir tablero, breakers y supresor automáticamente'),
         UI.field('Long. máx. para Icc (m)', UI.input(p, 'iccLongMax', { type: 'num', fk: 'p:icl' }), 'Igual que el Excel (20 m). 0 = sin límite'),
         UI.field('Ocupación (NEC)', UI.bind(p, 'ocupacion', [{ value: 'comercial', label: 'Comercial / oficinas' }, { value: 'vivienda', label: 'Vivienda' }, { value: 'hotel', label: 'Hotel' }, { value: 'hospital', label: 'Hospital' }, { value: 'industrial', label: 'Industrial' }], { fk: 'p:ocu' }), 'Para GFCI/AFCI (210.8, 210.12) y SPD (230.67)'),
+        UI.field('Carga de tableros derivados', UI.bind(p, 'cargaDerivados', [{ value: 'conectada', label: 'kVA conectados (como el Excel)' }, { value: 'demandada', label: 'kVA demandados (no repite demanda)' }], { fk: 'p:cder' }), 'Con qué carga sube cada tablero al que lo alimenta'),
         UI.field('Reserva de espacios (%)', UI.input(p, 'reservaEspacios', { type: 'num', fk: 'p:res' }), 'Para elegir el tablero de catálogo'),
         UI.field('Icc de la red (kA)', UI.input(p, 'iccRed', { type: 'num', fk: 'p:iccr', placeholder: 'infinita' }), 'En el primario de los transformadores principales'),
         UI.field('Alimentadores', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: p.autoAmpacidad !== false, onchange: e => { p.autoAmpacidad = e.target.checked; Store.save(); App.refresh(); } }), ' Aumentar calibre si no cumple 310.15'), 'Temperatura y agrupamiento'),

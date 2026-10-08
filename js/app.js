@@ -6,6 +6,7 @@
   const TABS = [
     { id: 'proyecto', label: 'Proyecto' },
     { id: 'unifilar', label: 'Diagrama unifilar' },
+    { id: 'prevista', label: 'Prevista' },
     { id: 'revit', label: 'Revit' },
     { id: 'memoria', label: 'Memoria de cálculo' },
     { id: 'tab3f', label: 'Tableros 3F' },
@@ -20,7 +21,7 @@
     R: null,
     route: { view: 'proyecto', id: '' },
 
-    calc() { App.R = Calc.proyecto(Store.project, Store.catalog); return App.R; },
+    calc() { Store.sincronizarBypass(); App.R = Calc.proyecto(Store.project, Store.catalog); return App.R; },
     go(view, id) { location.hash = '#' + view + (id ? '/' + id : ''); },
     readHash() {
       const [v, id] = decodeURIComponent(location.hash.slice(1)).split('/');

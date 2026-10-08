@@ -34,7 +34,7 @@
     emptyProject() {
       return {
         id: U.uid(), nombre: '', numero: '', ubicacion: '', fecha: U.today(), elaboro: '', revision: '',
-        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', resumenSimple: false, ocupacion: 'comercial', tableros: [],
+        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', resumenSimple: false, ocupacion: 'comercial', cargaDerivados: 'conectada', previstas: [], tableros: [],
       };
     },
     migrate() {
@@ -58,7 +58,7 @@
       Object.keys(s).forEach(k => { if (c[k] === undefined) c[k] = U.clone(s[k]); });
       if (!c.marcas) c.marcas = Store.marcasDe(c);
       const p = Store.project;
-      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed', 'resumenSimple', 'ocupacion'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
+      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed', 'resumenSimple', 'ocupacion', 'cargaDerivados', 'previstas'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
       p.tableros.forEach(t => Store.completarTablero(t));
     },
 
@@ -136,6 +136,24 @@
       return c;
     },
 
+    /** El tablero de origen de un bypass lleva el circuito (con su protección) que alimenta la segunda acometida. */
+    sincronizarBypass() {
+      const P = Store.project; let cambio = false;
+      P.tableros.forEach(o => {
+        const antes = o.circuitos.length;
+        o.circuitos = o.circuitos.filter(c => { if (!c.respaldoDe) return true; const t = Store.tablero(c.respaldoDe), a = t && t.alterna; return a && a.activo && a.tipo === 'tablero' && a.origenId === o.id; });
+        if (o.circuitos.length !== antes) cambio = true;
+      });
+      P.tableros.forEach(t => {
+        const a = t.alterna, o = a && a.activo && a.tipo === 'tablero' && Store.tablero(a.origenId);
+        if (o && o.id !== t.id && !o.circuitos.some(c => c.respaldoDe === t.id)) {
+          const det = Store.detalleTablero(t, o), dd = Store.catalog.detallesCarga.find(x => x.id === det) || {};
+          o.circuitos.push({ id: U.uid(), polos: Store.posicionLibre(o, Number(dd.fases) === 3 ? 3 : 2), detalleId: det, descripcion: '', kva: 0, longitud: a.longitud, material: 'CU', aislamiento: 'THHN', mult: '', paralelos: '', aumento: 1, breakerId: '', prot: '', tableroHijoId: '', respaldoDe: t.id, auto: true });
+          cambio = true;
+        }
+      });
+      if (cambio) Store.save();
+    },
     /** Aplica cambios de posición y los anota en la lista de cambios pendientes para Revit (un registro por circuito: posición original → nueva). */
     registrarCambios(t, cambios, origen) {
       const fecha = U.today();

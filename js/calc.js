@@ -238,7 +238,9 @@
   /* ---------- un circuito ramal (fila 16 a 115 del Machote) ---------- */
   function circuito(c, tab, ctx) {
     const det = K.detallesCarga.find(d => String(d.id) === String(c.detalleId)) || {};
-    const O = n(det.v), P = n(det.fases), Q = n(det.hilos), R = n(det.fd) || 1, S = n(det.fdiv) || 1, T = n(det.fp) || 1;
+    const tiene = v => v !== undefined && v !== null && v !== '';
+    const O = n(det.v), P = n(det.fases), Q = n(det.hilos), T = n(det.fp) || 1;
+    const R = tiene(c.fu) ? n(c.fu) : (n(det.fd) || 1), S = tiene(c.fdivC) ? (n(c.fdivC) || 1) : (n(det.fdiv) || 1);   // [R16] factor de uso, [S16] diversidad
     const N = ctx.fases, J = n(c.kva);
     const polos = (c.polos || []).map(Number).filter(x => x > 0);
     // [U16:W16] reparto por fases
@@ -292,10 +294,13 @@
     const marcaTab = tab.catalogoId ? ((K.tablerosCat.find(t => String(t.id) === String(tab.catalogoId)) || {}).fabricante) : (tab.marca || K.marcaDefecto || 'Eaton');
 
     // --- 1) cargas y fases, sin voltaje (para conocer el alimentador primero)
-    const circs = (tab.circuitos || []).slice().sort((a, b) => (Math.min(...(a.polos || [999])) - Math.min(...(b.polos || [999]))));
+    // orden físico del tablero: primero el lado impar (1, 3, 5…) y luego el par (2, 4, 6…)
+    const llave = c => { const p = Math.min(...((c.polos || []).length ? c.polos.map(Number) : [9999])); return (p % 2 ? 0 : 10000) + p; };
+    const circs = (tab.circuitos || []).slice().sort((a, b) => llave(a) - llave(b));
     const pre = circs.map(c => circuito(c, tab, { fases, V, vBus: V, vBusLN: vLN(V), marca: marcaTab, cvMaxTotal: 999 }));
-    const J116 = pre.reduce((a, x) => a + x.J, 0);
-    const U116 = [0, 1, 2].map(i => pre.reduce((a, x) => a + x.fase[i], 0));
+    const suma = pre.filter(x => !x.c.respaldoDe);       // el circuito de bypass ocupa espacios pero no suma carga
+    const J116 = suma.reduce((a, x) => a + x.J, 0);
+    const U116 = [0, 1, 2].map(i => suma.reduce((a, x) => a + x.fase[i], 0));
     const J117 = J116 / 3, U117 = U116.map(x => (J117 ? x / J117 : 0));
     const mx = fases === 3 ? Math.max(...U116) : fases === 2 ? Math.max(U116[0], U116[1]) : 0;
     const mn = fases === 3 ? Math.min(...U116) : fases === 2 ? Math.min(U116[0], U116[1]) : 0;
@@ -303,8 +308,11 @@
 
     // --- 2) factores de demanda por tipo de carga [filas 123 a 134]
     const reserva = n(tab.reserva);
-    const tipos = K.tiposCarga.map(t => {
-      const cs = pre.filter(x => String(x.L) === String(t.id));
+    const demandaDeriv = P && P.cargaDerivados === 'demandada';
+    const derivados = demandaDeriv ? suma.filter(x => x.c.tableroHijoId) : [];
+    const tiposCat = K.tiposCarga.concat(derivados.length ? [{ id: 'deriv', nombre: 'TABLEROS DERIVADOS (demanda ya aplicada)', metodo: 'fijo', fd: 1, fdiv: 1 }] : []);
+    const tipos = tiposCat.map(t => {
+      const cs = t.id === 'deriv' ? derivados : suma.filter(x => String(x.L) === String(t.id) && !derivados.includes(x));
       const conectados = cs.reduce((a, x) => a + x.J, 0), res = conectados * reserva, total = conectados + res;
       const ov = (tab.fd || {})[t.id];
       let fd, demandados;
@@ -320,10 +328,10 @@
     const W130 = W128 + W129, J134 = tipos.reduce((a, t) => a + t.demandados, 0);
 
     // --- 3) alimentador / acometida [fila 139]
-    const R139 = W130 ? J134 / W130 : 1, S139 = n(tab.fdivTablero) || 1, L139 = W130 * R139 * S139, T139 = n(al.fp) || 0.9;
+    const R139 = W130 ? J134 / W130 : 1, S139 = n(tab.fdivTablero) || 1, L139 = W130 * R139 / S139, T139 = n(al.fp) || 0.9;
     const X139 = U117.map(u => L139 * u / 3);
     const AA139 = X139.map(x => (x > 0 ? corrienteAlim(x, V, fases) : 0));
-    const AD139 = al.mult !== undefined && al.mult !== '' ? n(al.mult) : 1.25;
+    const AD139 = al.rated100 ? 1 : (al.mult !== undefined && al.mult !== '' ? n(al.mult) : 1.25);
     const AE139 = W130 > 0 ? (fases === 3 ? Math.max(...AA139) * AD139 : (U116[0] > 0 ? AA139[0] : U116[1] > 0 ? AA139[1] : AA139[2]) * AD139) : null;
     const AF139 = n(al.prot) || (AE139 ? proteccion(AE139) : null);
     const mat = al.material || 'CU', ais = al.aislamiento || 'XHHW-2', hilos = n(tab.hilos) || 4;
@@ -453,7 +461,8 @@
     const cvMaxTotal = n(P && P.cvMaxTotal) || 5;
     const polosBk = fases === 3 ? 3 : (V >= 208 && V <= 240 ? 2 : fases);
     const zapatas = tab.principal === 'zapatas';
-    const bkMain = AF139 && !zapatas ? breaker(marca, al.breakerId, polosBk, AF139, { V, familias: famT ? famT.principales : '', iccKA, unidad: al.unidad }) : null;
+    const bkMain = AF139 && !zapatas ? breaker(marca, al.breakerId, polosBk, AF139, { V, familias: famT ? famT.principales : '', iccKA, unidad: al.unidad || 'STD' }) : null;
+    if (bkMain && al.rated100) { bkMain.rated100 = true; if (/^PDG/.test(bkMain.ref)) bkMain.ref = bkMain.ref.replace(/^PDG/, 'PDF'); }
     const rows = circs.map(c => {
       const x = circuito(c, tab, { fases, V, vBus: AW139, vBusLN: AW140, marca, cvMaxTotal, iccKA, famRamales: famT ? famT.ramales : '' });
       if (x.breaker && x.breaker.sccrBajo && bkMain && !bkMain.sccrBajo) {
@@ -486,6 +495,8 @@
     if (ajustado && val && val.ok) avisos.push('Calibre del alimentador aumentado por temperatura/agrupamiento: ' + (parBase > 1 ? parBase + 'x' : '') + calBase + ' → ' + (AI139 > 1 ? AI139 + 'x' : '') + AL139 + ' AWG/kcmil');
     if (cat && espaciosUsados > n(cat.espacios)) avisos.push('Circuitos usan ' + espaciosUsados + ' espacios; el tablero tiene ' + cat.espacios);
     if (!cat) avisos.push('No hay tablero de catálogo (' + marcaTab + ') para ' + V + ' V, ' + (AF139 || '?') + ' A y ' + espaciosUsados + ' espacios');
+    if (bkMain && al.unidad && al.unidad !== 'STD' && bkMain.unidad !== al.unidad) avisos.push('No hay interruptor principal ' + al.unidad + ' para ' + AF139 + ' A en el catálogo de ' + marca + '; se usó ' + (bkMain.unidad || 'STD'));
+    if (bkMain && al.rated100 && !/^PDF/.test(bkMain.ref)) avisos.push('Interruptor principal 100 % rated: verifique el modelo con el fabricante (' + (bkMain.ref || bkMain.modelo) + ')');
     if (bkMain && bkMain.sccrBajo) avisos.push('SCCR del interruptor principal ' + bkMain.sccr + ' kA < Icc ' + r2(iccKA) + ' kA');
     if (trafo && trafo.carga > 1) avisos.push('Transformador cargado al ' + r2(trafo.carga * 100) + ' %');
     if (enSerie.length) {
@@ -535,8 +546,11 @@
       (t.circuitos || []).forEach(c => {
         const hj = c.tableroHijoId && byId[c.tableroHijoId];
         if (hj && !ciclo.has(hj.id)) { c.kva = r4(total[hj.id] || 0); c.longitud = hj.longitud; c.descripcion = nombreTablero(hj); }
+        const rb = c.respaldoDe && byId[c.respaldoDe];
+        if (rb) { if (!visit.has(rb.id)) cargar(rb); c.kva = r4(total[rb.id] || 0); c.longitud = (rb.alterna || {}).longitud; c.descripcion = 'BYPASS ' + nombreTablero(rb); }
       });
-      total[t.id] = tablero(t, P, null).W130;
+      const rt = tablero(t, P, null);
+      total[t.id] = P.cargaDerivados === 'demandada' ? rt.alim.L139 : rt.W130;
       return total[t.id];
     }
     tabs.forEach(cargar);

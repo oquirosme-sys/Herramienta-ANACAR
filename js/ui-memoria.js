@@ -105,10 +105,12 @@
         UI.field('Aislamiento', UI.bind(a, 'aislamiento', Store.catalog.aislamientos, { fk: k + 'ais' })),
         UI.field('Tubería', UI.bind(a, 'tuberia', L.tuberias, { fk: k + 'tub' })),
         UI.field('# en paralelo', UI.input(a, 'paralelos', { type: 'num', fk: k + 'par', placeholder: 'Auto ' + A.AI139 })),
-        UI.field('Aumento de calibre', UI.input(a, 'aumento', { type: 'num', fk: k + 'aum' }), '1 = sin aumento'),
+        UI.field('Aumento de calibre (%)', UI.pct(a, 'aumento', { modo: 'aumento', fk: k + 'aum', placeholder: '0' }), 'Sobre la ampacidad de la protección'),
         UI.field('Factor de potencia', UI.input(a, 'fp', { type: 'num', fk: k + 'fp' })),
-        UI.field('Factor multiplicador', UI.input(a, 'mult', { type: 'num', fk: k + 'mul' }), '1,25 carga continua'),
+        UI.field('Factor de protección (%)', a.rated100 ? h('div', { class: 'ro' }, '100 % (interruptor 100 % rated)') : UI.pct(a, 'mult', { fk: k + 'mul', placeholder: '125' }), '125 % carga continua'),
         UI.field('Protección (A)', UI.input(a, 'prot', { type: 'num', fk: k + 'pro', placeholder: 'Auto ' + (A.AF139 || '') })),
+        t.principal === 'zapatas' ? null : UI.field('Unidad de disparo', UI.bind(a, 'unidad', [{ value: '', label: 'Termomagnético (TM)' }, { value: 'LI', label: 'Electrónico LI' }, { value: 'LSI', label: 'Electrónico LSI' }, { value: 'LSIG', label: 'Electrónico LSIG' }], { fk: k + 'uni' })),
+        t.principal === 'zapatas' ? null : UI.field('Capacidad', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!a.rated100, onchange: e => { a.rated100 = e.target.checked; Store.save(); App.refresh(); } }), ' 100 % rated'), 'Lleva el 100 % de la carga continua (215.3 / 230.42 exc.)'),
         t.principal === 'zapatas' ? UI.field('Interruptor principal', h('div', { class: 'ro' }, 'Zapatas (sin interruptor principal)'), null, 'span3') : UI.field('Interruptor principal', UI.bind(a, 'breakerId', bkOpts(r.marca, r.bkMain && !a.breakerId ? (r.bkMain.ref || r.bkMain.modelo) + ' · ' + r.bkMain.sccr + ' kA' : ''), { fk: k + 'bk' }), r.famT ? 'Familias permitidas en ' + r.famT.familia + ': ' + r.famT.principales : null, 'span3'),
         UI.field('Temp. ambiente (°C)', UI.bind(a, 'tempAmb', L.temperaturas, { fk: k + 'ta' })),
         UI.field('Temp. bornes (°C)', UI.bind(a, 'tempBorne', [60, 75, 90], { num: true, fk: k + 'tb' }), 'Columna 310.16 que limita'),
@@ -154,13 +156,13 @@
   function circuitos(t, r, R) {
     const k = c => 'c:' + c.id + ':', L = Store.catalog.listas, dOpts = detOpts();
     const head = h('thead', null,
-      h('tr', { class: 'grp' }, h('th', { colspan: 10 }, 'Datos de circuitos ramales / alimentadores'), h('th', { colspan: r.fases === 3 ? 3 : 2 }, 'Balance (kVA)'),
+      h('tr', { class: 'grp' }, h('th', { colspan: 12 }, 'Datos de circuitos ramales / alimentadores'), h('th', { colspan: r.fases === 3 ? 3 : 2 }, 'Balance (kVA)'),
         h('th', { colspan: 8 }, 'Cálculo de conductores'), h('th', { colspan: 3 }, 'Caída de voltaje'), h('th', { colspan: 5 }, 'Interruptor ramal'), h('th', null, '')),
-      h('tr', null, ['Fijo', 'Posición', 'Detalle de carga', 'Descripción', 'kVA', 'Long. (m)', 'V', 'F', 'Mult.', 'I (A)'].concat(r.fases === 3 ? ['A', 'B', 'C'] : ['A', 'B'],
-        ['Amp. req.', 'Prot. (A)', 'Material', 'Aislam.', '# par.', 'Aum.', 'Calibres F / N / T', 'Tubo (mm)', 'V real', 'ΔV (V)', 'ΔV total %', 'Unidad', 'Tipo (catálogo)', 'Modelo de referencia', 'Polos', 'SCCR', '']).map(x => h('th', null, x))));
+      h('tr', null, ['Fijo', 'Posición', 'Detalle de carga', 'Descripción', 'kVA', 'Long. (m)', 'V', 'F', 'Prot. %', 'F. uso', 'F. div.', 'I (A)'].concat(r.fases === 3 ? ['A', 'B', 'C'] : ['A', 'B'],
+        ['Amp. req.', 'Prot. (A)', 'Material', 'Aislam.', '# par.', 'Aum. %', 'Calibres F / N / T', 'Tubo (mm)', 'V real', 'ΔV (V)', 'ΔV total %', 'Unidad', 'Tipo (catálogo)', 'Modelo de referencia', 'Polos', 'SCCR', '']).map(x => h('th', null, x))));
     const body = h('tbody');
     r.rows.forEach(x => {
-      const c = x.c, kk = k(c), hijo = c.tableroHijoId && Store.tablero(c.tableroHijoId);
+      const c = x.c, kk = k(c), resp = c.respaldoDe && Store.tablero(c.respaldoDe), hijo = (c.tableroHijoId && Store.tablero(c.tableroHijoId)) || resp;
       const polos = UI.input({ v: pos(c) }, 'v', { fk: kk + 'pol', class: 'w-pos', label: 'Posición', save: false, after: v => {
         const arr = String(v).split(/[^0-9]+/).map(Number).filter(z => z > 0);
         Store.registrarCambios(t, [{ id: c.id, de: c.polos, a: arr, descripcion: x.descripcion }], 'manual'); App.refresh();
@@ -168,12 +170,14 @@
       body.appendChild(h('tr', { class: (x.err.length ? 'row-warn' : '') + (hijo ? ' row-link' : ''), title: x.err.join('\n') || null },
         h('td', { class: 'c' }, h('input', { type: 'checkbox', checked: !!c.fijo, title: 'Fijar posición (el autobalanceo no lo mueve)', onchange: e => { c.fijo = e.target.checked; Store.save(); } })),
         h('td', { class: 'sticky' }, polos),
-        h('td', null, hijo ? h('a', { href: '#memoria/' + hijo.id, class: 'link' }, '→ ' + Calc.nombreTablero(hijo)) : null, UI.bind(c, 'detalleId', dOpts, { num: true, fk: kk + 'det', class: 'w-det', label: 'Detalle de carga' })),
+        h('td', null, hijo ? h('a', { href: '#memoria/' + hijo.id, class: 'link' }, (resp ? '↺ bypass de ' : '→ ') + Calc.nombreTablero(hijo)) : null, UI.bind(c, 'detalleId', dOpts, { num: true, fk: kk + 'det', class: 'w-det', label: 'Detalle de carga' })),
         h('td', null, hijo ? h('span', { class: 'ro' }, x.descripcion) : UI.input(c, 'descripcion', { fk: kk + 'des', class: 'w-desc', placeholder: x.det.descripcion || '' })),
         h('td', null, hijo ? h('span', { class: 'ro r' }, f2(x.J)) : UI.input(c, 'kva', { type: 'num', fk: kk + 'kva', class: 'w-num' })),
         h('td', null, hijo ? h('span', { class: 'ro r' }, f1(c.longitud)) : UI.input(c, 'longitud', { type: 'num', fk: kk + 'lon', class: 'w-num' })),
         h('td', { class: 'r' }, x.O || ''), h('td', { class: 'r' }, x.P || ''),
-        h('td', null, UI.input(c, 'mult', { type: 'num', fk: kk + 'mul', class: 'w-xs', placeholder: f2(x.det.mult || 1.25) })),
+        h('td', null, UI.pct(c, 'mult', { fk: kk + 'mul', class: 'w-xs', placeholder: U.fmt((x.det.mult || 1.25) * 100, 0) })),
+        h('td', null, UI.input(c, 'fu', { type: 'num', fk: kk + 'fu', class: 'w-xxs', placeholder: f2(x.det.fd || 1), title: 'Factor de uso (demanda) del circuito' })),
+        h('td', null, UI.input(c, 'fdivC', { type: 'num', fk: kk + 'fdv', class: 'w-xxs', placeholder: f2(x.det.fdiv || 1), title: 'Factor de diversidad del circuito' })),
         h('td', { class: 'r' }, x.J ? f1(Math.max(...x.I)) : ''),
         x.fase.slice(0, r.fases === 3 ? 3 : 2).map((v, i) => h('td', { class: 'r ph ph' + i }, v ? f2(v) : '')),
         h('td', { class: 'r' }, x.AE ? f1(x.AE) : ''),
@@ -181,7 +185,7 @@
         h('td', null, UI.bind(c, 'material', L.materiales, { fk: kk + 'mat', class: 'w-xs' })),
         h('td', null, UI.bind(c, 'aislamiento', Store.catalog.aislamientos, { fk: kk + 'ais', class: 'w-ais' })),
         h('td', null, UI.input(c, 'paralelos', { type: 'num', fk: kk + 'par', class: 'w-xxs', placeholder: String(x.AI) })),
-        h('td', null, UI.input(c, 'aumento', { type: 'num', fk: kk + 'aum', class: 'w-xxs' })),
+        h('td', null, UI.pct(c, 'aumento', { modo: 'aumento', fk: kk + 'aum', class: 'w-xxs', placeholder: '0' })),
         h('td', { class: 'nowrap' }, x.AL ? x.fasesTxt + (x.neutroTxt ? ' · ' + x.neutroTxt : '') + (x.tierraTxt ? ' · ' + x.tierraTxt : '') : ''),
         h('td', { class: 'r' }, x.tuboTxt), h('td', { class: 'r' }, x.AU ? f1(x.AU) : ''), h('td', { class: 'r' }, x.AV !== null ? f2(x.AV) : ''),
         h('td', { class: 'r ' + (x.AY > Store.project.cvMaxTotal ? 'bad' : '') }, x.AY !== null ? f2(x.AY) : ''),
@@ -195,7 +199,7 @@
             t.circuitos = t.circuitos.filter(z => z !== c); if (hijo) hijo.padreId = ''; Store.save(); App.refresh();
           }, 'danger'))));
     });
-    const tot = h('tfoot', null, h('tr', null, h('th', { colspan: 4, class: 'r' }, 'Totales'), h('th', { class: 'r' }, f2(r.J116)), h('th', { colspan: 5 }),
+    const tot = h('tfoot', null, h('tr', null, h('th', { colspan: 4, class: 'r' }, 'Totales'), h('th', { class: 'r' }, f2(r.J116)), h('th', { colspan: 7 }),
       r.U116.slice(0, r.fases === 3 ? 3 : 2).map(v => h('th', { class: 'r' }, f2(v))), h('th', { colspan: 17, class: 'l' }, 'Desbalance máximo: ' + f2(r.desbalance) + ' %')));
     const hijosSinCircuito = Store.project.tableros.filter(o => o.padreId === t.id && !t.circuitos.some(c => c.tableroHijoId === o.id));
     return UI.card('Circuitos ramales (' + r.rows.length + ')', h('div', null,
@@ -245,7 +249,12 @@
     return UI.card('Factores de demanda y diversidad', h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
       h('thead', null, h('tr', null, ['Tipo de carga', 'Circuitos', 'kVA conectados', 'Reserva', 'kVA totales', 'Factor demanda', 'F. diversidad', 'kVA demandados'].map(x => h('th', null, x)))),
       body, h('tfoot', null, h('tr', null, h('th', null, 'Totales'), h('th'), h('th', { class: 'r' }, f2(r.W128)), h('th', { class: 'r' }, f2(r.W129)), h('th', { class: 'r' }, f2(r.W130)), h('th', { class: 'r' }, f2(r.alim.R139)), h('th'), h('th', { class: 'r' }, f2(r.J134)))))),
-      h('small', { class: 'muted' }, 'Deje el factor vacío para usar el del catálogo. Tomas: 100 % de los primeros 10 kVA + 50 % del resto (NEC 220.44).'));
+      h('div', { class: 'hint' }, h('b', null, 'Cómo se aplican los factores: '),
+        '1) En cada circuito, el factor de uso (demanda) y el de diversidad del detalle de carga —o el valor propio del circuito, columnas F. uso y F. div.— dan los kVA demandados y la corriente con la que se dimensionan protección y conductor (I = kVA × F. uso ÷ F. div.). ',
+        '2) En el tablero, la carga conectada (más la reserva) se agrupa por tipo de carga y se aplica el factor de demanda del tipo (tomas: 100 % de los primeros 10 kVA + 50 % del resto, 220.44) y su diversidad. ',
+        '3) El alimentador usa los kVA demandados ÷ el factor de diversidad del tablero. ',
+        '4) Los tableros derivados suben al tablero que los alimenta con sus kVA ' + (Store.project.cargaDerivados === 'demandada' ? 'demandados (y ya no se les vuelve a aplicar demanda)' : 'conectados (como el Excel) y ahí se les aplica la demanda del tipo de carga del circuito') + '; se cambia en Proyecto ▸ Criterios. ',
+        'El circuito de bypass de otro tablero ocupa espacios pero no suma carga.'));
   }
 
   App.views.memoria = function (view, R, id) {

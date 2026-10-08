@@ -92,6 +92,23 @@
     check('NEC 210.12: habitación AFCI', RV.rows[1].breaker.unidad, 'AFCI');
     check('Catálogo GFCI Eaton', RV.rows[0].breaker.ref, 'QBGF1020');
 
+
+    // Factores: la diversidad del tablero divide la demanda; 100 % rated; bypass sin carga; orden impar/par
+    const td = JSON.parse(JSON.stringify(MACHOTE.tablero)); td.fdivTablero = 1.25;
+    const RD = Calc.proyecto({ tableros: [td], cvMaxTotal: 5 }, window.SEED).orden[0];
+    check('Diversidad del tablero divide', Math.abs(RD.alim.L139 - T.L139 / 1.25) < 1e-9, true);
+    const t1 = JSON.parse(JSON.stringify(MACHOTE.tablero)); t1.catalogoId = ''; t1.marca = 'Eaton'; t1.alim = { rated100: true }; t1.iccManual = 10;
+    const R1 = Calc.proyecto({ tableros: [t1], cvMaxTotal: 5 }, window.SEED).orden[0];
+    check('100 % rated: protección con la carga al 100 %', R1.alim.AD139, 1);
+    check('100 % rated: modelo PDF', /^PDF/.test(R1.bkMain.ref), true);
+    const tbA = { id: 'ba', nombre: 'A', tipo: '3F', fases: 3, voltaje: 208, hilos: 4, sistema: '120/208', reserva: 0, longitud: 5, iccManual: 10, alim: {}, circuitos: [{ id: 'a1', polos: [1], detalleId: 8, kva: 2, longitud: 5 }, { id: 'a2', polos: [3, 5, 7], detalleId: 19, kva: 0, longitud: 5, respaldoDe: 'bb' }] };
+    const tbB = { id: 'bb', nombre: 'B', tipo: '3F', fases: 3, voltaje: 208, hilos: 4, sistema: '120/208', reserva: 0, longitud: 5, alterna: { activo: true, tipo: 'tablero', origenId: 'ba', equipo: 'MTS', longitud: 10 }, alim: {}, circuitos: [{ id: 'b1', polos: [1], detalleId: 8, kva: 5, longitud: 5 }] };
+    const RB = Calc.proyecto({ tableros: [tbA, tbB], cvMaxTotal: 5 }, window.SEED);
+    check('Bypass: circuito dimensionado con la carga del respaldado', RB.res.ba.rows.find(x => x.c.id === 'a2').J, 5);
+    check('Bypass: no suma carga en el origen', RB.res.ba.J116, 2);
+    check('Bypass: segunda acometida con Icc', RB.res.bb.alterna.iccA > 0, true);
+    check('Orden físico: impares y luego pares', R.rows.map(x => x.polos[0] % 2).join('').indexOf('01') === -1, true);
+
     document.getElementById('sum').innerHTML = fails.length ? '<b class="bad">' + fails.length + ' de ' + total + ' comprobaciones fallaron</b>' : '<b class="ok">' + total + ' de ' + total + ' comprobaciones correctas</b>';
     out.innerHTML = fails.length ? '<table><tr><th>Valor</th><th>Herramienta</th><th>Excel</th></tr>' + fails.map(f => '<tr><td style="text-align:left">' + f[0] + '</td><td>' + f[1] + '</td><td>' + f[2] + '</td></tr>').join('') + '</table>' : '';
     window.RESULT = { total, fails };

@@ -26,6 +26,15 @@ Las hojas informativas u ocultas (`INSTRUCCIONES`, `CÓDIGO VBA`, `FACTORES POR 
 - El **cortocircuito** baja por cada alimentador (método punto a punto con las constantes C de la hoja DATOS). En el tablero principal se indica el Icc o se elige el transformador.
 - Si el derivado tiene otro voltaje (transformador de por medio), la caída y el Icc se reinician y se avisa.
 
+## Novedades 2026.1-web.4
+- **Excel con nombres definidos** para vincular en Revit: `TABLERO_<nombre>` en cada hoja de tablero (rango B1:AJ…, como la macro AsignarNombresTableros) y `TABLA_RESUMEN__TABLEROS_ELÉCTRICOS`, `DATOS_DEL_TABLERO`, `DATOS_DEL_SUPRESOR`, `DATOS_INTERRUPTOR_PRINCIPAL` en la tabla resumen.
+- **Porcentajes**: el aumento de calibre (0 % = sin aumento) y el factor de protección (125 %) se escriben en %.
+- **Orden físico**: en la memoria, el reporte y el cuadro, los circuitos van primero del lado impar y luego del par.
+- **Factores de uso y diversidad**: cada circuito usa el factor de uso y el de diversidad de su detalle de carga (o los propios, columnas *F. uso* y *F. div.*); el tablero aplica la demanda por tipo de carga; el factor de diversidad del tablero **divide** la demanda (en el Excel multiplicaba; con el valor 1 por defecto no cambia nada). Opción para que los tableros derivados suban con sus kVA demandados en lugar de conectados.
+- **Prevista (diseño esquemático)**: carga por tipo de uso y m² (iluminación NEC 2020 tabla 220.12; tomas y climatización estimadas, editables) y generación de circuitos de prevista en el tablero.
+- **Bypass con su protección**: el tablero de origen lleva automáticamente el circuito del bypass (ocupa espacios, no suma carga); en el DU el ATS/MTS va pegado a la barra y la rama alterna lleva su interruptor (el del circuito del bypass o el del generador).
+- **Interruptor principal**: unidad de disparo TM, LI, LSI o LSIG y opción 100 % rated (la protección lleva el 100 % de la carga continua; en Power Defense el modelo pasa a PDF…).
+
 ## Novedades 2026.1-web.3
 - **Impresión centrada**: cada hoja (tableros, tablas resumen) se ajusta al ancho de la página horizontal al imprimir.
 - **Tabla resumen**: casilla *Solo tabla resumen* (sin datos del tablero, del supresor ni del interruptor principal), también en la exportación a Excel.
@@ -55,7 +64,7 @@ Intercambia circuitos con el mismo número de polos y mueve circuitos a espacios
 
 ## Motor de cálculo y verificación
 `js/calc.js` replica las fórmulas del bloque *Machote* (reparto por fases de las funciones VBA `POLA…POLE`, corrientes, protección, calibres, neutro, tierra 250.122, electrodo 250.66, tubería C.10, FAC, caída de voltaje, breakers y supresor por marca, factores de demanda con la regla de tomas 10 kVA + 50 %).
-`tests/calc-test.html` compara la herramienta con los valores que calculó Excel para el Machote (261 comprobaciones: el Machote del Excel, la cascada, el transformador, las reglas de fabricante, el autobalanceo, la clasificación en serie y GFCI/AFCI) y prueba la cascada. Ábralo con un servidor local, p. ej. `py -m http.server` en esta carpeta y `http://localhost:8000/tests/calc-test.html`.
+`tests/calc-test.html` compara la herramienta con los valores que calculó Excel para el Machote (268 comprobaciones: el Machote del Excel, la cascada, el transformador, las reglas de fabricante, el autobalanceo, la clasificación en serie, GFCI/AFCI, diversidad, 100 % rated y bypass) y prueba la cascada. Ábralo con un servidor local, p. ej. `py -m http.server` en esta carpeta y `http://localhost:8000/tests/calc-test.html`.
 
 Mejoras respecto al Excel (indicadas en pantalla): tablero, interruptor principal, breakers y supresor se eligen **automáticamente** según la marca, la protección y los polos si no se escoge uno; conductores en paralelo del alimentador automáticos (>300 A); avisos de posiciones repetidas, caída de voltaje, SCCR menor que el Icc, ampacidad corregida insuficiente y espacios insuficientes.
 
@@ -79,6 +88,7 @@ css/styles.css
 js/config.js  util.js  calc.js  store.js  auth.js  ui.js  xlsx-read.js  app.js
 js/hoja.js             (hojas con el diseño del Excel: pantalla y exportación)
 js/reporte.js          (memoria de cálculo: PDF, Word, Excel)
+js/ui-prevista.js      (prevista por tipo de uso y m²)
 js/ui-proyecto.js  ui-unifilar.js  ui-revit.js  ui-memoria.js  ui-cuadro.js  ui-resumen.js  ui-admin.js  export-excel.js
 img/logo-sinergia.png
 js/data/seed.js        (catálogo generado del Excel)

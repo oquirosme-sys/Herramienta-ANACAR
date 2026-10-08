@@ -32,6 +32,17 @@
       return el;
     },
 
+    /** Factor guardado como número y editado en %: modo 'factor' (125 % ↔ 1,25) o 'aumento' (10 % ↔ 1,10). */
+    pct(obj, key, opts) {
+      opts = opts || {};
+      const aum = opts.modo === 'aumento', f = obj[key];
+      const aPct = x => (x === '' || x === null || x === undefined ? '' : Math.round((aum ? (Number(x) - 1) : Number(x)) * 10000) / 100);
+      return UI.input({ v: aPct(f) }, 'v', Object.assign({}, opts, { type: 'num', save: false, after: v => {
+        obj[key] = v === '' ? '' : Math.round((aum ? 1 + v / 100 : v / 100) * 10000) / 10000;
+        Store.save(); App.refresh();
+      } }));
+    },
+
     /** Select. options: [{value,label,group?,title?}] */
     select(options, value, onchange, opts) {
       opts = opts || {};
