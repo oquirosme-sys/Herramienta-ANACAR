@@ -48,8 +48,8 @@
     /** TABLA RESUMEN ORIGINAL (BZ18:CB56), incluye los datos del transformador si se indicaron. */
     original(r) {
       const A = r.alim, tr = r.tab.trafo || {};
-      return [['Tablero', r.nombre], ['Capacidad del transformador (kVA)', tr.kva || ''], ['Impedancia (%Z)', tr.z || ''], ['Fases', tr.fases || ''], ['Voltaje devanado primario (kV)', tr.primario || ''],
-        ['Voltaje devanado secundario (V)', tr.secundario || ''], ['Corriente de cortocircuito calculada (kA)', r.iccKA ? r2(r.iccKA) : ''], ['Potencia total (kVA)', r2(r.W130)], ['Potencia neta (kVA)', r2(A.L139)],
+      return [['Tablero', r.nombre], ['Capacidad del transformador (kVA)', tr.kva || ''], ['Impedancia (%Z)', tr.z || ''], ['Fases', tr.fases || ''], ['Voltaje devanado primario (kV)', tr.primario ? Number(tr.primario) / 1000 : ''],
+        ['Voltaje devanado secundario (V)', tr.kva ? r.tab.sistema : ''], ['Corriente de cortocircuito calculada (kA)', r.trafo && r.trafo.iccSec ? r2(r.trafo.iccSec / 1000) : (r.iccKA ? r2(r.iccKA) : '')], ['Potencia total (kVA)', r2(r.W130)], ['Potencia neta (kVA)', r2(A.L139)],
         ['Factor de demanda', r2(A.R139)], ['Factor de potencia', r2(A.T139)], ['Factor de diversidad', r2(A.S139)], ['Alimentadores', ''],
         ['Fases', A.preF, t2(A.AL139)], ['Neutro', t2(A.preN), t2(A.AN139)], ['Puesta a tierra', t2(A.preN), t2(A.AP139)], ['Distancia (m)', r2(A.M139)],
         ['Voltaje nominal (V)', r.V], ['Voltaje en bornes (V)', r2(A.AW139)], ['Caída de voltaje (V)', r2(A.AX139)], ['Caída de voltaje (%)', r2(A.AY139)]];
@@ -57,20 +57,11 @@
   };
   const num = v => (v === '' || v === null || v === undefined || isNaN(Number(v)) ? 1e9 : Number(v));
 
-  function tablaVertical(lista, fn, titulo) {
-    if (!lista.length) return h('div', { class: 'empty' }, 'Sin tableros.');
-    const filas = lista.map(fn), n = filas[0].length;
-    return h('div', { class: 'tbl-wrap', 'data-scroll': 'v-' + titulo }, h('table', { class: 'tbl vert' },
-      h('thead', null, h('tr', null, h('th', null, titulo), lista.map(r => h('th', { colspan: 2 }, r.nombre)))),
-      h('tbody', null, Array.from({ length: n }, (_, i) => h('tr', { class: filas[0][i][1] === '' && filas[0][i].length === 2 && i ? 'sub' : '' }, h('th', null, filas[0][i][0]),
-        filas.map(f => f[i].length > 2 ? [h('td', { class: 'r' }, f[i][1]), h('td', null, f[i][2])] : h('td', { colspan: 2 }, f[i][1])))))));
-  }
-
   App.views.resumen = function (view, R, sub) {
     sub = sub || 'horizontal';
     const lista = Resumen.ordenados(R);
     view.appendChild(h('div', { class: 'page-h row no-print' }, h('div', null, h('h2', null, 'Tablas resumen'), h('p', { class: 'muted' }, 'Tablas para los planos de Revit. Se actualizan solas; ya no hace falta correr macros.')),
-      h('div', { class: 'toolbar' }, UI.btn('Exportar a Excel', () => ExportExcel.download(R), 'primary small'),
+      h('div', { class: 'toolbar' }, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: Hoja.real, onchange: e => { Hoja.real = e.target.checked; App.refresh(); } }), ' Tamaño real'), UI.btn('Exportar a Excel', () => ExportExcel.download(R), 'primary small'),
         UI.btn('CSV (tabla horizontal)', () => U.download(App.fileBase() + ' - tabla resumen.csv', U.csv([Resumen.grupos.flatMap(([g, n]) => [g].concat(Array(n - 1).fill(''))), Resumen.sub].concat(lista.map(Resumen.horizontal))), 'text/csv'), 'small'),
         UI.btn('Imprimir', () => window.print(), 'small'))));
 
@@ -84,16 +75,12 @@
     const tabs = [['horizontal', 'Horizontal'], ['vertical', 'Vertical'], ['du', 'DU (vertical)'], ['original', 'Original']];
     view.appendChild(h('nav', { class: 'chips no-print' }, tabs.map(([k, l]) => h('a', { class: 'chip' + (sub === k ? ' active' : ''), href: '#resumen/' + k }, l))));
 
-    if (sub === 'horizontal') {
-      const head = h('thead', null,
-        h('tr', null, Resumen.grupos.map(([g, n]) => h('th', { colspan: n, rowspan: n === 1 ? 2 : 1 }, g))),
-        h('tr', null, Resumen.sub.map((s, i) => { const grp = colGrupo(i); return grp && grp[1] > 1 ? h('th', null, s) : null; })));
-      view.appendChild(UI.card('TABLA RESUMEN — TABLEROS ELÉCTRICOS', lista.length ? h('div', { class: 'tbl-wrap', 'data-scroll': 'res-h' }, h('table', { class: 'tbl res' }, head,
-        h('tbody', null, lista.map(r => h('tr', null, Resumen.horizontal(r).map((v, i) => h('td', { class: typeof v === 'number' ? 'r' : '' }, typeof v === 'number' ? U.fmt(v, 2) : v))))))) : h('div', { class: 'empty' }, 'Sin tableros.')));
-    } else if (sub === 'vertical') view.appendChild(UI.card('TABLA RESUMEN (VERTICAL)', tablaVertical(lista, Resumen.vertical, 'Tablero / Alimentadores')));
-    else if (sub === 'du') view.appendChild(UI.card('TABLA RESUMEN DU (VERTICAL)', tablaVertical(lista, Resumen.du, 'Tablero / Alimentadores')));
-    else view.appendChild(UI.card('TABLA RESUMEN ORIGINAL', tablaVertical(lista, Resumen.original, 'Datos'), h('small', { class: 'muted' }, 'Los datos del transformador se llenan en la memoria de cálculo de cada tablero.')));
+    const hoja = sub === 'horizontal' ? Hoja.resumen(lista)
+      : sub === 'vertical' ? Hoja.vertical(lista, Resumen.vertical, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS')
+        : sub === 'du' ? Hoja.vertical(lista, Resumen.du, 'TABLA RESUMEN DU - TABLEROS ELÉCTRICOS')
+          : Hoja.vertical(lista, Resumen.original, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS');
+    view.appendChild(h('article', { class: 'hoja' }, lista.length ? Hoja.html(hoja, { real: Hoja.real }) : h('div', { class: 'empty' }, 'Sin tableros.')));
+    if (sub === 'original') view.appendChild(h('p', { class: 'hint no-print' }, 'Los datos del transformador se toman del transformador de cada tablero (memoria de cálculo o diagrama unifilar).'));
   };
-  function colGrupo(i) { let c = 0; for (const g of Resumen.grupos) { if (i < c + g[1]) return g; c += g[1]; } return null; }
   window.Resumen = Resumen;
 })();

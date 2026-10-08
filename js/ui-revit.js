@@ -106,7 +106,7 @@
       p.circuitos.forEach(c => {
         const libres = c.polos.filter(x => !t.circuitos.some(o => (o.polos || []).includes(x)));
         t.circuitos.push({ id: U.uid(), polos: libres.length === c.polos.length ? c.polos : Store.posicionLibre(t, c.polos.length), detalleId: c.detalleId, descripcion: c.nombre, kva: c.kva,
-          longitud: c.longitud === null ? '' : Math.round(c.longitud * factor * 100) / 100, material: 'CU', aislamiento: 'THHN', mult: '', paralelos: '', aumento: 1, breakerId: '', prot: '', tableroHijoId: '', origen: 'revit' });
+          longitud: c.longitud === null ? '' : Math.round(c.longitud * factor * 100) / 100, material: 'CU', aislamiento: 'THHN', mult: '', paralelos: '', aumento: 1, breakerId: '', prot: '', tableroHijoId: '', origen: 'revit', circuitoRevit: c.polos.join(',') });
         nC++;
       });
     });
@@ -115,8 +115,58 @@
     App.go('proyecto');
   }
 
+  /* ---------- cambios de circuito pendientes para pasar a Revit ---------- */
+  let verAplicados = false;
+  function filasCambios() {
+    const out = [];
+    Store.project.tableros.forEach(t => (t.cambiosRevit || []).forEach(e => { if (verAplicados || !e.aplicado) out.push({ t, e }); }));
+    return out;
+  }
+  function autobalancearTodos() {
+    const R = App.R, res = [];
+    R.orden.forEach(r => {
+      if (r.fases === 1) return;
+      const b = Calc.balanceo(r.tab, Store.catalog, { espacios: r.cat ? r.cat.espacios : 0, maxMov: 40, objetivo: Math.min(5, Store.project.desbalanceMax || 5) });
+      if (b.cambios.length) res.push({ r, b });
+    });
+    if (!res.length) { UI.alert('No hay cambios que mejoren el balance de los tableros.', 'Autobalanceo'); return; }
+    UI.modal('Autobalancear todos los tableros', h('div', null,
+      h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Tablero', 'Desbalance actual', 'Con cambios', 'Circuitos a mover'].map(x => h('th', null, x)))),
+        h('tbody', null, res.map(({ r, b }) => h('tr', null, h('td', null, r.nombre), h('td', { class: 'r' }, U.fmt(b.antes, 2) + ' %'), h('td', { class: 'r okc' }, U.fmt(b.despues, 2) + ' %'), h('td', { class: 'r' }, b.cambios.length))))),
+      h('p', { class: 'muted' }, 'Los circuitos fijados no se mueven. Los cambios quedan anotados en esta lista para pasarlos a Revit.')), [
+      { label: 'Cancelar' },
+      { label: 'Aplicar en todos', cls: 'primary', onclick: () => { res.forEach(({ r, b }) => Store.registrarCambios(r.tab, b.cambios, 'balanceo')); App.refresh(); UI.toast('Cambios aplicados en ' + res.length + ' tablero(s)', 'ok'); } },
+    ], { wide: true });
+  }
+  function vistaCambios(view) {
+    const filas = filasCambios(), pend = filas.filter(x => !x.e.aplicado);
+    const tabla = () => [['Panel (Revit)', 'Carga', 'Circuito en Revit', 'Circuito nuevo', 'Origen', 'Fecha']].concat(filas.map(({ t, e }) => [t.nombre, e.descripcion, e.revit || e.de, e.a, e.origen, e.fecha]));
+    view.appendChild(h('div', { class: 'toolbar' },
+      UI.btn('⚖ Autobalancear todos los tableros', autobalancearTodos, 'primary small'),
+      UI.btn('Copiar tabla', () => { navigator.clipboard.writeText(tabla().map(r => r.join('\t')).join('\n')).then(() => UI.toast('Tabla copiada: péguela en Excel', 'ok'), () => UI.alert('No se pudo copiar.')); }, 'small'),
+      UI.btn('Exportar CSV', () => U.download(App.fileBase() + ' - cambios para Revit.csv', U.csv(tabla()), 'text/csv'), 'small'),
+      pend.length ? UI.btn('Marcar todos como aplicados', async () => { if (await UI.confirm('¿Marcar los ' + pend.length + ' cambios como ya aplicados en Revit?', 'Marcar', false)) { pend.forEach(x => { x.e.aplicado = true; }); Store.save(); App.refresh(); } }, 'small') : null,
+      h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: verAplicados, onchange: e => { verAplicados = e.target.checked; App.refresh(); } }), ' Ver también los aplicados')));
+    if (!filas.length) { view.appendChild(h('div', { class: 'empty' }, 'No hay cambios pendientes. Al autobalancear o cambiar la posición de un circuito, el cambio aparece aquí para pasarlo al modelo de Revit.')); return; }
+    view.appendChild(UI.card('Cambios de circuito para Revit (' + pend.length + ' pendientes)', h('div', null, h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
+      h('thead', null, h('tr', null, ['Aplicado', 'Panel (Revit)', 'Carga', 'Circuito en Revit', '→', 'Circuito nuevo', 'Origen', 'Fecha', ''].map(x => h('th', null, x)))),
+      h('tbody', null, filas.map(({ t, e }) => h('tr', { class: e.aplicado ? 'dim' : '' },
+        h('td', { class: 'c' }, h('input', { type: 'checkbox', checked: !!e.aplicado, onchange: ev => { e.aplicado = ev.target.checked; Store.save(); App.refresh(); } })),
+        h('td', null, h('a', { href: '#memoria/' + t.id }, t.nombre)), h('td', null, e.descripcion), h('td', null, e.revit || e.de), h('td', { class: 'muted' }, '→'), h('td', null, h('b', null, e.a)),
+        h('td', null, e.origen === 'balanceo' ? 'Autobalanceo' : 'Manual'), h('td', null, e.fecha),
+        h('td', { class: 'acc' }, UI.iconBtn('↶', 'Deshacer este cambio (vuelve a la posición anterior)', () => {
+          const c = t.circuitos.find(x => x.id === e.circuitoId);
+          if (c) c.polos = String(e.de).split(',').map(Number).filter(Boolean);
+          t.cambiosRevit.splice(t.cambiosRevit.indexOf(e), 1); Store.save(); App.refresh();
+        }))))))),
+      h('p', { class: 'hint' }, 'En Revit: abra el tablero (Panel), seleccione el circuito y use "Mover a" o edite el número de circuito. Al terminar márquelo como aplicado.'))));
+  }
+
   /* ---------- vista ---------- */
-  App.views.revit = function (view) {
+  App.views.revit = function (view, R, sub) {
+    view.appendChild(h('nav', { class: 'chips no-print' }, h('a', { class: 'chip' + (sub !== 'cambios' ? ' active' : ''), href: '#revit' }, 'Importar circuitos'),
+      h('a', { class: 'chip' + (sub === 'cambios' ? ' active' : ''), href: '#revit/cambios' }, 'Cambios para Revit (' + Store.project.tableros.reduce((a, t) => a + (t.cambiosRevit || []).filter(e => !e.aplicado).length, 0) + ')')));
+    if (sub === 'cambios') { view.appendChild(h('div', { class: 'page-h' }, h('h2', null, 'Cambios para Revit'), h('p', { class: 'muted' }, 'Lista de circuitos que cambiaron de posición (autobalanceo o edición) para actualizar el modelo de Revit.'))); vistaCambios(view); return; }
     view.appendChild(h('div', { class: 'page-h' }, h('h2', null, 'Importar circuitos de Revit'), h('p', { class: 'muted' },
       'Los tableros se alimentan con la tabla de circuitos de Revit (Electrical Circuit Schedule) con las columnas Voltage, True Load, Panel, Circuit Number, Number of Poles, Load Name y Length.')));
     if (!sesion) {

@@ -5,7 +5,8 @@
 
   const TABS = [
     { id: 'proyecto', label: 'Proyecto' },
-    { id: 'revit', label: 'Importar de Revit' },
+    { id: 'unifilar', label: 'Diagrama unifilar' },
+    { id: 'revit', label: 'Revit' },
     { id: 'memoria', label: 'Memoria de cálculo' },
     { id: 'tab3f', label: 'Tableros 3F' },
     { id: 'tab1f', label: 'Tableros 1F' },

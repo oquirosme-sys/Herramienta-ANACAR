@@ -34,15 +34,22 @@
     emptyProject() {
       return {
         id: U.uid(), nombre: '', numero: '', ubicacion: '', fecha: U.today(), elaboro: '', revision: '',
-        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', tableros: [],
+        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', tableros: [],
       };
     },
     migrate() {
       const c = Store.catalog, s = window.SEED;
+      // catálogos guardados antes de las reglas de fabricante: tablas NEC completas, SCCR a 240/480 V y fases de cada tablero
+      if (!c.reglas) {
+        ['reglas', 'ampacidad31016', 'tempFactor'].forEach(k => { c[k] = U.clone(s[k]); });
+        c.listas.temperaturas = s.listas.temperaturas.slice();
+      }
+      c.breakers.forEach(b => { if (b.vSccr === undefined) { const o = s.breakers.find(x => x.marca === b.marca && x.id === b.id); if (o) b.vSccr = o.vSccr; } });
+      c.tablerosCat.forEach(t => { if (t.fases === undefined) { const o = s.tablerosCat.find(x => x.id === t.id); if (o) t.fases = o.fases; } });
       Object.keys(s).forEach(k => { if (c[k] === undefined) c[k] = U.clone(s[k]); });
       if (!c.marcas) c.marcas = Store.marcasDe(c);
       const p = Store.project;
-      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
+      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
       p.tableros.forEach(t => Store.completarTablero(t));
     },
 
@@ -61,8 +68,17 @@
       if (t.prefijo === undefined) t.prefijo = 'TABLERO';
       if (t.reserva === undefined) t.reserva = 0.1;
       if (t.longitud === undefined) t.longitud = 10;
-      t.alim = Object.assign({ material: 'CU', aislamiento: 'XHHW-2', fp: 0.9, mult: 1.25, tuberia: 'EMT', paralelos: '', aumento: 1, tempAmb: '26-30', tempBorne: 90, agrupamiento: '4-6', breakerId: '', prot: '' }, t.alim || {});
-      t.circuitos = t.circuitos || []; t.fd = t.fd || {}; t.trafo = t.trafo || {};
+      t.alim = Object.assign({ material: 'CU', aislamiento: 'XHHW-2', fp: 0.9, mult: 1.25, tuberia: 'EMT', paralelos: '', aumento: 1, tempAmb: '26-30', tempBorne: 75, agrupamiento: '', breakerId: '', prot: '' }, t.alim || {});
+      t.circuitos = t.circuitos || []; t.fd = t.fd || {}; t.cambiosRevit = t.cambiosRevit || [];
+      // transformador aguas arriba (antes solo datos para la tabla original; primario en kV)
+      t.trafo = Object.assign({ activo: false, kva: '', z: '', xr: '', primario: '', fases: '', nombre: '' }, t.trafo || {});
+      if (Number(t.trafo.primario) && Number(t.trafo.primario) < 100) t.trafo.primario = Number(t.trafo.primario) * 1000;
+      // versión anterior: transformador de la lista del Excel solo para el Icc → transformador aguas arriba
+      if (t.transformadorId && !t.trafo.activo) {
+        const x = Store.catalog.transformadores.find(o => String(o.id) === String(t.transformadorId)), m = x && /(\d+(?:[.,]\d+)?)\s*KVA/i.exec(x.nombre);
+        if (x && m) Object.assign(t.trafo, { activo: true, kva: Number(m[1].replace(',', '.')), z: x.z, fases: /MONO/i.test(x.tipo) ? 1 : 3, nombre: x.nombre });
+        delete t.transformadorId;
+      }
       t.circuitos.forEach(c => { if (!c.id) c.id = U.uid(); if (!Array.isArray(c.polos)) c.polos = []; });
       if (t.montaje === undefined) t.montaje = 'Superficial';
       return t;
@@ -106,10 +122,25 @@
       return c;
     },
 
+    /** Aplica cambios de posición y los anota en la lista de cambios pendientes para Revit (un registro por circuito: posición original → nueva). */
+    registrarCambios(t, cambios, origen) {
+      const fecha = U.today();
+      cambios.forEach(ch => {
+        const c = t.circuitos.find(x => x.id === ch.id); if (!c) return;
+        const de = (ch.de || c.polos || []).join(','), a = ch.a.join(',');
+        c.polos = ch.a.slice();
+        const e = t.cambiosRevit.find(x => x.circuitoId === ch.id && !x.aplicado);
+        if (e) { e.a = a; e.fecha = fecha; e.origen = origen || e.origen; if (e.a === e.de) t.cambiosRevit.splice(t.cambiosRevit.indexOf(e), 1); }
+        else if (de !== a) t.cambiosRevit.push({ id: U.uid(), circuitoId: ch.id, descripcion: ch.descripcion || c.descripcion || '', de, a, revit: c.circuitoRevit || de, fecha, origen: origen || 'manual', aplicado: false });
+      });
+      Store.save();
+    },
     /** Detalle de carga (DCARGAS) adecuado para el circuito que alimenta a un tablero derivado. */
-    detalleTablero(t) {
-      const d = Store.catalog.detallesCarga, f = Number(t.fases) === 3 ? 3 : 2;
-      return (d.find(x => /tablero/i.test(x.descripcion) && Number(x.fases) === f && Number(x.v) === Number(t.voltaje)) ||
+    detalleTablero(t, padre) {
+      const d = Store.catalog.detallesCarga, f = Number(t.fases) === 3 ? 3 : 2, V = Number(padre ? padre.voltaje : t.voltaje);
+      if (padre && Number(padre.voltaje) !== Number(t.voltaje)) { const tr = d.find(x => /transformador/i.test(x.descripcion) && Number(x.v) === V); if (tr) return tr.id; }
+      return (d.find(x => /tablero/i.test(x.descripcion) && Number(x.fases) === f && Number(x.v) === V) ||
+        d.find(x => /tablero/i.test(x.descripcion) && Number(x.v) === V) ||
         d.find(x => /tablero/i.test(x.descripcion) && Number(x.fases) === f) || d[0]).id;
     },
     /** Cambia de quién se alimenta un tablero y crea/mueve el circuito que lo alimenta en el tablero padre. */
@@ -119,7 +150,7 @@
       t.padreId = padreId || '';
       const padre = Store.tablero(padreId);
       if (padre) {
-        const det = Store.detalleTablero(t), dd = Store.catalog.detallesCarga.find(x => x.id === det) || {};
+        const det = Store.detalleTablero(t, padre), dd = Store.catalog.detallesCarga.find(x => x.id === det) || {};
         const np = Number(dd.fases) === 3 ? 3 : 2;
         padre.circuitos.push({ id: U.uid(), polos: Store.posicionLibre(padre, np), detalleId: det, descripcion: '', kva: 0, longitud: t.longitud, material: 'CU', aislamiento: 'THHN', mult: '', paralelos: '', aumento: 1, breakerId: '', prot: '', tableroHijoId: t.id, auto: true });
       }

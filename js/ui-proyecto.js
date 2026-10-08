@@ -52,6 +52,9 @@
         UI.field('Desbalance máx. (%)', UI.input(p, 'desbalanceMax', { type: 'num', fk: 'p:des' })),
         UI.field('Marca por defecto', UI.bind(p, 'marcaDefecto', Store.catalog.marcas, { fk: 'p:marca' }), 'Para elegir tablero, breakers y supresor automáticamente'),
         UI.field('Long. máx. para Icc (m)', UI.input(p, 'iccLongMax', { type: 'num', fk: 'p:icl' }), 'Igual que el Excel (20 m). 0 = sin límite'),
+        UI.field('Reserva de espacios (%)', UI.input(p, 'reservaEspacios', { type: 'num', fk: 'p:res' }), 'Para elegir el tablero de catálogo'),
+        UI.field('Icc de la red (kA)', UI.input(p, 'iccRed', { type: 'num', fk: 'p:iccr', placeholder: 'infinita' }), 'En el primario de los transformadores principales'),
+        UI.field('Alimentadores', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: p.autoAmpacidad !== false, onchange: e => { p.autoAmpacidad = e.target.checked; Store.save(); App.refresh(); } }), ' Aumentar calibre si no cumple 310.15'), 'Temperatura y agrupamiento'),
       ))));
 
     // ---- tableros
@@ -84,6 +87,6 @@
         UI.btn('Crear varios…', crearVarios, 'small'),
         UI.btn('Importar de Revit…', () => App.go('revit'), 'small'))));
 
-    view.appendChild(UI.card('Diagrama de alimentación', arbol(R), h('small', { class: 'muted' }, 'Clic en un tablero para abrir su memoria de cálculo')));
+    view.appendChild(UI.card('Diagrama de alimentación', arbol(R), h('a', { class: 'btn small', href: '#unifilar' }, 'Ver diagrama unifilar con transformadores y cortocircuito →')));
   };
 })();

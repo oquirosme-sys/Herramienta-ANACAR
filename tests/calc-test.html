@@ -57,6 +57,26 @@
     check('Cascada: Icc del hijo < Icc del padre', rh.iccA < rp.iccA, true);
     check('Cascada: el hijo nombra a su padre', rh.alimentadoDesde, 'TABLERO Machote');
 
+
+    // Transformador 750 kVA, Z 5,75 % desde red infinita: secundario = KACC del Excel (DATOS, 36 206 A) y en bornes = AQ10 (5 721,7 A)
+    const close = (a, b, tol) => Math.abs(a - b) <= tol * Math.abs(b);
+    const tt = JSON.parse(JSON.stringify(MACHOTE.tablero)); tt.iccManual = ''; tt.trafo = { activo: true, kva: 750, z: 5.75 };
+    const RT = Calc.proyecto({ tableros: [tt], cvMaxTotal: 5, iccLongMax: 20 }, window.SEED).orden[0];
+    check('Transformador: Icc secundario ≈ 36 206 A', close(RT.trafo.iccSec, 36206, 0.0005), true);
+    check('Transformador: Icc en bornes ≈ AQ10 del Excel', close(RT.iccA, 5721.655187998049, 0.0005), true);
+    // Reglas de fabricante: tablero NQ 208 V con 15 kA → ramal 1P 20 A debe ser QOB-VH (22 kA), no QOB (10 kA)
+    const tq = { id: 'q', nombre: 'Q', tipo: '3F', fases: 3, voltaje: 208, hilos: 4, sistema: '120/208', reserva: 0, longitud: 10, iccManual: 15, marca: 'Square D', alim: {},
+      circuitos: [{ id: 'q1', polos: [1], detalleId: 8, kva: 1, longitud: 10 }] };
+    const RQ = Calc.proyecto({ tableros: [tq], cvMaxTotal: 5, reservaEspacios: 20 }, window.SEED).orden[0];
+    check('Reglas: familia del tablero', RQ.famT && RQ.famT.familia, 'NQ');
+    check('Reglas: breaker ramal por SCCR', RQ.rows[0].breaker && RQ.rows[0].breaker.ref, 'QOB120VH');
+    // Autobalanceo: todo en fase A debe repartirse
+    const tb = { id: 'b', tipo: '3F', fases: 3, voltaje: 208, circuitos: [1, 7, 13, 19].map((p, i) => ({ id: 'b' + i, polos: [p], detalleId: 8, kva: 1 })) };
+    const B = Calc.balanceo(tb, window.SEED, { espacios: 30 });
+    check('Autobalanceo: desbalance inicial 100 %', B.antes, 100);
+    check('Autobalanceo: mejora el desbalance', B.despues < 60, true);
+    check('Autobalanceo: lista de cambios', B.cambios.length >= 2, true);
+
     document.getElementById('sum').innerHTML = fails.length ? '<b class="bad">' + fails.length + ' de ' + total + ' comprobaciones fallaron</b>' : '<b class="ok">' + total + ' de ' + total + ' comprobaciones correctas</b>';
     out.innerHTML = fails.length ? '<table><tr><th>Valor</th><th>Herramienta</th><th>Excel</th></tr>' + fails.map(f => '<tr><td style="text-align:left">' + f[0] + '</td><td>' + f[1] + '</td><td>' + f[2] + '</td></tr>').join('') + '</table>' : '';
     window.RESULT = { total, fails };

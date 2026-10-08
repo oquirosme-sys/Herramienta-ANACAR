@@ -12,8 +12,10 @@
     marcas: { title: 'Marcas', especial: true },
     tiposCarga: { title: 'Tipos de carga (demanda)', cols: [['id', 'Código', 'num'], ['nombre', 'Nombre'], ['metodo', 'Método', 'sel', () => [{ value: 'fijo', label: 'Factor fijo' }, { value: 'tomas', label: 'Tomas: 10 kVA + 50 %' }, { value: 'cocina', label: 'Cocina: tabla 220.56' }, { value: '220.53', label: '≥ 4 equipos: 75 % (220.53)' }]], ['fd', 'F. demanda', 'num'], ['fdiv', 'F. diversidad', 'num']] },
     detallesCarga: { title: 'Detalles de carga (DCARGAS)', cols: [['id', 'Detalle', 'num'], ['tipo', 'Tipo de carga', 'sel', tipos, true], ['descripcion', 'Descripción'], ['v', 'V', 'num'], ['fases', 'Fases', 'num'], ['hilos', 'Hilos', 'num'], ['fd', 'F. dem.', 'num'], ['fdiv', 'F. div.', 'num'], ['fp', 'FP', 'num'], ['continua', 'Continua', 'bool'], ['mult', 'Mult.', 'num'], ['fundamento', 'Fundamento NEC']] },
-    tablerosCat: { title: 'Tableros', marca: 'fabricante', cols: [['id', 'Tipo', 'num'], ['modelo', 'Modelo de referencia'], ['fabricante', 'Fabricante', 'sel', marcas], ['barraFase', 'Barra fase (A)', 'num'], ['barraNeutro', 'Barra neutro (A)', 'num'], ['barraTierra', 'Barra tierra (A)', 'num'], ['espacios', 'Espacios', 'num'], ['nota', 'Nota']] },
-    breakers: { title: 'Breakers', marca: 'marca', cols: [['marca', 'Marca', 'sel', marcas], ['id', 'Tipo', 'num'], ['modelo', 'Modelo'], ['marco', 'Marco (A)', 'num'], ['amperios', 'Amperios (rango)'], ['unidad', 'Tipo de unidad'], ['polos', 'Polos', 'num'], ['sccr', 'SCCR (kA)', 'num'], ['nota', 'Nota']] },
+    tablerosCat: { title: 'Tableros', marca: 'fabricante', cols: [['id', 'Tipo', 'num'], ['modelo', 'Modelo de referencia'], ['fabricante', 'Fabricante', 'sel', marcas], ['fases', 'Fases', 'sel', () => ['3F', '1F', '1F/3F']], ['barraFase', 'Barra fase (A)', 'num'], ['barraNeutro', 'Barra neutro (A)', 'num'], ['barraTierra', 'Barra tierra (A)', 'num'], ['espacios', 'Espacios', 'num'], ['nota', 'Nota']] },
+    breakers: { title: 'Breakers', marca: 'marca', cols: [['marca', 'Marca', 'sel', marcas], ['id', 'Tipo', 'num'], ['modelo', 'Modelo'], ['marco', 'Marco (A)', 'num'], ['amperios', 'Amperios (rango)'], ['unidad', 'Tipo de unidad'], ['polos', 'Polos', 'num'], ['sccr', 'SCCR (kA)', 'num'], ['vSccr', 'SCCR a (V)', 'num'], ['nota', 'Nota']] },
+    reglasTableros: { title: 'Reglas: familias de tableros', get: () => C().reglas.tableros, ayuda: 'El tablero automático se elige entre las familias de la marca cuyo voltaje máximo y fases sirven, con barras ≥ protección principal y espacios ≥ usados + reserva; primero la de menor "Preferencia". Los breakers ramales y principales se buscan solo en las familias indicadas (separadas por coma) y se elige el de menor SCCR que supere el Icc del tablero.', cols: [['marca', 'Marca', 'sel', marcas], ['familia', 'Familia'], ['patron', 'Patrón del modelo (expresión regular)'], ['vMax', 'V máx.', 'num'], ['fases', 'Fases (1F/3F)'], ['ramales', 'Breakers ramales'], ['principales', 'Breakers principales'], ['orden', 'Preferencia', 'num'], ['nota', 'Nota']] },
+    reglasBreakers: { title: 'Reglas: familias de breakers', get: () => C().reglas.breakers, ayuda: 'La familia de cada breaker se reconoce por su modelo. La plantilla arma el número de catálogo: {p} polos, {a} amperios, {a3} amperios con 3 dígitos, {m3} primeras 3 letras del modelo (p. ej. QOB{p}{a} → QOB120; EDB{p}4{a3} → EDB34020). Vacía = se usa el modelo del catálogo.', cols: [['marca', 'Marca', 'sel', marcas], ['familia', 'Familia'], ['patron', 'Patrón del modelo (expresión regular)'], ['vMax', 'V máx.', 'num'], ['plantilla', 'Plantilla del número de catálogo']] },
     supresores: { title: 'Supresores (SPD)', marca: 'marca', cols: [['marca', 'Marca', 'sel', marcas], ['id', 'Tipo', 'num'], ['modelo', 'Modelo'], ['montaje', 'Montaje', 'sel', () => ['Interno', 'Externo']], ['kaLL', 'kA L-L', 'num'], ['kaLN', 'kA L-N', 'num'], ['voltaje', 'Voltaje'], ['fases', 'Fases', 'num'], ['conexion', 'Conexión']] },
     cableado: { title: 'Tipos de cableado', especial: true },
     ampCU: { title: 'Calibre por ampacidad — cobre (310.16)', cols: [['amp', 'Desde (A)', 'num'], ['cal', 'Calibre']] },
@@ -28,7 +30,7 @@
   };
 
   function tabla(key, def) {
-    let lista = C()[key];
+    let lista = def.get ? def.get() : C()[key];
     const q = filtro.toLowerCase();
     const filas = lista.map((x, i) => ({ x, i })).filter(({ x }) => (!def.marca || !filtroMarca || x[def.marca] === filtroMarca) && (!q || def.cols.some(c => String(x[c[0]] === undefined || x[c[0]] === null ? '' : x[c[0]]).toLowerCase().includes(q))));
     const cel = (x, c, i) => {
@@ -46,7 +48,7 @@
       lista.push(o); Store.save(); filtro = ''; App.refresh();
       setTimeout(() => { const w = document.querySelector('[data-scroll="adm-' + key + '"]'); if (w) w.scrollTop = w.scrollHeight; }, 0);
     };
-    return h('div', null,
+    return h('div', null, def.ayuda ? h('p', { class: 'hint' }, def.ayuda) : null,
       h('div', { class: 'toolbar' },
         h('input', { type: 'search', placeholder: 'Buscar…', value: filtro, oninput: e => { filtro = e.target.value; clearTimeout(tabla.t); tabla.t = setTimeout(App.refresh, 250); }, 'data-fk': 'adm-buscar' }),
         def.marca ? UI.select(UI.opts(C().marcas, 'Todas las marcas'), filtroMarca, v => { filtroMarca = v; App.refresh(); }) : null,
