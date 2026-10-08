@@ -77,6 +77,21 @@
     check('Autobalanceo: mejora el desbalance', B.despues < 60, true);
     check('Autobalanceo: lista de cambios', B.cambios.length >= 2, true);
 
+
+    // Serie (240.86): tablero CH con principal PDG2…G (65 kA) y Icc 30 kA → ramal BAB de 10 kA aceptado en serie
+    const ts = { id: 's', nombre: 'S', tipo: '3F', fases: 3, voltaje: 208, hilos: 4, sistema: '120/208', reserva: 0, longitud: 5, iccManual: 30, marca: 'Eaton', catalogoId: 95, alim: { prot: 100, breakerId: 14 },
+      circuitos: [{ id: 's1', polos: [1], detalleId: 8, kva: 1, longitud: 10, unidad: 'STD' }] };
+    const RS = Calc.proyecto({ tableros: [ts], cvMaxTotal: 5 }, window.SEED).orden[0];
+    check('Serie: principal PDG2 G', /^PDG23G/.test(RS.bkMain.ref), true);
+    check('Serie: ramal BAB aceptado en serie', !!(RS.rows[0].breaker.serie && !RS.rows[0].breaker.sccrBajo), true);
+    // NEC 2020: vivienda → baño GFCI y habitación AFCI
+    const tv = { id: 'v', nombre: 'V', tipo: '3F', fases: 3, voltaje: 208, hilos: 4, sistema: '120/208', reserva: 0, longitud: 5, iccManual: 5, marca: 'Eaton', alim: {},
+      circuitos: [{ id: 'v1', polos: [1], detalleId: 8, kva: 1, longitud: 10, descripcion: 'Tomacorrientes baño' }, { id: 'v2', polos: [3], detalleId: 8, kva: 1, longitud: 10, descripcion: 'Tomacorrientes habitación' }] };
+    const RV = Calc.proyecto({ tableros: [tv], cvMaxTotal: 5, ocupacion: 'vivienda' }, window.SEED).orden[0];
+    check('NEC 210.8: baño GFCI', RV.rows[0].breaker.unidad, 'GFCI');
+    check('NEC 210.12: habitación AFCI', RV.rows[1].breaker.unidad, 'AFCI');
+    check('Catálogo GFCI Eaton', RV.rows[0].breaker.ref, 'QBGF1020');
+
     document.getElementById('sum').innerHTML = fails.length ? '<b class="bad">' + fails.length + ' de ' + total + ' comprobaciones fallaron</b>' : '<b class="ok">' + total + ' de ' + total + ' comprobaciones correctas</b>';
     out.innerHTML = fails.length ? '<table><tr><th>Valor</th><th>Herramienta</th><th>Excel</th></tr>' + fails.map(f => '<tr><td style="text-align:left">' + f[0] + '</td><td>' + f[1] + '</td><td>' + f[2] + '</td></tr>').join('') + '</table>' : '';
     window.RESULT = { total, fails };

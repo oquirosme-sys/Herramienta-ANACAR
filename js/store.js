@@ -34,7 +34,7 @@
     emptyProject() {
       return {
         id: U.uid(), nombre: '', numero: '', ubicacion: '', fecha: U.today(), elaboro: '', revision: '',
-        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', tableros: [],
+        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', resumenSimple: false, ocupacion: 'comercial', tableros: [],
       };
     },
     migrate() {
@@ -44,12 +44,21 @@
         ['reglas', 'ampacidad31016', 'tempFactor'].forEach(k => { c[k] = U.clone(s[k]); });
         c.listas.temperaturas = s.listas.temperaturas.slice();
       }
+      // catálogos anteriores a las subestaciones (QED-2, Pow-R-Line Xpert) y al tipo de principal (zapatas / interruptor)
+      if (!c.reglas.tableros.some(f => f.familia === 'QED-2')) {
+        c.reglas.tableros.forEach(f => { const o = s.reglas.tableros.find(x => x.marca === f.marca && x.familia === f.familia); if (o && f.clase === undefined) f.clase = o.clase; });
+        s.reglas.tableros.filter(x => x.clase === 'subestacion').forEach(x => c.reglas.tableros.push(U.clone(x)));
+        c.reglas.breakers.forEach(f => { if (/^PDG/.test(f.familia) && !f.plantilla) f.plantilla = '{pdg}'; });
+        s.tablerosCat.filter(x => /^(QED|PRLX)/.test(x.modelo)).forEach(x => { if (!c.tablerosCat.some(y => y.id === x.id)) c.tablerosCat.push(U.clone(x)); });
+      }
+      c.reglas.breakers.forEach(f => { if (f.familia === 'GFCI/AFCI' && !f.plantilla) { const o = s.reglas.breakers.find(x => x.marca === f.marca && x.familia === f.familia); if (o) f.plantilla = o.plantilla; } });
+      c.tablerosCat.forEach(t => { if (t.principal === undefined) { const o = s.tablerosCat.find(x => x.id === t.id && x.modelo === t.modelo); t.principal = o ? o.principal : 'Ambos'; } });
       c.breakers.forEach(b => { if (b.vSccr === undefined) { const o = s.breakers.find(x => x.marca === b.marca && x.id === b.id); if (o) b.vSccr = o.vSccr; } });
       c.tablerosCat.forEach(t => { if (t.fases === undefined) { const o = s.tablerosCat.find(x => x.id === t.id); if (o) t.fases = o.fases; } });
       Object.keys(s).forEach(k => { if (c[k] === undefined) c[k] = U.clone(s[k]); });
       if (!c.marcas) c.marcas = Store.marcasDe(c);
       const p = Store.project;
-      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
+      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed', 'resumenSimple', 'ocupacion'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
       p.tableros.forEach(t => Store.completarTablero(t));
     },
 
@@ -81,6 +90,11 @@
       }
       t.circuitos.forEach(c => { if (!c.id) c.id = U.uid(); if (!Array.isArray(c.polos)) c.polos = []; });
       if (t.montaje === undefined) t.montaje = 'Superficial';
+      if (!t.principal) t.principal = 'interruptor';
+      if (!t.clase) t.clase = 'tablero';
+      if (t.espacios === undefined) t.espacios = '';
+      t.ups = Object.assign({ activo: false, kva: '', factorIcc: 2, nombre: 'UPS' }, t.ups || {});
+      t.alterna = Object.assign({ activo: false, equipo: 'ATS', tipo: 'generador', nombre: 'GEN-1', kva: '', xd: 12, origenId: '', longitud: '', material: 'CU', aislamiento: 'XHHW-2', tuberia: 'EMT', paralelos: '' }, t.alterna || {});
       return t;
     },
     nuevoTablero(datos) {

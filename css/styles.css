@@ -230,3 +230,20 @@ td.ph0 { background: var(--pa); color: var(--pa-i); } td.ph1 { background: var(-
 .valid { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--line-2); } .valid h4 { margin-bottom: .4rem; display: flex; gap: .5rem; align-items: center; }
 .tbl td.c { text-align: center; }
 .tbl tr.dim td { color: var(--muted); }
+.nec { margin: 0; padding-left: 1rem; list-style: none; } .nec li { margin: .25rem 0; } .nec li.error { color: var(--bad); } .nec li.aviso { color: var(--warn); } .nec li.info { color: var(--muted); }
+.hx .s-titR { font-size: 52px; font-weight: 700; color: #006600; text-align: center; white-space: normal; line-height: 1.1; border: 2px solid #000 !important; }
+@media print { .hx { margin: 0 auto; } .hoja { align-items: center; } .hx-wrap { display: flex; justify-content: center; width: 100%; } }
+@page { size: letter landscape; margin: 10mm; }
+
+/* ---------- reporte de memoria ---------- */
+.hoja.doc { padding: 1.2rem 1.6rem; font-family: "Century Gothic", Futura, "Trebuchet MS", sans-serif; font-size: 13px; }
+.rep h1 { font-size: 1.4rem; color: #006600; } .rep h2 { font-size: 1.15rem; color: #006600; border-bottom: 2px solid #006600; margin: 1.4rem 0 .4rem; padding-bottom: .2rem; }
+.rep h3 { font-size: 1rem; margin: 1rem 0 .3rem; } .rep h4 { font-size: .92rem; margin: .7rem 0 .2rem; } .rep p { margin: .15rem 0; }
+.rep-h { display: flex; gap: 1rem; align-items: center; border-bottom: 3px solid #006600; padding-bottom: .5rem; } .rep-h img { height: 56px; }
+.rt { border-collapse: collapse; width: 100%; margin: .2rem 0 .6rem; } .rt th, .rt td { border: 1px solid #999; padding: 2px 5px; vertical-align: top; } .rt th { background: #D9D9D9; text-align: left; }
+.rt td.n { text-align: right; white-space: nowrap; } .rt.kv2 th { width: 32%; background: #f0f0f0; font-weight: 600; } .rt.chica { font-size: 11px; }
+@media print { .hoja.doc { padding: 0; } .rep-tab { break-before: page; } .rt { page-break-inside: auto; } .rt tr { break-inside: avoid; } }
+.unifilar .u-trc, .unifilar .u-gen { fill: none; stroke: var(--ink); stroke-width: 2; } .unifilar .u-ups, .unifilar .u-ats { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.unifilar .u-lin2 { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 6 4; } .unifilar .u-tab { fill: var(--surface); stroke: var(--ink); stroke-width: 1.2; } .unifilar .u-tabl { stroke: var(--line); stroke-width: 1; }
+.unifilar .u-t.s { font-size: 10px; } .unifilar .clic { cursor: pointer; } .unifilar .u-trc.clic:hover { stroke: var(--brand); }
+@media print { .app-head { display: none !important; } }

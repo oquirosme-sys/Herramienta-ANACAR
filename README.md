@@ -26,6 +26,19 @@ Las hojas informativas u ocultas (`INSTRUCCIONES`, `CÓDIGO VBA`, `FACTORES POR 
 - El **cortocircuito** baja por cada alimentador (método punto a punto con las constantes C de la hoja DATOS). En el tablero principal se indica el Icc o se elige el transformador.
 - Si el derivado tiene otro voltaje (transformador de por medio), la caída y el Icc se reinician y se avisa.
 
+## Novedades 2026.1-web.3
+- **Impresión centrada**: cada hoja (tableros, tablas resumen) se ajusta al ancho de la página horizontal al imprimir.
+- **Tabla resumen**: casilla *Solo tabla resumen* (sin datos del tablero, del supresor ni del interruptor principal), también en la exportación a Excel.
+- **Diagrama unifilar en DXF** (AutoCAD lo abre directamente; *Guardar como* → DWG). Capas E-TABLERO, E-ALIMENTADOR, E-PROTECCION, E-TRAFO, E-EQUIPOS, E-TEXTO, E-TABLA; texto en Century Gothic. Opción *Tabla de datos junto a cada tablero* (equipo, Icc, kVA, FD, FP, acometida, longitud, voltajes y % de caída), como en los DU.
+  El formato DWG es cerrado y no se puede escribir desde una página web; el DXF es el formato de intercambio de Autodesk.
+- **Por tablero**: interruptor principal o zapatas, espacios (polos) del tablero y tipo de equipo (tablero o subestación/switchboard: QED-2, I-Line, PRL4, Pow-R-Line Xpert); el modelo de catálogo se ajusta solo.
+- **Fuentes**: UPS en la alimentación normal (salida regulada, Icc limitado por el inversor) y **segunda acometida** con ATS, MTS o interruptor enclavado, desde un generador (kVA, X''d) o como bypass desde otro tablero; se dimensiona su cable, caída e Icc, y el tablero toma el mayor Icc.
+- **Revit ▸ Actualizar desde la tabla**: vuelve a leer la tabla de circuitos y solo actualiza carga, longitud y nombre (conserva detalle de carga, conductores, breakers y posiciones fijadas); agrega los nuevos, avisa los que ya no están y reconoce los cambios de posición ya aplicados en Revit.
+- **Memoria de cálculo** como documento: imprimir / PDF, Word (.doc) y Excel (una hoja por tablero).
+- **NEC 2020** (según los resúmenes de Eaton, CITEC y CIEMI): GFCI 210.8(A)/(B)/(F), 422.5 y 680.21, AFCI 210.12 por ubicación y ocupación (interruptor automático si el circuito no tiene uno elegido); SPD por artículo 242 (kA recomendados según la posición: acometida 250 kA, 600–1200 A 120 kA, hasta 400 A 50 kA; MCOV; 230.67 en vivienda); 110.24 y 408.6 (rótulo de corriente de falla y SCCR); 240.87 (reducción de energía de arco ≥ 1200 A); 700.5(E)/702.5 (SCCR del ATS/MTS).
+- **Clasificación en serie (240.86)**: si un ramal no alcanza el Icc pero hay una combinación listada con el principal, se acepta y se indica el rótulo 110.22(C) y la restricción de motores 240.86(C). Tabla inicial con las combinaciones Eaton de la presentación *Series Rating* (parcial), editable en Administración.
+- **Números de catálogo**: Power Defense (PDG + marco + polos + letra de capacidad + amperios + disparo + J), GFCI/AFCI de referencia (Eaton QBGF/QBAF/QBAG, Square D QOB…GFI / QO…CAFI).
+
 ## Transformadores y cortocircuito
 Cada tablero puede tener un **transformador aguas arriba** (kVA, %Z, X/R, voltaje primario). El Icc en el secundario se calcula por el método punto a punto (Bussmann) a partir del Icc del tablero que lo alimenta o de la red (Icc de la red en Proyecto; vacío = red infinita), y luego baja por el alimentador. También se calcula la caída de tensión en el transformador (regulación) y su porcentaje de carga. Con un transformador de 750 kVA y Z 5,75 % la herramienta reproduce los 36 206 A de la tabla del Excel y el Icc en bornes del Machote (AQ10).
 
@@ -42,7 +55,7 @@ Intercambia circuitos con el mismo número de polos y mueve circuitos a espacios
 
 ## Motor de cálculo y verificación
 `js/calc.js` replica las fórmulas del bloque *Machote* (reparto por fases de las funciones VBA `POLA…POLE`, corrientes, protección, calibres, neutro, tierra 250.122, electrodo 250.66, tubería C.10, FAC, caída de voltaje, breakers y supresor por marca, factores de demanda con la regla de tomas 10 kVA + 50 %).
-`tests/calc-test.html` compara la herramienta con los valores que calculó Excel para el Machote (256 comprobaciones: el Machote del Excel, la cascada, el transformador, las reglas de fabricante y el autobalanceo) y prueba la cascada. Ábralo con un servidor local, p. ej. `py -m http.server` en esta carpeta y `http://localhost:8000/tests/calc-test.html`.
+`tests/calc-test.html` compara la herramienta con los valores que calculó Excel para el Machote (261 comprobaciones: el Machote del Excel, la cascada, el transformador, las reglas de fabricante, el autobalanceo, la clasificación en serie y GFCI/AFCI) y prueba la cascada. Ábralo con un servidor local, p. ej. `py -m http.server` en esta carpeta y `http://localhost:8000/tests/calc-test.html`.
 
 Mejoras respecto al Excel (indicadas en pantalla): tablero, interruptor principal, breakers y supresor se eligen **automáticamente** según la marca, la protección y los polos si no se escoge uno; conductores en paralelo del alimentador automáticos (>300 A); avisos de posiciones repetidas, caída de voltaje, SCCR menor que el Icc, ampacidad corregida insuficiente y espacios insuficientes.
 
@@ -65,6 +78,7 @@ index.html
 css/styles.css
 js/config.js  util.js  calc.js  store.js  auth.js  ui.js  xlsx-read.js  app.js
 js/hoja.js             (hojas con el diseño del Excel: pantalla y exportación)
+js/reporte.js          (memoria de cálculo: PDF, Word, Excel)
 js/ui-proyecto.js  ui-unifilar.js  ui-revit.js  ui-memoria.js  ui-cuadro.js  ui-resumen.js  ui-admin.js  export-excel.js
 img/logo-sinergia.png
 js/data/seed.js        (catálogo generado del Excel)

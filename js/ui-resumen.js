@@ -61,7 +61,7 @@
     sub = sub || 'horizontal';
     const lista = Resumen.ordenados(R);
     view.appendChild(h('div', { class: 'page-h row no-print' }, h('div', null, h('h2', null, 'Tablas resumen'), h('p', { class: 'muted' }, 'Tablas para los planos de Revit. Se actualizan solas; ya no hace falta correr macros.')),
-      h('div', { class: 'toolbar' }, h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: Hoja.real, onchange: e => { Hoja.real = e.target.checked; App.refresh(); } }), ' Tamaño real'), UI.btn('Exportar a Excel', () => ExportExcel.download(R), 'primary small'),
+      h('div', { class: 'toolbar' }, h('label', { class: 'chk', title: 'Sin datos del tablero, del supresor ni del interruptor principal' }, h('input', { type: 'checkbox', checked: !!Store.project.resumenSimple, onchange: e => { Store.project.resumenSimple = e.target.checked; Store.save(); App.refresh(); } }), ' Solo tabla resumen'), h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: Hoja.real, onchange: e => { Hoja.real = e.target.checked; App.refresh(); } }), ' Tamaño real'), UI.btn('Exportar a Excel', () => ExportExcel.download(R), 'primary small'),
         UI.btn('CSV (tabla horizontal)', () => U.download(App.fileBase() + ' - tabla resumen.csv', U.csv([Resumen.grupos.flatMap(([g, n]) => [g].concat(Array(n - 1).fill(''))), Resumen.sub].concat(lista.map(Resumen.horizontal))), 'text/csv'), 'small'),
         UI.btn('Imprimir', () => window.print(), 'small'))));
 
@@ -75,7 +75,7 @@
     const tabs = [['horizontal', 'Horizontal'], ['vertical', 'Vertical'], ['du', 'DU (vertical)'], ['original', 'Original']];
     view.appendChild(h('nav', { class: 'chips no-print' }, tabs.map(([k, l]) => h('a', { class: 'chip' + (sub === k ? ' active' : ''), href: '#resumen/' + k }, l))));
 
-    const hoja = sub === 'horizontal' ? Hoja.resumen(lista)
+    const hoja = sub === 'horizontal' ? Hoja.resumen(lista, Store.project.resumenSimple)
       : sub === 'vertical' ? Hoja.vertical(lista, Resumen.vertical, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS')
         : sub === 'du' ? Hoja.vertical(lista, Resumen.du, 'TABLA RESUMEN DU - TABLEROS ELÉCTRICOS')
           : Hoja.vertical(lista, Resumen.original, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS');

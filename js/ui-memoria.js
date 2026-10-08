@@ -40,11 +40,60 @@
       UI.field('Icc disponible (kA)', UI.input(t, 'iccManual', { type: 'num', fk: k + 'icc', placeholder: r.iccKA ? f2(r.iccKA) + ' (' + r.iccFuente + ')' : 'Ingrese o elija transformador' }), t.padreId ? 'Vacío = cascada desde ' + (r.padre ? r.padre.nombre : 'el padre') : 'En bornes del tablero'),
       UI.field('Transformador aguas arriba', h('div', { class: 'row' }, h('span', { class: 'ro grow' }, r.trafo ? (r.trafo.nombre ? r.trafo.nombre + ' · ' : '') + U.fmt(r.trafo.kva, 1) + ' kVA · Z ' + f2(r.trafo.z) + ' %' : 'Ninguno'), UI.btn(r.trafo ? 'Editar' : '+ Agregar', () => Unifilar.editarTrafo(t, App.R), 'small')),
         r.trafo ? 'Carga ' + f1(r.trafo.carga * 100) + ' % · Icc secundario ' + f2(r.trafo.iccSec / 1000) + ' kA · ΔV ' + f2(r.trafo.reg) + ' %' : 'Cambio de voltaje o acometida en media tensión'),
+      UI.field('Tipo de equipo', UI.bind(t, 'clase', [{ value: 'tablero', label: 'Tablero (panelboard)' }, { value: 'subestacion', label: 'Subestación / switchboard (QED-2, I-Line, PRL4, Pow-R-Line Xpert)' }], { fk: k + 'cla' })),
+      UI.field('Principal', UI.bind(t, 'principal', [{ value: 'interruptor', label: 'Interruptor principal' }, { value: 'zapatas', label: 'Zapatas (main lugs)' }], { fk: k + 'pri' }), t.principal === 'zapatas' ? 'Protegido por el interruptor del tablero que lo alimenta' : null),
+      UI.field('Espacios (polos)', UI.bind(t, 'espacios', [{ value: '', label: 'Auto (' + r.espaciosUsados + ' usados + ' + (Store.project.reservaEspacios || 0) + ' %)' }].concat(Array.from(new Set(C.tablerosCat.filter(x => x.fabricante === r.marca && n(x.espacios) < 999).map(x => n(x.espacios)))).sort((a, b) => a - b).map(v => ({ value: v, label: v + ' espacios' }))), { num: true, fk: k + 'esp' })),
       UI.field('Marca', UI.bind(t, 'marca', marcaOpts, { fk: k + 'mar' })),
       UI.field('Tablero (catálogo)', UI.bind(t, 'catalogoId', catOpts, { fk: k + 'cat' }), r.cat ? (r.famT ? 'Familia ' + r.famT.familia + ' · ' : '') + 'Barras ' + r.cat.barraFase + '/' + r.cat.barraNeutro + '/' + r.cat.barraTierra + ' A · ' + r.cat.espacios + ' espacios (usa ' + r.espaciosUsados + ', reserva ' + (Store.project.reservaEspacios || 0) + ' %)' : null, 'span2'),
       UI.field('Montaje', UI.bind(t, 'montaje', L.montajes, { fk: k + 'mon' })),
       UI.field('Supresor (SPD)', UI.bind(t, 'supresorId', spdOpts, { fk: k + 'spd' }), r.spd ? r.spd.montaje + ' · ' + r.spd.kaLL + '/' + r.spd.kaLN + ' kA' : null),
     ));
+  }
+
+  const n = v => Number(v) || 0;
+  /** UPS en la alimentación normal y segunda acometida (generador o bypass) con ATS / MTS / interruptor. */
+  function alimentacion(t, r) {
+    const u = t.ups, a = t.alterna, k = 'f:' + t.id + ':', L = Store.catalog.listas, A = r.alterna;
+    const chk = (obj, key, txt) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!obj[key], onchange: e => { obj[key] = e.target.checked; Store.save(); App.refresh(); } }), ' ' + txt);
+    const fila = (l, v, cls) => h('tr', null, h('th', null, l), h('td', { class: cls || '' }, v));
+    const otros = Store.project.tableros.filter(o => o.id !== t.id);
+    return UI.card('Fuentes de alimentación', h('div', { class: 'cols' },
+      h('div', null,
+        h('h4', null, 'Alimentación normal'),
+        h('p', { class: 'muted' }, r.trafo ? 'Por transformador ' + (r.trafo.nombre || '') + ' (' + U.fmt(r.trafo.kva, 1) + ' kVA).' : r.padre ? 'Desde ' + r.padre.nombre + '.' : 'Acometida: ' + (t.conectadoA || 'red') + '.'),
+        chk(u, 'activo', 'A través de una UPS'),
+        u.activo ? h('div', { class: 'grid3 mt' }, UI.field('Nombre', UI.input(u, 'nombre', { fk: k + 'un' })), UI.field('Capacidad (kVA)', UI.input(u, 'kva', { type: 'num', fk: k + 'uk' })),
+          UI.field('Icc del inversor (× In)', UI.input(u, 'factorIcc', { type: 'num', fk: k + 'uf', placeholder: '2' }), 'Corriente que entrega en falla')) : null,
+        r.ups ? h('p', { class: 'hint' }, 'Carga ' + U.fmt(r.ups.carga * 100, 1) + ' % · Icc limitado a ' + f2(r.ups.icc / 1000) + ' kA · voltaje regulado a la salida') : null),
+      h('div', null,
+        h('h4', null, 'Segunda acometida'),
+        chk(a, 'activo', 'Lleva segunda acometida (generador o bypass)'),
+        a.activo ? h('div', { class: 'grid3 mt' },
+          UI.field('Equipo', UI.bind(a, 'equipo', [{ value: 'ATS', label: 'Transferencia automática (ATS)' }, { value: 'MTS', label: 'Transferencia manual (MTS)' }, { value: 'IP', label: 'Interruptor principal (enclavado)' }], { fk: k + 'eq' })),
+          UI.field('Fuente', UI.bind(a, 'tipo', [{ value: 'generador', label: 'Generador' }, { value: 'tablero', label: 'Bypass directo desde otro tablero' }], { fk: k + 'ti' })),
+          a.tipo === 'generador' ? UI.field('Nombre', UI.input(a, 'nombre', { fk: k + 'gn' })) : UI.field('Tablero de origen', UI.bind(a, 'origenId', UI.opts(otros.map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— elegir —'), { fk: k + 'or' })),
+          a.tipo === 'generador' ? UI.field('Generador (kVA)', UI.input(a, 'kva', { type: 'num', fk: k + 'gk' })) : null,
+          a.tipo === 'generador' ? UI.field("Reactancia X''d (%)", UI.input(a, 'xd', { type: 'num', fk: k + 'gx', placeholder: '12' })) : null,
+          /ATS|MTS/.test(a.equipo) ? UI.field('SCCR del ' + a.equipo + ' (kA)', UI.input(a, 'sccr', { type: 'num', fk: k + 'sc' })) : null,
+          UI.field('Longitud (m)', UI.input(a, 'longitud', { type: 'num', fk: k + 'al' })),
+          UI.field('Material', UI.bind(a, 'material', L.materiales, { fk: k + 'am' })), UI.field('Aislamiento', UI.bind(a, 'aislamiento', Store.catalog.aislamientos, { fk: k + 'aa' })),
+          UI.field('Tubería', UI.bind(a, 'tuberia', L.tuberias, { fk: k + 'at' })), UI.field('# en paralelo', UI.input(a, 'paralelos', { type: 'num', fk: k + 'ap', placeholder: A ? 'Auto ' + A.par : 'Auto' }))) : null,
+        A ? h('table', { class: 'kv mt' }, h('tbody', null,
+          fila('Origen', A.origen || '—'),
+          fila('Conductores', h('b', null, A.fasesTxt + (A.neutroTxt ? ' + ' + A.neutroTxt + ' N' : '') + (A.tierraTxt ? ' + ' + A.tierraTxt + ' T' : '') + ' ' + A.mat + ' ' + A.ais)),
+          fila('Tubería', A.tubo + ' mm ' + A.tuberia),
+          fila('Ampacidad corregida', A.val ? f1(A.val.cap) + ' A ' + (A.val.ok ? '✓' : '✗') : '—', A.val && !A.val.ok ? 'bad' : ''),
+          fila('Caída / voltaje en bornes', f2(A.caida) + ' V · ' + f2(A.vBornes) + ' V · ΔV ' + f2(A.cv) + ' %', A.cv > Store.project.cvMaxAlim ? 'bad' : ''),
+          fila('Icc por esta fuente', A.iccA ? f2(A.iccA / 1000) + ' kA' : '—'),
+          A.carga !== null ? fila('Carga del generador', f1(A.carga * 100) + ' %', A.carga > 1 ? 'bad' : '') : null)) : null)));
+  }
+
+  /** Revisión NEC 2020 del tablero. */
+  function revisionNec(r) {
+    if (!r.nec || !r.nec.length) return null;
+    const ico = { error: '✗', aviso: '⚠', info: 'ℹ' };
+    return UI.card('Revisión NEC 2020 (' + r.nec.filter(x => x.nivel !== 'info').length + ' por atender)', h('ul', { class: 'nec' }, r.nec.map(x => h('li', { class: x.nivel }, h('b', null, ico[x.nivel] + ' ' + x.art + ' '), x.txt))),
+      h('small', { class: 'muted' }, 'Según los resúmenes de cambios NEC 2020 de Eaton/CITEC/CIEMI'));
   }
 
   function alimentador(t, r) {
@@ -60,7 +109,7 @@
         UI.field('Factor de potencia', UI.input(a, 'fp', { type: 'num', fk: k + 'fp' })),
         UI.field('Factor multiplicador', UI.input(a, 'mult', { type: 'num', fk: k + 'mul' }), '1,25 carga continua'),
         UI.field('Protección (A)', UI.input(a, 'prot', { type: 'num', fk: k + 'pro', placeholder: 'Auto ' + (A.AF139 || '') })),
-        UI.field('Interruptor principal', UI.bind(a, 'breakerId', bkOpts(r.marca, r.bkMain && !a.breakerId ? (r.bkMain.ref || r.bkMain.modelo) + ' · ' + r.bkMain.sccr + ' kA' : ''), { fk: k + 'bk' }), r.famT ? 'Familias permitidas en ' + r.famT.familia + ': ' + r.famT.principales : null, 'span3'),
+        t.principal === 'zapatas' ? UI.field('Interruptor principal', h('div', { class: 'ro' }, 'Zapatas (sin interruptor principal)'), null, 'span3') : UI.field('Interruptor principal', UI.bind(a, 'breakerId', bkOpts(r.marca, r.bkMain && !a.breakerId ? (r.bkMain.ref || r.bkMain.modelo) + ' · ' + r.bkMain.sccr + ' kA' : ''), { fk: k + 'bk' }), r.famT ? 'Familias permitidas en ' + r.famT.familia + ': ' + r.famT.principales : null, 'span3'),
         UI.field('Temp. ambiente (°C)', UI.bind(a, 'tempAmb', L.temperaturas, { fk: k + 'ta' })),
         UI.field('Temp. bornes (°C)', UI.bind(a, 'tempBorne', [60, 75, 90], { num: true, fk: k + 'tb' }), 'Columna 310.16 que limita'),
         UI.field('Cond. portadores (agrup.)', UI.bind(a, 'agrupamiento', [{ value: '', label: 'Auto (' + A.agrup + ')' }].concat(L.agrupamientos.map(x => ({ value: x, label: x }))), { fk: k + 'ag' })),
@@ -136,7 +185,7 @@
         h('td', { class: 'nowrap' }, x.AL ? x.fasesTxt + (x.neutroTxt ? ' · ' + x.neutroTxt : '') + (x.tierraTxt ? ' · ' + x.tierraTxt : '') : ''),
         h('td', { class: 'r' }, x.tuboTxt), h('td', { class: 'r' }, x.AU ? f1(x.AU) : ''), h('td', { class: 'r' }, x.AV !== null ? f2(x.AV) : ''),
         h('td', { class: 'r ' + (x.AY > Store.project.cvMaxTotal ? 'bad' : '') }, x.AY !== null ? f2(x.AY) : ''),
-        h('td', null, UI.bind(c, 'unidad', [{ value: '', label: 'STD' }].concat(['GFCI', 'AFCI', 'AFCI/GFCI', 'HACR', 'SHT'].map(u => ({ value: u, label: u }))), { fk: kk + 'uni', class: 'w-xs' })),
+        h('td', { title: x.nec ? 'NEC ' + x.nec.motivo : null }, UI.bind(c, 'unidad', [{ value: '', label: x.nec ? 'Auto: ' + x.nec.unidad : 'Auto (STD)' }, { value: 'STD', label: 'STD' }].concat(['GFCI', 'AFCI', 'AFCI/GFCI', 'HACR', 'SHT'].map(u => ({ value: u, label: u }))), { fk: kk + 'uni', class: 'w-xs' })),
         h('td', null, UI.bind(c, 'breakerId', bkOpts(r.marca, x.breaker && !c.breakerId ? (x.breaker.fam || x.breaker.modelo || x.breaker.unidad) : ''), { fk: kk + 'bk', class: 'w-bk' })),
         h('td', { class: x.breaker && x.breaker.sccrBajo ? 'bad' : '' }, x.breaker ? (x.breaker.ref || x.breaker.modelo || '—') + (x.breaker.unidad && x.breaker.unidad !== 'STD' ? ' ' + x.breaker.unidad : '') : ''), h('td', { class: 'r' }, x.J ? x.polosBreaker : ''), h('td', { class: 'r' }, x.breaker ? x.breaker.sccr : ''),
         h('td', { class: 'acc' },
@@ -204,7 +253,8 @@
     const r = R.res[id] || R.orden[0], t = r.tab;
     view.appendChild(selector(R, t.id));
     view.appendChild(h('div', { class: 'page-h row' }, h('div', null, h('h2', null, r.nombre), h('p', { class: 'muted' }, t.tipo + ' · ' + t.sistema + ' V · alimentado desde ' + (r.alimentadoDesde || '—'))),
-      h('div', { class: 'toolbar' }, UI.btn('Ver tablero ' + t.tipo, () => App.go(t.tipo === '1F' ? 'tab1f' : 'tab3f', t.id), 'small'))));
+      h('div', { class: 'toolbar' }, UI.btn('Ver tablero ' + t.tipo, () => App.go(t.tipo === '1F' ? 'tab1f' : 'tab3f', t.id), 'small'),
+        UI.btn('Memoria: PDF / Word / Excel', () => App.go('reporte', t.id), 'primary small'))));
     if (r.avisos.length) view.appendChild(UI.avisos(r.avisos));
     const A = r.alim;
     view.appendChild(h('div', { class: 'kpis' },
@@ -218,6 +268,8 @@
     view.appendChild(circuitos(t, r, R));
     view.appendChild(h('div', { class: 'cols' }, demanda(t, r)));
     view.appendChild(alimentador(t, r));
+    view.appendChild(alimentacion(t, r));
+    const rn = revisionNec(r); if (rn) view.appendChild(rn);
   };
   const n100 = v => (Number(v) || 0) * 100;
 })();

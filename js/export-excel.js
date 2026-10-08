@@ -106,19 +106,48 @@
     });
   }
 
+  /** Convierte el reporte de memoria (encabezados, párrafos, tablas y listas) en una cuadrícula para Excel. */
+  function memoriaGrid(r) {
+    const G = Hoja.Grid([2, 34].concat(Array(18).fill(13))); let y = 0;
+    const num = s => { const t = String(s).trim(); return /^-?[\d.]+(,\d+)?$/.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : null; };
+    const visitar = el => Array.from(el.children).forEach(ch => {
+      const tag = ch.tagName;
+      if (/^H[1-4]$/.test(tag)) { if (y) y++; G.put(y, 1, y, 12, ch.textContent, 'hdoc'); G.alto(y, tag === 'H1' || tag === 'H2' ? 22 : 18); y++; }
+      else if (tag === 'P') { G.put(y, 1, y, 12, ch.textContent, 'pdoc'); y++; }
+      else if (tag === 'UL') { Array.from(ch.children).forEach(li => { G.put(y, 1, y, 12, '• ' + li.textContent, 'pdoc'); y++; }); }
+      else if (tag === 'TABLE') {
+        const kv = ch.classList.contains('kv2');
+        Array.from(ch.querySelectorAll('tr')).forEach(tr => {
+          const cs = Array.from(tr.children);
+          cs.forEach((c, i) => {
+            const v = c.tagName === 'TD' && c.classList.contains('n') ? num(c.textContent) : null;
+            if (kv && i === 1) G.put(y, 2, y, 8, c.textContent, 'tdd');
+            else G.put(y, 1 + i, y, 1 + i, v !== null ? v : c.textContent, c.tagName === 'TH' ? (kv ? 'tdd' : 'thd') : v !== null ? 'tddn' : 'tdd', v !== null ? 2 : null);
+          });
+          y++;
+        });
+        y++;
+      } else if (tag !== 'IMG') visitar(ch);
+    });
+    visitar(Reporte.documento([r]));
+    return G;
+  }
+
   /* ---------- libro ---------- */
   function build(R, opts, logo) {
     opts = opts || {};
     const st = Styles(), sheets = [], used = {};
     const mk = n => { let b = n.replace(/[:\\/?*\[\]]/g, '-').slice(0, 28), nn = b, i = 2; while (used[nn.toLowerCase()]) nn = b.slice(0, 26) + '_' + i++; used[nn.toLowerCase()] = 1; const s = Sheet(nn, st); sheets.push(s); return s; };
     const lista = Resumen.ordenados(R);
-    if (!opts.soloTipo) {
-      volcar(mk('TABLA RESUMEN'), Hoja.resumen(lista));
+    if (opts.memoria) {
+      R.orden.filter(r => !opts.ids || opts.ids.includes(r.tab.id)).forEach(r => volcar(mk('MEMORIA ' + (r.tab.nombre || r.nombre)), memoriaGrid(r)));
+    } else if (!opts.soloTipo) {
+      volcar(mk('TABLA RESUMEN'), Hoja.resumen(lista, Store.project.resumenSimple));
       volcar(mk('TABLA RESUMEN (VERTICAL)'), Hoja.vertical(lista, Resumen.vertical, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS'));
       volcar(mk('TABLA RESUMEN DU(VERTICAL)'), Hoja.vertical(lista, Resumen.du, 'TABLA RESUMEN DU - TABLEROS ELÉCTRICOS'));
       volcar(mk('TABLA RESUMEN ORIGINAL'), Hoja.vertical(lista, Resumen.original, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS'));
     }
-    R.orden.filter(r => !opts.soloTipo || r.tab.tipo === opts.soloTipo).forEach(r => volcar(mk(r.tab.tipo + ' ' + (r.tab.nombre || r.nombre)), Hoja.tablero(r)));
+    if (!opts.memoria) R.orden.filter(r => !opts.soloTipo || r.tab.tipo === opts.soloTipo).forEach(r => volcar(mk(r.tab.tipo + ' ' + (r.tab.nombre || r.nombre)), Hoja.tablero(r)));
 
     const files = [], ct = [], wbRels = [];
     let nDraw = 0;
@@ -172,7 +201,7 @@
     if (!R || !R.orden.length) { UI.alert('No hay tableros para exportar.'); return; }
     const blob = build(R, opts, await cargarLogo());
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = App.fileBase() + (opts && opts.soloTipo ? ' - tableros ' + opts.soloTipo : ' - tablas resumen y tableros') + '.xlsx';
+    a.download = App.fileBase() + (opts && opts.memoria ? ' - memoria de cálculo' : opts && opts.soloTipo ? ' - tableros ' + opts.soloTipo : ' - tablas resumen y tableros') + '.xlsx';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     UI.toast('Excel generado', 'ok');
   }

@@ -3,7 +3,7 @@
    (la clave "anon" es pública por diseño; la seguridad real la dan Auth + Row Level Security). */
 window.CONFIG = {
   APP_NAME: 'ANACAR — Análisis de cargas de tableros eléctricos',
-  APP_VERSION: '2026.1-web.2',
+  APP_VERSION: '2026.1-web.3',
 
   // 'local' = datos en el navegador (paso 1). 'supabase' = base de datos (paso 2).
   BACKEND: 'local',

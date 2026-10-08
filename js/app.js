@@ -12,6 +12,7 @@
     { id: 'tab1f', label: 'Tableros 1F' },
     { id: 'resumen', label: 'Tablas resumen' },
     { id: 'admin', label: 'Administración', admin: true },
+    { id: 'reporte', label: 'Reporte', oculto: true },
   ];
 
   const App = {
@@ -40,7 +41,7 @@
     render() {
       App.calc();
       const nav = U.clear(document.getElementById('tabs'));
-      TABS.filter(t => !t.admin || Auth.isAdmin()).forEach(t => nav.appendChild(h('a', { class: 'tab' + (t.admin ? ' admin' : '') + (App.route.view === t.id ? ' active' : ''), href: '#' + t.id, role: 'tab', 'aria-selected': App.route.view === t.id ? 'true' : 'false' }, t.label)));
+      TABS.filter(t => !t.oculto && (!t.admin || Auth.isAdmin())).forEach(t => nav.appendChild(h('a', { class: 'tab' + (t.admin ? ' admin' : '') + (App.route.view === t.id ? ' active' : ''), href: '#' + t.id, role: 'tab', 'aria-selected': App.route.view === t.id ? 'true' : 'false' }, t.label)));
       const view = U.clear(document.getElementById('view'));
       try { App.views[App.route.view](view, App.R, App.route.id); }
       catch (e) { console.error(e); view.appendChild(h('div', { class: 'empty err' }, 'Error al mostrar la vista: ' + e.message)); }
@@ -56,6 +57,7 @@
         UI.btn('Guardar proyecto (.json)', () => U.download(App.fileBase() + '.json', Store.exportProject(), 'application/json'), 'ghost'),
         h('hr'),
         UI.btn('Exportar a Excel (tablas resumen y tableros)', () => ExportExcel.download(App.R), 'ghost'),
+        UI.btn('Memoria de cálculo de todos (PDF / Word / Excel)', () => App.go('reporte', 'todos'), 'ghost'),
         UI.btn('Imprimir / PDF de la vista', () => window.print(), 'ghost')));
       menu.addEventListener('click', e => { if (e.target.closest('.menu-b .btn')) menu.open = false; });
       const adm = Auth.isAdmin()

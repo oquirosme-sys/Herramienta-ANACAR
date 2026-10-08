@@ -12,6 +12,7 @@
   /** Estilos (iguales a las hojas del Excel: Century Gothic, títulos verdes, barras grises). */
   const ESTILOS = {
     tit: { fn: 'Century Gothic', sz: 48, b: 1, color: '#006600', al: 'center', border: 'medium' },
+    titR: { fn: 'Century Gothic', sz: 40, b: 1, color: '#006600', al: 'center', border: 'medium', wrap: true },
     tit2: { fn: 'Century Gothic', sz: 40, b: 1, color: '#006600', al: 'center', border: 'medium', wrap: true },
     alimL: { fn: 'Century Gothic', sz: 18, b: 1, bg: '#D9D9D9', al: 'center', border: 'thin' },
     alimV: { fn: 'Century Gothic', sz: 18, b: 1, al: 'center', border: 'medium', wrap: true },
@@ -27,6 +28,11 @@
     tot: { fn: 'Century Gothic', sz: 12, b: 1, bg: '#D9D9D9', al: 'center', border: 'thin', wrap: true },
     ley: { fn: 'Century Gothic', sz: 9, al: 'left', wrap: true, border: 'none' },
     logo: { border: 'thin' },
+    hdoc: { fn: 'Century Gothic', sz: 14, b: 1, color: '#006600', al: 'left', border: 'none' },
+    pdoc: { fn: 'Century Gothic', sz: 10, al: 'left', border: 'none' },
+    thd: { fn: 'Century Gothic', sz: 9, b: 1, bg: '#D9D9D9', al: 'center', wrap: true, border: 'thin' },
+    tdd: { fn: 'Century Gothic', sz: 9, al: 'left', wrap: true, border: 'thin' },
+    tddn: { fn: 'Century Gothic', sz: 9, al: 'right', border: 'thin' },
   };
 
   /** Cuadrícula: celdas {y, x, y2, x2, v, s, f} (f = decimales si v es número). */
@@ -75,7 +81,7 @@
     P(7, 'AG', 'AH', '', 'th', null, 8);
     G.alto(7, 38.45);
     [['B', 'F', A.fasesTxt], ['G', 'G', A.neutroTxt], ['H', 'H', A.tierraTxt], ['I', 'I', A.mat], ['J', 'J', A.ais], ['K', 'K', (A.preN || '') + txt(A.AR139)], ['L', 'L', A.M139, 1], ['M', 'M', A.AW139, 2],
-      ['N', 'N', A.AX139, 2], ['O', 'O', A.AY139, 2], ['P', 'R', bk.ref || bk.modelo], ['S', 'S', A.AF139], ['T', 'T', Number(bk.marco) ? bk.marco : ''], ['U', 'U', bk.unidad], ['V', 'V', bk.polos], ['W', 'W', bk.sccr],
+      ['N', 'N', A.AX139, 2], ['O', 'O', A.AY139, 2], ['P', 'R', r.zapatas ? 'ZAPATAS' : (bk.ref || bk.modelo)], ['S', 'S', r.zapatas ? '' : A.AF139], ['T', 'T', Number(bk.marco) ? bk.marco : ''], ['U', 'U', bk.unidad], ['V', 'V', bk.polos], ['W', 'W', bk.sccr],
       ['X', 'AC', spd.modelo], ['AD', 'AF', spd.kaLL], ['AI', 'AJ', spd.montaje]].forEach(([a, b, v, f]) => P(8, a, b, v, 'td', f));
     G.alto(8, 38.45);
     // circuitos ramales / posición en el tablero (filas 15 a 17)
@@ -130,9 +136,11 @@
       X: 19.1, Y: 18.2, Z: 32.1, AA: 23.5, AB: 16.5, AC: 15, AD: 10, AE: 10, AF: 16, AG: 20.2, AH: 21.8, AI: 34.9, AJ: 21.8, AK: 12, AL: 14, AM: 12, AN: 21.5, AO: 30.9, AP: 43, AQ: 16.2, AR: 21.8, AS: 14, AT: 10, AU: 12 };
     return Object.keys(w).map(k => w[k]);
   })();
-  function resumen(lista) {
-    const G = Grid(ANCHOS_RES), P = (y, a, b, v, s, f, y2) => G.put(y, a, y2 === undefined ? y : y2, b, v, s, f);
-    P(0, 'B', 'N', 'TABLA RESUMEN - TABLEROS ELÉCTRICOS', 'tit', null, 7); P(0, 'O', 'Y', '', 'logo', null, 7);
+  /** simple = solo la tabla del alimentador (sin datos del tablero, del supresor ni del interruptor principal). */
+  function resumen(lista, simple) {
+    const G = Grid(simple ? ANCHOS_RES.slice(0, col('Y') + 1) : ANCHOS_RES), lim = simple ? col('Y') : 999;
+    const P = (y, a, b, v, s, f, y2) => { const xa = typeof a === 'string' ? col(a) : a; if (xa <= lim) G.put(y, a, y2 === undefined ? y : y2, b, v, s, f); };
+    P(0, 'B', 'N', 'TABLA RESUMEN - TABLEROS ELÉCTRICOS', 'titR', null, 7); P(0, 'O', 'Y', '', 'logo', null, 7);
     P(0, 'Z', 'AG', 'DATOS DEL TABLERO', 'tit2', null, 7); P(0, 'AH', 'AN', 'DATOS DEL SUPRESOR', 'tit2', null, 7); P(0, 'AO', 'AU', 'DATOS INTERRUPTOR PRINCIPAL', 'tit2', null, 7);
     for (let i = 0; i < 8; i++) G.alto(i, 22.35);
     const dos = [['B', 'Tablero / Equipo'], ['C', 'Alimentado desde'], ['D', 'kVA Totales'], ['E', 'kVA Demandados'], ['F', 'Factor demanda'], ['G', 'Factor diversidad'], ['H', 'Factor potencia'],
@@ -147,7 +155,7 @@
     G.alto(8, 23.45); G.alto(9, 44.45);
     lista.forEach((r, i) => {
       const v = Resumen.horizontal(r), y = 10 + i;
-      v.forEach((x, k) => P(y, 1 + k, 1 + k, x, k === 0 || k === 24 ? 'td' : 'tdn', typeof x === 'number' && !Number.isInteger(x) ? 2 : null));
+      (r.zapatas ? v.map((x, k) => (k === 40 ? 'ZAPATAS' : k > 40 ? '' : x)) : v).forEach((x, k) => P(y, 1 + k, 1 + k, x, k === 0 || k === 24 ? 'td' : 'tdn', typeof x === 'number' && !Number.isInteger(x) ? 2 : null));
       G.alto(y, 32.45);
     });
     return G;
@@ -219,5 +227,13 @@
     return wrap;
   }
 
-  g.Hoja = { tablero, resumen, vertical, html, ESTILOS, col, LET, real: false };
+  /* ---------- impresión: cada hoja al ancho útil de la página (carta horizontal, márgenes de 10 mm) y centrada ---------- */
+  const ANCHO_PAGINA = 990;
+  window.addEventListener('beforeprint', () => document.querySelectorAll('.hx').forEach(t => {
+    t.dataset.zoom = t.style.zoom || ''; t.style.zoom = 1;
+    t.style.zoom = Math.min(1, ANCHO_PAGINA / t.scrollWidth);
+  }));
+  window.addEventListener('afterprint', () => document.querySelectorAll('.hx').forEach(t => { t.style.zoom = t.dataset.zoom || ''; }));
+
+  g.Hoja = { tablero, resumen, vertical, html, ESTILOS, col, LET, Grid, real: false };
 })(window);

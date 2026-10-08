@@ -66,7 +66,7 @@
       const cs = grupos[panel], existente = Store.project.tableros.find(t => norm(t.nombre) === norm(panel) || norm(Calc.nombreTablero(t)) === norm(panel));
       const tres = cs.some(c => c.nPolos === 3), vmax = Math.max(...cs.map(c => c.voltaje));
       const sistema = vmax >= 440 ? '277/480' : vmax === 240 ? '120/240' : '120/208';
-      return { panel, destino: existente ? existente.id : 'nuevo', tipo: tres || sistema === '120/208' ? '3F' : '1F', sistema, modo: 'reemplazar', incluir: true, circuitos: cs };
+      return { panel, destino: existente ? existente.id : 'nuevo', tipo: tres || sistema === '120/208' ? '3F' : '1F', sistema, modo: existente ? 'actualizar' : 'reemplazar', incluir: true, circuitos: cs };
     });
     if (!paneles.length) throw new Error('No se encontraron circuitos. Verifique que la tabla tenga las columnas Panel y Circuit Number.');
     sesion = { paneles, origen, unidad: paneles.some(p => p.circuitos.some(c => c.enPies)) ? 'pies-detectado' : 'm' };
@@ -96,12 +96,41 @@
   }
 
   /* ---------- aplicar ---------- */
+  /** Actualiza un tablero existente con la tabla de Revit: carga, longitud y nombre de cada circuito; conserva los demás ajustes. */
+  function actualizar(t, p, factor, res) {
+    const usados = new Set(), normN = x => String(x || '').trim().toLowerCase();
+    p.circuitos.forEach(c => {
+      const num = c.polos.join(',');
+      const lon = c.longitud === null ? '' : Math.round(c.longitud * factor * 100) / 100;
+      // por número de circuito en Revit (o la posición), por un cambio ya pasado a Revit, o por el nombre
+      let e = t.circuitos.find(x => !usados.has(x) && !x.tableroHijoId && (x.circuitoRevit === num || (!x.circuitoRevit && (x.polos || []).join(',') === num)));
+      const camb = (t.cambiosRevit || []).find(x => !x.aplicado && x.a === num && !usados.has(t.circuitos.find(z => z.id === x.circuitoId)));
+      if (!e && camb) { e = t.circuitos.find(z => z.id === camb.circuitoId); if (e) { camb.aplicado = true; res.aplicados++; } }
+      if (!e) e = t.circuitos.find(x => !usados.has(x) && !x.tableroHijoId && normN(x.descripcion) === normN(c.nombre));
+      if (e) {
+        usados.add(e);
+        const cambio = Number(e.kva) !== c.kva || String(e.longitud) !== String(lon) || e.descripcion !== c.nombre;
+        e.kva = c.kva; e.longitud = lon; e.descripcion = c.nombre; e.circuitoRevit = num; e.origen = 'revit';
+        if (cambio) res.actualizados.push(t.nombre + ' ' + num + ' ' + c.nombre);
+      } else {
+        const libres = c.polos.filter(x => !t.circuitos.some(o => (o.polos || []).includes(x)));
+        const nuevo = { id: U.uid(), polos: libres.length === c.polos.length ? c.polos : Store.posicionLibre(t, c.polos.length), detalleId: c.detalleId, descripcion: c.nombre, kva: c.kva,
+          longitud: lon, material: 'CU', aislamiento: 'THHN', mult: '', paralelos: '', aumento: 1, breakerId: '', prot: '', tableroHijoId: '', origen: 'revit', circuitoRevit: num };
+        t.circuitos.push(nuevo); usados.add(nuevo); res.nuevos.push(t.nombre + ' ' + num + ' ' + c.nombre);
+      }
+    });
+    const faltan = t.circuitos.filter(x => !usados.has(x) && !x.tableroHijoId && x.origen === 'revit');
+    faltan.forEach(x => res.faltan.push({ t, c: x }));
+  }
+
   function importar() {
     let nT = 0, nC = 0;
+    const res = { actualizados: [], nuevos: [], faltan: [], aplicados: 0 };
     const factor = sesion.unidad === 'pies' || sesion.unidad === 'pies-detectado' ? 0.3048 : 1;
     sesion.paneles.filter(p => p.incluir).forEach(p => {
       let t = Store.tablero(p.destino);
       if (!t) { t = Store.nuevoTablero({ nombre: p.panel, tipo: p.tipo, sistema: p.sistema }); nT++; }
+      if (p.modo === 'actualizar') { actualizar(t, p, factor, res); return; }
       if (p.modo === 'reemplazar') t.circuitos = t.circuitos.filter(c => c.tableroHijoId);
       p.circuitos.forEach(c => {
         const libres = c.polos.filter(x => !t.circuitos.some(o => (o.polos || []).includes(x)));
@@ -111,8 +140,18 @@
       });
     });
     Store.save(); sesion = null;
-    UI.toast(nC + ' circuitos importados' + (nT ? ', ' + nT + ' tablero(s) nuevos' : ''), 'ok');
-    App.go('proyecto');
+    const hayAct = res.actualizados.length || res.nuevos.length || res.faltan.length || res.aplicados;
+    if (!hayAct) { UI.toast(nC + ' circuitos importados' + (nT ? ', ' + nT + ' tablero(s) nuevos' : ''), 'ok'); App.go('proyecto'); return; }
+    const lst = (titulo, arr) => arr.length ? h('div', null, h('h4', null, titulo + ' (' + arr.length + ')'), h('ul', { class: 'help' }, arr.slice(0, 60).map(x => h('li', null, x)))) : null;
+    UI.modal('Actualización desde Revit', h('div', null,
+      nC ? h('p', null, nC + ' circuitos importados en tableros nuevos o reemplazados.') : null,
+      res.aplicados ? h('p', null, res.aplicados + ' cambio(s) de posición ya aparecen en Revit y se marcaron como aplicados.') : null,
+      lst('Circuitos con carga, longitud o nombre actualizados', res.actualizados), lst('Circuitos nuevos agregados', res.nuevos),
+      res.faltan.length ? h('div', null, h('h4', null, 'Ya no están en la tabla de Revit (' + res.faltan.length + ')'), h('ul', { class: 'help' }, res.faltan.map(x => h('li', null, x.t.nombre + ' [' + x.c.polos.join(',') + '] ' + (x.c.descripcion || ''))))) : null,
+      h('p', { class: 'muted' }, 'Se conservaron el detalle de carga, los conductores, el breaker y las posiciones fijadas de cada circuito.')), [
+      res.faltan.length ? { label: 'Eliminar los que ya no están', cls: 'danger', onclick: () => { res.faltan.forEach(x => { x.t.circuitos = x.t.circuitos.filter(c => c !== x.c); }); Store.save(); App.go('proyecto'); } } : null,
+      { label: 'Listo', cls: 'primary', onclick: () => App.go('proyecto') },
+    ].filter(Boolean), { wide: true });
   }
 
   /* ---------- cambios de circuito pendientes para pasar a Revit ---------- */
@@ -145,13 +184,13 @@
       UI.btn('⚖ Autobalancear todos los tableros', autobalancearTodos, 'primary small'),
       UI.btn('Copiar tabla', () => { navigator.clipboard.writeText(tabla().map(r => r.join('\t')).join('\n')).then(() => UI.toast('Tabla copiada: péguela en Excel', 'ok'), () => UI.alert('No se pudo copiar.')); }, 'small'),
       UI.btn('Exportar CSV', () => U.download(App.fileBase() + ' - cambios para Revit.csv', U.csv(tabla()), 'text/csv'), 'small'),
-      pend.length ? UI.btn('Marcar todos como aplicados', async () => { if (await UI.confirm('¿Marcar los ' + pend.length + ' cambios como ya aplicados en Revit?', 'Marcar', false)) { pend.forEach(x => { x.e.aplicado = true; }); Store.save(); App.refresh(); } }, 'small') : null,
+      pend.length ? UI.btn('Marcar todos como aplicados', async () => { if (await UI.confirm('¿Marcar los ' + pend.length + ' cambios como ya aplicados en Revit?', 'Marcar', false)) { pend.forEach(x => { x.e.aplicado = true; const c = x.t.circuitos.find(z => z.id === x.e.circuitoId); if (c) c.circuitoRevit = x.e.a; }); Store.save(); App.refresh(); } }, 'small') : null,
       h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: verAplicados, onchange: e => { verAplicados = e.target.checked; App.refresh(); } }), ' Ver también los aplicados')));
     if (!filas.length) { view.appendChild(h('div', { class: 'empty' }, 'No hay cambios pendientes. Al autobalancear o cambiar la posición de un circuito, el cambio aparece aquí para pasarlo al modelo de Revit.')); return; }
     view.appendChild(UI.card('Cambios de circuito para Revit (' + pend.length + ' pendientes)', h('div', null, h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
       h('thead', null, h('tr', null, ['Aplicado', 'Panel (Revit)', 'Carga', 'Circuito en Revit', '→', 'Circuito nuevo', 'Origen', 'Fecha', ''].map(x => h('th', null, x)))),
       h('tbody', null, filas.map(({ t, e }) => h('tr', { class: e.aplicado ? 'dim' : '' },
-        h('td', { class: 'c' }, h('input', { type: 'checkbox', checked: !!e.aplicado, onchange: ev => { e.aplicado = ev.target.checked; Store.save(); App.refresh(); } })),
+        h('td', { class: 'c' }, h('input', { type: 'checkbox', checked: !!e.aplicado, onchange: ev => { e.aplicado = ev.target.checked; const c = t.circuitos.find(z => z.id === e.circuitoId); if (c) c.circuitoRevit = e.aplicado ? e.a : e.revit; Store.save(); App.refresh(); } })),
         h('td', null, h('a', { href: '#memoria/' + t.id }, t.nombre)), h('td', null, e.descripcion), h('td', null, e.revit || e.de), h('td', { class: 'muted' }, '→'), h('td', null, h('b', null, e.a)),
         h('td', null, e.origen === 'balanceo' ? 'Autobalanceo' : 'Manual'), h('td', null, e.fecha),
         h('td', { class: 'acc' }, UI.iconBtn('↶', 'Deshacer este cambio (vuelve a la posición anterior)', () => {
@@ -174,7 +213,9 @@
       view.appendChild(h('div', { class: 'cols' },
         UI.card('1. Abrir archivo', h('div', null,
           h('p', null, 'Acepta el .txt/.csv que exporta Revit (Exportar ▸ Informes ▸ Tabla de planificación) o el Excel ', h('i', null, 'Circuitos revit-excel.xlsm'), '.'),
-          UI.btn('Elegir archivo…', abrir, 'primary'))),
+          h('div', { class: 'toolbar' }, UI.btn('Elegir archivo…', abrir, 'primary'),
+            Store.project.tableros.length ? UI.btn('↻ Actualizar desde la tabla de Revit…', abrir, '', 'Lee de nuevo la tabla: actualiza cargas, distancias y nombres sin perder los ajustes') : null),
+          Store.project.tableros.length ? h('p', { class: 'hint' }, 'Los tableros que ya existen se proponen en modo "Actualizar": solo cambian carga, longitud y nombre de cada circuito.') : null)),
         UI.card('… o pegar filas', h('div', null, area, h('div', { class: 'toolbar' }, UI.btn('Leer filas pegadas', () => { try { procesar(textoAFilas(area.value), 'Pegado'); } catch (e) { UI.alert(e.message); } }))))));
       view.appendChild(UI.card('Cómo se interpreta', h('ul', { class: 'help' },
         h('li', null, 'Cada valor de ', h('b', null, 'Panel'), ' es un tablero. Si ya existe uno con ese nombre se actualiza; si no, se crea.'),
@@ -196,7 +237,7 @@
         UI.field('Incluir', h('input', { type: 'checkbox', checked: p.incluir, onchange: e => { p.incluir = e.target.checked; } })),
         UI.field('Destino', UI.select(destinos, p.destino, v => { p.destino = v; App.refresh(); })),
         p.destino === 'nuevo' ? UI.field('Tipo / sistema', h('div', { class: 'row' }, UI.select(['3F', '1F'], p.tipo, v => { p.tipo = v; }), UI.select(Store.catalog.listas.sistemas, p.sistema, v => { p.sistema = v; }))) :
-          UI.field('Circuitos existentes', UI.select([{ value: 'reemplazar', label: 'Reemplazar (conserva los de tableros derivados)' }, { value: 'agregar', label: 'Agregar' }], p.modo, v => { p.modo = v; })));
+          UI.field('Circuitos existentes', UI.select([{ value: 'actualizar', label: 'Actualizar cargas y distancias (conserva ajustes)' }, { value: 'reemplazar', label: 'Reemplazar (conserva los de tableros derivados)' }, { value: 'agregar', label: 'Agregar' }], p.modo, v => { p.modo = v; })));
       const tbl = h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Circuito', 'Posición', 'Nombre de carga (Revit)', 'V', 'Polos', 'kVA', 'Long.', 'Detalle de carga'].map(x => h('th', null, x)))),
         h('tbody', null, p.circuitos.map((c, ci) => h('tr', { class: c.seguro ? '' : 'row-warn' }, h('td', null, c.circuitoTxt), h('td', null, c.polos.join(',')), h('td', null, c.nombre),
           h('td', { class: 'r' }, c.voltaje), h('td', { class: 'r' }, c.nPolos), h('td', { class: 'r' }, U.fmt(c.kva, 2)), h('td', { class: 'r' }, c.longitud === null ? '' : U.fmt(c.longitud, 2)),
