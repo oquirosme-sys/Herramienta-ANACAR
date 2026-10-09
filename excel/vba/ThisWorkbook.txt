@@ -1,0 +1,32 @@
+Option Explicit
+
+Private Sub Workbook_Open()
+    On Error Resume Next
+    ModUDF.RecargarCatalogo
+    Me.Worksheets("INICIO").Activate
+End Sub
+
+Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
+    On Error GoTo fin
+    If ModTableros.enProceso Then Exit Sub
+    If Left$(Sh.Name, 4) = "CAT_" Then
+        ModUDF.RecargarCatalogo
+        Exit Sub
+    End If
+    If Left$(Sh.Name, 3) <> "MC " Then Exit Sub
+    ModTableros.enProceso = True
+    If Not Intersect(Target, Sh.Range("C3,C5")) Is Nothing Then ModTableros.RenombrarTablero Sh
+    If Not Intersect(Target, Sh.Range("C10")) Is Nothing Then ModTableros.ConectarTablero Sh
+    If Not Intersect(Target, Sh.Range("I14,I16,I17")) Is Nothing Then ModTableros.SincronizarBypass Sh: ModTableros.FormulasEnlace Sh
+    Dim c As Range
+    If Not Intersect(Target, Sh.Range("E25:E124")) Is Nothing And Target.Cells.Count <= 200 Then
+        Application.EnableEvents = False
+        For Each c In Intersect(Target, Sh.Range("E25:E124")).Cells
+            If Len(c.Formula) > 0 Then ModTableros.CompletarPolos Sh, c.Row
+        Next c
+    End If
+    If Not Intersect(Target, Sh.Range("C6,C17,E25:E124,G25:G124,F17")) Is Nothing Then ModTableros.AjustarVista Sh
+fin:
+    ModTableros.enProceso = False
+    Application.EnableEvents = True
+End Sub

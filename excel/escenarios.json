@@ -1,0 +1,28 @@
+[
+ {"P": {"ocupacion": "comercial"}, "t": {"nombre": "A480", "fases": 3, "voltaje": 480, "hilos": 4, "sistema": "277/480", "tipo": "3F", "reserva": 0.1, "longitud": 25, "iccManual": 35,
+   "alim": {"material": "CU", "aislamiento": "XHHW-2", "tuberia": "EMT", "fp": 0.9}, "circuitos": [
+   {"polos": [1], "detalleId": 6, "kva": 3, "longitud": 40, "descripcion": "Iluminacion nivel 1"},
+   {"polos": [3, 5, 7], "detalleId": 54, "kva": 45, "longitud": 30, "descripcion": "Bombas"},
+   {"polos": [2, 4, 6], "detalleId": 56, "kva": 150, "longitud": 20, "descripcion": "Esterilizadora"}]}},
+ {"P": {"ocupacion": "vivienda"}, "t": {"nombre": "V240", "fases": 2, "voltaje": 240, "hilos": 3, "sistema": "120/240", "tipo": "1F", "reserva": 0.1, "longitud": 25, "iccManual": 10,
+   "alim": {"material": "CU", "aislamiento": "XHHW-2", "tuberia": "EMT", "fp": 0.9}, "circuitos": [
+   {"polos": [1], "detalleId": 8, "kva": 1.2, "longitud": 15, "descripcion": "Tomas bano principal"},
+   {"polos": [3], "detalleId": 1, "kva": 0.8, "longitud": 12, "descripcion": "Iluminacion habitacion 1"},
+   {"polos": [2], "detalleId": 8, "kva": 1.0, "longitud": 10, "descripcion": "Tomas sala"},
+   {"polos": [5, 7], "detalleId": 16, "kva": 5, "longitud": 10, "descripcion": "Secadora"}]}},
+ {"P": {"ocupacion": "comercial"}, "t": {"nombre": "SUB", "fases": 3, "voltaje": 480, "hilos": 4, "sistema": "277/480", "tipo": "3F", "reserva": 0.1, "longitud": 25, "iccManual": 50, "principal": "zapatas", "clase": "subestacion",
+   "alim": {"material": "CU", "aislamiento": "XHHW-2", "tuberia": "EMT", "fp": 0.9}, "circuitos": [
+   {"polos": [1, 3, 5], "detalleId": 54, "kva": 600, "longitud": 20, "descripcion": "Carga 1"},
+   {"polos": [2, 4, 6], "detalleId": 54, "kva": 500, "longitud": 20, "descripcion": "Carga 2"}]}},
+ {"P": {"ocupacion": "comercial"}, "t": {"nombre": "R100", "fases": 3, "voltaje": 208, "hilos": 4, "sistema": "120/208", "tipo": "3F", "reserva": 0.1, "longitud": 25, "iccManual": 42,
+   "alim": {"material": "CU", "aislamiento": "XHHW-2", "tuberia": "EMT", "fp": 0.9, "unidad": "LSIG", "rated100": true}, "circuitos": [
+   {"polos": [1, 3, 5], "detalleId": 55, "kva": 200, "longitud": 20, "descripcion": "Carga A"},
+   {"polos": [2, 4, 6], "detalleId": 55, "kva": 150, "longitud": 20, "descripcion": "Carga B"},
+   {"polos": [7], "detalleId": 8, "kva": 1, "longitud": 20, "descripcion": "Tomas cocina"}]}},
+ {"P": {"ocupacion": "comercial"}, "t": {"nombre": "SQD", "marca": "Square D", "fases": 3, "voltaje": 208, "hilos": 4, "sistema": "120/208", "tipo": "3F", "reserva": 0.1, "longitud": 25, "iccManual": 22,
+   "alim": {"material": "CU", "aislamiento": "THHN", "tuberia": "EMT", "fp": 0.9, "tempAmb": "41-45", "tempBorne": 75}, "circuitos": [
+   {"polos": [1], "detalleId": 8, "kva": 1.4, "longitud": 30, "descripcion": "Tomas oficina"},
+   {"polos": [3], "detalleId": 31, "kva": 1.2, "longitud": 20, "descripcion": "Lavaplatos"},
+   {"polos": [2, 4, 6], "detalleId": 42, "kva": 18, "longitud": 25, "descripcion": "Unidad CU-01"},
+   {"polos": [5, 7], "detalleId": 40, "kva": 6, "longitud": 25, "descripcion": "Unidad CU-02"}]}}
+]

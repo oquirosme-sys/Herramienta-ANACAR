@@ -1,0 +1,32 @@
+﻿Electrical Circuit Schedule
+Voltage	True Load	Panel	Circuit Number	Number of Poles	Load Name	Length
+120 V	787 VA	TP-1	1	1	Tomas baño 0	89'
+120 V	567 VA	TP-1	2	1	Tomas baño 1	67'
+120 V	1270 VA	TP-1	3	1	Tomas baño 2	28'
+120 V	326 VA	TP-1	4	1	Tomas baño 3	80'
+208 V	3062 VA	TP-1	5,7	2	Calentador de paso 4	55'
+120 V	779 VA	TP-1	9	1	Tomas baño 5	44'
+120 V	1263 VA	TP-1	10	1	Tomas baño 6	89'
+120 V	1275 VA	TP-1	11	1	Tomas baño 7	70'
+120 V	608 VA	TP-1	12	1	Tomas baño 8	49'
+208 V	4600 VA	TP-1	13,15	2	Calentador de paso 9	29'
+120 V	1371 VA	TP-1	17	1	Tomas baño 10	69'
+120 V	331 VA	TP-1	18	1	Tomas baño 11	28'
+120 V	626 VA	TP-1	19	1	Tomas baño 12	25'
+120 V	916 VA	TP-1	20	1	Tomas baño 13	23'
+120 V	851 VA	TL-1	1	1	Iluminación habitación 1	80' - 0"
+120 V	1093 VA	TL-1	2	1	Iluminación habitación 2	74' - 0"
+120 V	1108 VA	TL-1	3	1	Iluminación habitación 3	76' - 0"
+120 V	574 VA	TL-1	4	1	Iluminación habitación 4	66' - 0"
+120 V	499 VA	TL-1	5	1	Iluminación habitación 5	24' - 0"
+120 V	578 VA	TL-1	6	1	Iluminación habitación 6	83' - 0"
+120 V	744 VA	TL-1	7	1	Iluminación habitación 7	53' - 0"
+120 V	1193 VA	TL-1	8	1	Iluminación habitación 8	58' - 0"
+120 V	1162 VA	TL-1	9	1	Iluminación habitación 9	84' - 0"
+120 V	1090 VA	TL-1	10	1	Iluminación habitación 10	64' - 0"
+208 V	11750 VA	TM-1	1,3,5	3	Unidad CU-01	72' - 6"
+208 V	6807 VA	TM-1	7,9,11	3	Unidad CU-02	63' - 6"
+208 V	3469 VA	TM-1	13,15,17	3	Unidad CU-03	55' - 6"
+208 V	5672 VA	TM-1	19,21,23	3	Unidad CU-04	61' - 6"
+208 V	11876 VA	TM-1	25,27,29	3	Unidad CU-05	33' - 6"
+208 V	6459 VA	TM-1	31,33,35	3	Unidad CU-06	54' - 6"

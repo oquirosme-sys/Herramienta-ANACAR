@@ -26,6 +26,21 @@ Las hojas informativas u ocultas (`INSTRUCCIONES`, `CÓDIGO VBA`, `FACTORES POR 
 - El **cortocircuito** baja por cada alimentador (método punto a punto con las constantes C de la hoja DATOS). En el tablero principal se indica el Icc o se elige el transformador.
 - Si el derivado tiene otro voltaje (transformador de por medio), la caída y el Icc se reinician y se avisa.
 
+## Versión Excel con macros (`ANACAR Web 2026.xlsm`)
+Libro de Excel con las mismas funciones que la herramienta en línea, para trabajar sin conexión. Se abre limpio (sin tableros) y hay que **habilitar las macros**.
+
+| Hoja | Qué hace |
+|---|---|
+| **INICIO** | Botones: nuevo tablero, actualizar proyecto y tablas, importar/actualizar desde Revit, autobalancear (activo o todos), prevista, exportar PDF, unifilar DXF, tablas para Revit, modo administrador. |
+| **PROYECTO** | Datos del proyecto y criterios (ΔV máx., desbalance, Icc de la red, marca, reserva de espacios, ocupación NEC, carga de derivados, aumento automático de calibre). Lista de tableros con vínculos, orden y exclusión para las tablas resumen. |
+| **MC &lt;tablero&gt;** | Memoria de cálculo con **fórmulas** (como el bloque Machote): datos del tablero, alimentador (TM/LI/LSI/LSIG, 100 % rated), transformador, UPS, segunda acometida (ATS/MTS/IP, generador o bypass), circuitos en filas por posición (impares y luego pares), factores de demanda y diversidad, resultados en la columna BX. *Alimentado desde* conecta el tablero a su padre y crea su circuito (cascada de carga, caída de voltaje y cortocircuito). |
+| **3F/1F &lt;tablero&gt;** | Cuadro de cargas con el diseño de la hoja `TABLEROS 3F`; oculta las posiciones que no existen en el tablero elegido. Nombre definido `TABLERO_<tablero>` para Revit. |
+| **TABLA RESUMEN / RESUMEN VERTICAL / RESUMEN DU** | Tablas para los planos con sus nombres definidos (`TABLA_RESUMEN__TABLEROS_ELÉCTRICOS`, `DATOS_DEL_TABLERO`, `DATOS_DEL_SUPRESOR`, `DATOS_INTERRUPTOR_PRINCIPAL`…); botón *Solo tabla resumen*. |
+| **PREVISTA** | Carga por tipo de uso y m² y generación de circuitos de prevista. |
+| **REVIT / CAMBIOS REVIT** | Importar o actualizar desde la tabla de circuitos (archivo o pegado) y lista de cambios de posición del autobalanceo. |
+
+Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
+
 ## Novedades 2026.1-web.5
 - **Arranca limpio**: cada vez que se abre la herramienta empieza con un proyecto en blanco. Los proyectos con datos quedan en *Archivo ▸ Proyectos guardados…* (y en la pantalla de inicio) para abrirlos o eliminarlos; al recargar la página se sigue con el proyecto abierto.
 
