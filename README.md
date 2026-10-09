@@ -39,6 +39,8 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 | **PREVISTA** | Carga por tipo de uso y m² y generación de circuitos de prevista. |
 | **REVIT / CAMBIOS REVIT** | Importar o actualizar desde la tabla de circuitos (archivo o pegado) y lista de cambios de posición del autobalanceo. |
 
+**Autollenado como en línea**: las celdas de datos traen en *gris cursiva* el valor automático (descripción, % de protección, factores de uso y diversidad, material, aislamiento, # en paralelo, protección, unidad GFCI/AFCI, breaker, marca, agrupamiento, tablero de catálogo, SPD, voltaje primario); se escribe encima para cambiarlo y se borra para volver al automático. Detalle de carga, breaker, tablero y SPD se eligen de listas con nombre. Botones: *Crear varios tableros*, *Tablero derivado*, *Duplicar tablero*, *Duplicar circuito*, *Mover circuito* (anota el cambio en CAMBIOS REVIT); en PROYECTO se editan tipo, sistema, alimentado desde y longitud.
+
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
 ## Novedades 2026.1-web.5
