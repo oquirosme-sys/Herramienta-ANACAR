@@ -41,7 +41,8 @@ try:
 
     VERDE, AZUL, GRIS, ROJO = 0x3A7A2E, 0x9C5B1F, 0x606060, 0x2B2BB0
     ini = wb.Worksheets("INICIO")
-    botones = [("Nuevo tablero", "NuevoTablero", VERDE), ("Actualizar proyecto y tablas", "ActualizarProyecto", VERDE), ("Importar / actualizar desde Revit (archivo)", "ImportarArchivoRevit", AZUL),
+    botones = [("Nuevo tablero", "NuevoTablero", VERDE), ("Crear varios tableros", "CrearVarios", VERDE), ("Tablero derivado del activo", "NuevoDerivado", VERDE), ("Duplicar tablero activo", "DuplicarTablero", VERDE),
+               ("Duplicar circuito (fila activa)", "DuplicarCircuito", AZUL), ("Mover circuito (fila activa)", "MoverCircuito", AZUL), ("Actualizar proyecto y tablas", "ActualizarProyecto", VERDE), ("Importar / actualizar desde Revit (archivo)", "ImportarArchivoRevit", AZUL),
                ("Importar lo pegado en REVIT", "ImportarPegado", AZUL), ("Autobalancear tablero activo", "Autobalancear", AZUL), ("Autobalancear todos", "AutobalancearTodos", AZUL),
                ("Generar circuitos de prevista", "GenerarPrevista", AZUL), ("Exportar PDF (cuadros, resumen y memorias)", "ExportarPDF", GRIS), ("Exportar unifilar DXF", "ExportarDXF", GRIS),
                ("Exportar tablas para Revit (.xlsx)", "ExportarTablasRevit", GRIS), ("Solo tabla resumen (sí/no)", "SoloTablaResumen", GRIS), ("Eliminar tablero activo", "EliminarTablero", ROJO),
@@ -49,23 +50,24 @@ try:
     top0 = ini.Range("B17").Top
     for i, (t, m, c) in enumerate(botones):
         boton(ini, ini.Range("B1").Left + (i % 4) * 215, top0 + (i // 4) * 42, 205, 34, t, m, c)
-    for nm, lista in [("PROYECTO", [("Nuevo tablero", "NuevoTablero"), ("Actualizar proyecto y tablas", "ActualizarProyecto"), ("Importar desde Revit", "ImportarArchivoRevit")]),
+    for nm, lista in [("PROYECTO", [("Nuevo tablero", "NuevoTablero"), ("Crear varios", "CrearVarios"), ("Actualizar proyecto y tablas", "ActualizarProyecto"), ("Importar desde Revit", "ImportarArchivoRevit")]),
                       ("REVIT", [("Importar archivo", "ImportarArchivoRevit"), ("Importar lo pegado (desde B5)", "ImportarPegado")]),
                       ("PREVISTA", [("Generar circuitos de prevista", "GenerarPrevista")]),
                       ("TABLA RESUMEN", [("Actualizar tablas", "ActualizarProyecto"), ("Solo tabla resumen (sí/no)", "SoloTablaResumen"), ("Exportar tablas para Revit", "ExportarTablasRevit")]),
                       ("RESUMEN VERTICAL", [("Actualizar tablas", "ActualizarProyecto")]), ("RESUMEN DU", [("Actualizar tablas", "ActualizarProyecto")]),
-                      ("MC_MACHOTE", [("Autobalancear", "Autobalancear"), ("Actualizar proyecto", "ActualizarProyecto"), ("Ir a PROYECTO", "IrAProyecto"), ("Eliminar tablero", "EliminarTablero")])]:
+                      ("MC_MACHOTE", [("Autobalancear", "Autobalancear"), ("Actualizar proyecto", "ActualizarProyecto"), ("+ Tablero derivado", "NuevoDerivado"), ("Duplicar tablero", "DuplicarTablero"),
+                                      ("Duplicar circuito (fila activa)", "DuplicarCircuito"), ("Mover circuito (fila activa)", "MoverCircuito"), ("Ir a PROYECTO", "IrAProyecto"), ("Eliminar tablero", "EliminarTablero")])]:
         ws = wb.Worksheets(nm)
         if nm == "MC_MACHOTE":
             x0, y0 = ws.Range("T3").Left, ws.Range("T3").Top
-            for i, (t, m) in enumerate(lista): boton(ws, x0 + (i % 2) * 150, y0 + (i // 2) * 34, 140, 28, t, m, ROJO if "Eliminar" in t else VERDE)
+            for i, (t, m) in enumerate(lista): boton(ws, x0 + (i % 2) * 190, y0 + (i // 2) * 32, 180, 27, t, m, ROJO if "Eliminar" in t else VERDE)
         elif nm == "TABLA RESUMEN":
             x0, y0 = ws.Range("AH2").Left, ws.Range("AH2").Top
             for i, (t, m) in enumerate(lista): boton(ws, x0 + i * 260, y0, 250, 40, t, m)
         else:
             col = {"PROYECTO": "H3", "REVIT": "L1", "PREVISTA": "L1", "RESUMEN VERTICAL": "F1", "RESUMEN DU": "F1"}[nm]
             x0, y0 = ws.Range(col).Left, ws.Range(col).Top
-            for i, (t, m) in enumerate(lista): boton(ws, x0 + i * 200, y0, 190, 30, t, m)
+            for i, (t, m) in enumerate(lista): boton(ws, x0 + i * 170, y0, 160, 30, t, m)
     for ws in wb.Worksheets:
         if ws.Name.startswith("CAT_") or ws.Name in ("MC_MACHOTE", "VISTA_MACHOTE"): ws.Visible = 2   # xlSheetVeryHidden
     ini.Activate(); ini.Range("A1").Select()

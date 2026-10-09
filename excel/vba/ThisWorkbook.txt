@@ -13,7 +13,17 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
         ModUDF.RecargarCatalogo
         Exit Sub
     End If
+    If Sh.Name = "PROYECTO" Then
+        ModTableros.enProceso = True
+        Application.EnableEvents = False
+        ModAuto.CambioProyecto Target
+        GoTo fin
+    End If
     If Left$(Sh.Name, 3) <> "MC " Then Exit Sub
+    Application.EnableEvents = False
+    ModAuto.ConvertirEtiquetas Sh, Target
+    ModAuto.RestaurarAuto Sh, Target
+    Application.EnableEvents = True
     ModTableros.enProceso = True
     If Not Intersect(Target, Sh.Range("C3,C5")) Is Nothing Then ModTableros.RenombrarTablero Sh
     If Not Intersect(Target, Sh.Range("C10")) Is Nothing Then ModTableros.ConectarTablero Sh
@@ -26,6 +36,7 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
         Next c
     End If
     If Not Intersect(Target, Sh.Range("C6,C17,E25:E124,G25:G124,F17")) Is Nothing Then ModTableros.AjustarVista Sh
+    If Not Intersect(Target, Sh.Range("C3,C5,C6,C10,C12")) Is Nothing Then ModTableros.ActualizarLista
 fin:
     ModTableros.enProceso = False
     Application.EnableEvents = True

@@ -362,7 +362,6 @@ for col in ["E", "S", "T"]:
 dv = DataValidation(type="list", formula1="=L_MATERIALES", allow_blank=True); mc.add_data_validation(dv); dv.add("L25:L124")
 dv = DataValidation(type="list", formula1="=L_AISLAMIENTOS", allow_blank=True); mc.add_data_validation(dv); dv.add("M25:M124")
 dv = DataValidation(type="list", formula1="=L_UNIDADES", allow_blank=True); mc.add_data_validation(dv); dv.add("Q25:Q124")
-dv = DataValidation(type="list", formula1="=L_DET", allow_blank=True); mc.add_data_validation(dv); dv.add("E25:E124")
 dv = DataValidation(type="list", formula1='"SI"', allow_blank=True); mc.add_data_validation(dv); dv.add("A25:A124")
 mc.freeze_panes = "C25"
 
@@ -592,10 +591,65 @@ pasos = ["1. Llene los datos y criterios en la hoja PROYECTO.",
          "6. 'Autobalancear' reubica circuitos del tablero activo y anota los cambios en la hoja CAMBIOS REVIT.",
          "7. 'Exportar DXF' genera el diagrama unifilar para AutoCAD; 'Exportar PDF' imprime los cuadros, tablas y memorias.",
          "8. Catálogos (marcas, tableros, breakers, supresores, cargas, conductores, reglas): botón 'Modo administrador' (contraseña inicial: sinergia-admin).",
-         "Habilite las macros al abrir el archivo. Celdas verdes = datos; celdas vacías = valor automático."]
+         "Habilite las macros al abrir el archivo. Celdas verdes = datos. Los valores en GRIS CURSIVA son automáticos (como en la versión en línea): escriba encima para cambiarlos y bórrelos para volver al automático.",
+         "Detalle de carga, breaker, tablero y SPD se eligen de la lista por nombre. 'Crear varios', 'Tablero derivado', 'Duplicar tablero/circuito' y 'Mover circuito' (anota el cambio para Revit) están en los botones; en PROYECTO se puede cambiar tipo, sistema, alimentado desde y longitud de cada tablero."]
 for i, t in enumerate(pasos): f(ini, "B%d" % (6 + i), t, size=11)
 ini.column_dimensions["B"].width = 140
 ini.sheet_view.showGridLines = False
+
+
+# ======================= AUTOLLENADO (como la herramienta en línea) =======================
+# Las celdas de datos traen en gris cursiva el valor automático (fórmula). Si se escribe encima queda el valor del usuario
+# (negro); si se borra, la macro restaura la fórmula de esta plantilla.
+from openpyxl.styles.differential import DifferentialStyle
+for r in range(R0, RN + 1):
+    hay = 'AND($E{r}="",$G{r}="")'.format(r=r)
+    auto = {
+        "F": '=IF($E{r}="","",IFERROR(VLOOKUP($E{r},T_DET,3,FALSE),""))',
+        "I": '=IF($E{r}="","",IFERROR(VLOOKUP($E{r},T_DET,11,FALSE)*100,125))',
+        "J": '=IF($E{r}="","",IFERROR(VLOOKUP($E{r},T_DET,7,FALSE),1))',
+        "K": '=IF($E{r}="","",IFERROR(VLOOKUP($E{r},T_DET,8,FALSE),1))',
+        "L": '=IF(' + hay + ',"","CU")',
+        "M": '=IF(' + hay + ',"","THHN")',
+        "N": '=IF($AS{r}="","",IF($AS{r}>1600,5,IF($AS{r}>1000,4,IF($AS{r}>600,3,IF($AS{r}>300,2,1)))))',
+        "O": '=IF(' + hay + ',"",0)',
+        "P": '=IF($AS{r}="","",VLOOKUP($AS{r},T_PROT,2,TRUE))',
+        "Q": '=IF($X{r}=0,"",NEC_UNIDAD($W{r},$E{r},$Y{r},$Z{r},N($AT{r}),$C$7,OCUPACION))',
+        "R": '=IF($X{r}=0,"",BREAKER_SEL($BX$60,$BI{r},$AT{r},$C$7,$BX$58,$BX$69,$BJ{r}))',
+    }
+    for col, fm in auto.items():
+        mc[col + str(r)].value = fm.format(r=r)
+POLM = 'IF($C$8=3,3,IF(AND($C$7>=208,$C$7<=240),2,$C$8))'
+for cel, fm in {"C15": '=MARCA_DEF',
+                "F6": '=IF(BX23="","",IF(BX23>1600,5,IF(BX23>1000,4,IF(BX23>600,3,IF(BX23>300,2,1)))))',
+                "F10": '=IF(BX23="","",VLOOKUP(BX23,T_PROT,2,TRUE))',
+                "F13": '=IF(AND($C$8=3,$C$9=4),"4-6","1-3")',
+                "F16": '=IF(OR($C$16="Zapatas",N(BX24)=0),"",BREAKER_SEL(BX60,' + POLM + ',BX24,$C$7,BX58,BX70,IF(OR($F$14="",$F$14="TM"),"STD",$F$14)))',
+                "F17": '=TABLERO_SEL(BX60,$C$7,$C$5,N(BX24),BX61,RESERVA_ESP,$C$20,$C$16,N($C$17))',
+                "F18": '=SPD_SEL(BX60,$C$6,$C$8,BX77)',
+                "I7": '=IF(N(BX44)>0,BX44,"")'}.items():
+    mc[cel].value = fm
+gris = DifferentialStyle(font=Font(color="808080", italic=True))
+from openpyxl.formatting.rule import Rule
+for rng in ["C15", "F6:F18", "I7", "F25:F124", "I25:R124"]:
+    a = rng.split(":")[0]
+    rule = Rule(type="expression", dxf=gris, formula=["_xlfn.ISFORMULA(%s)" % a])
+    mc.conditional_formatting.add(rng, rule)
+mc["C21"] = "Gris cursiva = valor automático (escriba encima para cambiarlo; borre para volver al automático)."
+mc["C21"].font = Font(name=FN, size=8, italic=True, color="808080")
+
+# listas con nombre (como los desplegables de la web): se elige el texto y la macro deja el número
+def lista_txt(hoja, col, fm, n, nom):
+    ws_ = wb[hoja]
+    ws_[col + "1"] = "Lista"
+    for i in range(n): ws_["%s%d" % (col, 2 + i)] = fm.format(r=2 + i)
+    nombre(nom, "%s!$%s$2:$%s$%d" % (hoja, col, col, 1 + n))
+lista_txt("CAT_DET", "M", '=A{r}&" · "&C{r}&" ("&D{r}&" V "&E{r}&"F)"', len(D["detallesCarga"]), "L_DET_TXT")
+lista_txt("CAT_BREAKERS", "K", '=B{r}&" · "&A{r}&" "&C{r}&" "&E{r}&" A "&IF(F{r}="","STD",F{r})&" "&G{r}&"P "&H{r}&" kA @"&I{r}&" V"', len(D["breakers"]), "L_BK_TXT")
+lista_txt("CAT_TABLEROS", "K", '=A{r}&" · "&C{r}&" "&B{r}&" · "&D{r}&" A · "&G{r}&" esp."', len(D["tablerosCat"]), "L_TAB_TXT")
+lista_txt("CAT_SPD", "J", '=B{r}&" · "&A{r}&" "&C{r}&" · "&G{r}&" V · "&E{r}&" kA"', len(D["supresores"]), "L_SPD_TXT")
+for nom, rng in [("L_DET_TXT", "E25:E124"), ("L_BK_TXT", "R25:R124"), ("L_BK_TXT", "F16"), ("L_TAB_TXT", "F17"), ("L_SPD_TXT", "F18")]:
+    dv = DataValidation(type="list", formula1="=" + nom, allow_blank=True, showErrorMessage=False); mc.add_data_validation(dv); dv.add(rng)
 
 # orden y visibilidad
 for nm in wb.sheetnames:

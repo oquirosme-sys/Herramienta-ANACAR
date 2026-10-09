@@ -83,8 +83,10 @@ Public Function RefMC(id As String) As String
     RefMC = "'MC " & id & "'!"
 End Function
 
-Private Function TieneDatos(ws As Worksheet, r As Long) As Boolean
-    TieneDatos = (Len(ws.Cells(r, 5).Formula) + Len(ws.Cells(r, 6).Formula) + Len(ws.Cells(r, 7).Formula) + Len(ws.Cells(r, 19).Formula) + Len(ws.Cells(r, 20).Formula)) > 0
+Public Function TieneDatos(ws As Worksheet, r As Long) As Boolean
+    ' fila con circuito: detalle, kVA, descripcion propia o enlace a otro tablero (las celdas automaticas no cuentan)
+    If Len(ws.Cells(r, 5).Formula) + Len(ws.Cells(r, 7).Formula) + Len(ws.Cells(r, 19).Formula) + Len(ws.Cells(r, 20).Formula) > 0 Then TieneDatos = True: Exit Function
+    If Len(ws.Cells(r, 6).Formula) > 0 Then TieneDatos = Not ModAuto.EsAuto(ws.Cells(r, 6))
 End Function
 
 Public Function FasesDet(det As Variant) As Long
@@ -142,8 +144,9 @@ Public Function PosicionLibre(ws As Worksheet, np As Long) As Long
 End Function
 
 Public Sub LimpiarFila(ws As Worksheet, r As Long)
+    ' deja la fila como en la plantilla (sin datos y con los valores automaticos)
     ws.Range("A" & r).ClearContents
-    ws.Range("C" & r & ":V" & r).ClearContents
+    ws.Range("C" & r & ":V" & r).Formula = ModAuto.Plantilla().Range("C" & r & ":V" & r).Formula
 End Sub
 
 ' detalle de carga para el circuito que alimenta a un tablero (o a un transformador si cambia el voltaje)
@@ -214,8 +217,6 @@ Public Function CrearTablero(id As String, Optional tipo As String = "3F", Optio
     mc.Range("C5").Value = tipo
     mc.Range("C6").Value = sistema
     mc.Range("C10").ClearContents
-    mc.Range("A25:A124").ClearContents
-    mc.Range("C25:V124").ClearContents
     mc.Tab.Color = RGB(198, 224, 180)
     vs.Tab.Color = RGB(221, 235, 247)
     Application.Calculation = calc
@@ -507,10 +508,10 @@ Public Sub ActualizarLista()
         Set ws = o: id = IdDe(ws): R0 = RefMC(id)
         pj.Cells(r, 2).Value = id
         pj.Hyperlinks.Add Anchor:=pj.Cells(r, 2), Address:="", SubAddress:=R0 & "A1", TextToDisplay:=id
-        pj.Cells(r, 3).Formula = "=" & R0 & "$C$5"
-        pj.Cells(r, 4).Formula = "=" & R0 & "$C$6"
-        pj.Cells(r, 5).Formula = "=" & R0 & "$BX$98&"""""
-        pj.Cells(r, 6).Formula = "=" & R0 & "$C$12"
+        pj.Cells(r, 3).Value = ws.Range("C5").Value
+        pj.Cells(r, 4).Value = ws.Range("C6").Value
+        pj.Cells(r, 5).Value = ws.Range("C10").Value
+        pj.Cells(r, 6).Value = ws.Range("C12").Value
         pj.Cells(r, 7).Formula = "=" & R0 & "$BX$10"
         pj.Cells(r, 8).Formula = "=" & R0 & "$BX$14"
         pj.Cells(r, 9).Formula = "=" & R0 & "$BX$24"
@@ -531,6 +532,13 @@ Public Sub ActualizarLista()
     pj.Range("G17:K116").NumberFormat = "0.00"
     pj.Range("L17:L116").NumberFormat = "0.00"
     pj.Range("O17:P" & Application.WorksheetFunction.Max(17, r - 1)).Interior.Color = RGB(230, 244, 225)
+    pj.Range("C17:F" & Application.WorksheetFunction.Max(17, r - 1)).Interior.Color = RGB(230, 244, 225)
+    On Error Resume Next
+    pj.Range("C17:C116").Validation.Delete: pj.Range("C17:C116").Validation.Add Type:=xlValidateList, Formula1:="=L_TIPO"
+    pj.Range("D17:D116").Validation.Delete: pj.Range("D17:D116").Validation.Add Type:=xlValidateList, Formula1:="=L_SISTEMAS"
+    pj.Range("E17:E116").Validation.Delete: pj.Range("E17:E116").Validation.Add Type:=xlValidateList, Formula1:="=LISTA_TABLEROS"
+    pj.Range("E17:E116").Validation.ShowError = False
+    On Error GoTo 0
     Application.EnableEvents = ev
 End Sub
 

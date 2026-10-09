@@ -433,7 +433,7 @@ sig:
 End Sub
 
 Private Function TieneDatosR(ws As Worksheet, r As Long) As Boolean
-    TieneDatosR = (Len(ws.Cells(r, 5).Formula) + Len(ws.Cells(r, 6).Formula) + Len(ws.Cells(r, 7).Formula)) > 0
+    TieneDatosR = TieneDatos(ws, r)
 End Function
 
 Private Function PolosTxt(ws As Worksheet, r As Long) As Variant

@@ -7,4 +7,5 @@ python build.py "$R/js/data/seed.js" plantilla.xlsx "$R/img/logo-sinergia.png"
 python importar.py plantilla.xlsx "$R/ANACAR Web 2026.xlsm" vba
 python test_machote.py "$R/ANACAR Web 2026.xlsm" "$R/tests/machote.js" res.json     # 238 comparaciones con el Machote del Excel
 python test_escenarios.py "$R/ANACAR Web 2026.xlsm"                               # 125 comparaciones con el motor web
+python test_auto.py "$R/ANACAR Web 2026.xlsm"                                    # autollenado, listas, crear varios, duplicar
 python test_flujo.py "$R/ANACAR Web 2026.xlsm" revit_prueba.txt salida             # Revit, prevista, balanceo, DXF, PDF, tablas

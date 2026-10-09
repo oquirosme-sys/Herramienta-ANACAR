@@ -88,7 +88,7 @@ Public Function BalancearTablero(ws As Worksheet, preguntar As Boolean) As Strin
     If fasesT < 2 Then Exit Function
     nC = 0: ReDim cs(1 To 100)
     For r = FILA1 To FILAN
-        If (Len(ws.Cells(r, 5).Formula) + Len(ws.Cells(r, 6).Formula) + Len(ws.Cells(r, 7).Formula)) > 0 Then
+        If TieneDatos(ws, r) Then
             nC = nC + 1
             With cs(nC)
                 .fila = r
@@ -187,32 +187,36 @@ Public Function BalancearTablero(ws As Worksheet, preguntar As Boolean) As Strin
 End Function
 
 Private Sub Aplicar(ws As Worksheet, base() As Circ)
-    Dim i As Long, f() As Variant, cm As Worksheet, u As Long, ev As Boolean, nf As Long, explic2 As Boolean, explic3 As Boolean
+    ' se copian a hojas temporales los datos de cada circuito movido y luego se escriben en su nueva fila
+    Dim i As Long, j As Long, ev As Boolean, tmp As Worksheet, k As Long, pol As Variant
     ev = Application.EnableEvents: Application.EnableEvents = False
-    Set cm = ThisWorkbook.Worksheets("CAMBIOS REVIT")
-    ReDim f(1 To nC)
+    Set tmp = ThisWorkbook.Worksheets("MC_MACHOTE")
+    Dim f() As Variant, a() As Variant
+    ReDim f(1 To nC): ReDim a(1 To nC)
     For i = 1 To nC
-        f(i) = ws.Range("A" & base(i).fila & ":V" & base(i).fila).Formula
+        If PolTxt(cs(i)) <> PolTxt(base(i)) Then
+            Dim fr(1 To 22) As String, au(1 To 22) As Boolean
+            For j = 1 To 22
+                fr(j) = ws.Cells(base(i).fila, j).Formula
+                au(j) = ModAuto.EsAuto(ws.Cells(base(i).fila, j))
+            Next j
+            f(i) = fr: a(i) = au
+        End If
     Next i
     For i = 1 To nC
         If PolTxt(cs(i)) <> PolTxt(base(i)) Then LimpiarFila ws, base(i).fila
     Next i
     For i = 1 To nC
         If PolTxt(cs(i)) <> PolTxt(base(i)) Then
-            Dim r As Long, v As Variant
-            r = FilaPos(cs(i).pol(1))
-            v = f(i)
-            v(1, 2) = cs(i).pol(1)
-            If Len(CStr(v(1, 3))) > 0 And cs(i).np >= 2 Then v(1, 3) = cs(i).pol(2)
-            If Len(CStr(v(1, 4))) > 0 And cs(i).np >= 3 Then v(1, 4) = cs(i).pol(3)
-            ws.Range("A" & r & ":V" & r).Formula = v
-            u = cm.Cells(cm.Rows.Count, 1).End(xlUp).Row + 1
-            cm.Cells(u, 1).Value = Date
-            cm.Cells(u, 2).Value = IdDe(ws)
-            cm.Cells(u, 3).Value = cs(i).desc
-            cm.Cells(u, 4).Value = "'" & base(i).revit
-            cm.Cells(u, 5).Value = "'" & PolTxt(cs(i))
-            cm.Cells(u, 6).Value = "balanceo"
+            Dim r As Long, ff As Variant, aa As Variant
+            r = FilaPos(cs(i).pol(1)): ff = f(i): aa = a(i)
+            LimpiarFila ws, r
+            For j = 1 To 22
+                If j <> 2 And Not aa(j) And Len(ff(j)) > 0 Then ws.Cells(r, j).Formula = ff(j)
+            Next j
+            If Len(ff(3)) > 0 And cs(i).np >= 2 Then ws.Cells(r, 3).Value = cs(i).pol(2)
+            If Len(ff(4)) > 0 And cs(i).np >= 3 Then ws.Cells(r, 4).Value = cs(i).pol(3)
+            ModAuto.Anotar ws, cs(i).desc, base(i).revit, PolTxt(cs(i)), cs(i).np, "balanceo"
         End If
     Next i
     Application.EnableEvents = ev
