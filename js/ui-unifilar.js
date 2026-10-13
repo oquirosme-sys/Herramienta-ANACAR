@@ -53,20 +53,33 @@
     const prof = r => 1 + Math.max(0, ...hijos(r).map(prof));
     D.tamano(totalW, 120 + NIVEL * Math.max(1, ...raiz.map(prof)) + 120);
 
-    const interruptor = (x, y, txt, mal, ir) => {
-      D.rect(x - 9, y - 9, 18, 18, 'u-bk' + (mal ? ' mal' : ''), 'PROTECCION', ir);
-      D.texto(x + 16, y + 4, txt, 'u-t', 'TEXTO');
+    const HB = SIMB.INTERRUPTOR_3P.alto * SIMB.INTERRUPTOR_3P.k;     // alto del símbolo de interruptor
+    /** Interruptor: bloque de 1, 2 o 3 polos centrado en (x, y) con atributos (polos, amperios, unidad, modelo, SCCR) y texto a la derecha. Devuelve [y superior, y inferior]. */
+    const interruptor = (x, y, txt, mal, ir, d) => {
+      d = d || {};
+      const np = Math.max(1, Math.min(3, Number(d.polos) || 3));
+      D.simbolo('INTERRUPTOR_' + np + 'P', x, y - HB / 2, { POLOS: np + 'p', AMPERIOS: d.amp ? d.amp + 'A' : '', UNIDAD: d.unidad || 'TM', MODELO: d.modelo || '', SCCR: d.sccr || '' }, { mal, ir, title: txt });
+      D.texto(x + 19, y + 4, txt, 'u-t', 'TEXTO');
+      return [y - HB / 2, y + HB / 2];
+    };
+    /** Línea vertical con huecos donde hay símbolos (los símbolos traen sus propios terminales). */
+    const lineaV = (x, y0, y1, huecos, capa) => {
+      let a = y0;
+      huecos.slice().sort((m, n) => m[0] - n[0]).forEach(([h0, h1]) => { if (h0 > a) D.linea(x, a, x, h0, 'u-lin', capa); a = Math.max(a, h1); });
+      if (y1 > a) D.linea(x, a, x, y1, 'u-lin', capa);
     };
     /** Bajada desde (x, y0) hasta la barra en y1. */
     function bajada(x, y0, y1, r, circ) {
-      const A = r.alim, tr = r.trafo; let y = y0;
-      D.linea(x, y0, x, y1, 'u-lin', 'ALIMENTADOR');
+      const A = r.alim, tr = r.trafo; let y = y0; const huecos = [];
       const bkA = circ ? circ.AF : A.AF139, b = circ ? circ.breaker : r.bkMain;
       y += circ ? (conTabla ? 262 : 96) + (r.padre && r.padre.alterna ? 40 : 0) : 26;
-      interruptor(x, y, (bkA || '–') + ' A ' + (b ? (b.polos || '') + 'P ' + (b.unidad === 'STD' ? 'TM' : b.unidad || '') + ' · ' + (b.ref || b.modelo || '') : ''), b && b.sccrBajo, () => App.go('memoria', circ ? r.padre.tab.id : r.tab.id));
+      huecos.push(interruptor(x, y, (bkA || '–') + ' A ' + (b ? (b.polos || '') + 'P ' + (b.unidad === 'STD' ? 'TM' : b.unidad || '') + ' · ' + (b.ref || b.modelo || '') : ''), b && b.sccrBajo, () => App.go('memoria', circ ? r.padre.tab.id : r.tab.id),
+        { polos: b ? b.polos : fasesPolos(r), amp: bkA, unidad: b ? (b.unidad === 'STD' || !b.unidad ? 'TM' : b.unidad) : 'TM', modelo: b ? (b.ref || b.modelo || '') : '', sccr: b ? b.sccr : '' }));
       if (tr) {
         y += 58;
-        D.circulo(x, y - 11, 15, 'u-trc', 'TRAFO', () => editarTrafo(r.tab, R)); D.circulo(x, y + 11, 15, 'u-trc', 'TRAFO', () => editarTrafo(r.tab, R));
+        const kt = SIMB.TRAFO_SECO.k, ht = SIMB.TRAFO_SECO.alto * kt;
+        D.simbolo('TRAFO_SECO', x, y - ht / 2, { KVA: f1(tr.kva) + ' kVA', IMPEDANCIA: 'Z ' + f2(tr.z) + ' %', VOLTAJES: (tr.Vp ? f0(tr.Vp) : '?') + ' / ' + r.tab.sistema + ' V' }, { ir: () => editarTrafo(r.tab, R), title: 'Editar transformador' });
+        huecos.push([y - ht / 2 - 3 * kt, y + ht / 2 + 3 * kt]);
         D.texto(x + 22, y - 12, (tr.nombre ? tr.nombre + ' · ' : '') + f1(tr.kva) + ' kVA · Z ' + f2(tr.z) + ' %', 'u-t b', 'TEXTO');
         D.texto(x + 22, y + 3, (tr.Vp ? f0(tr.Vp) : '?') + ' / ' + r.tab.sistema + ' V · carga ' + f1(tr.carga * 100) + ' %', 'u-t', 'TEXTO');
         D.texto(x + 22, y + 18, 'Icc sec. ' + f2(tr.iccSec / 1000) + ' kA · ΔV ' + f2(tr.reg) + ' %', 'u-t', 'TEXTO');
@@ -76,7 +89,7 @@
       }
       if (r.ups) {
         y += 44;
-        D.rect(x - 22, y - 13, 44, 26, 'u-ups', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, y + 4, 'UPS', 'u-t b', 'TEXTO', 'c');
+        D.rect(x - 22, y - 13, 44, 26, 'u-ups', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, y + 4, 'UPS', 'u-t b', 'TEXTO', 'c'); huecos.push([y - 13, y + 13]);
         D.texto(x + 30, y + 4, r.ups.nombre + ' ' + f1(r.ups.kva) + ' kVA · Icc ' + f2(r.ups.icc / 1000) + ' kA', 'u-t', 'TEXTO');
       }
       y = Math.max(y + 46, y1 - (r.alterna ? 120 : 74));
@@ -85,29 +98,46 @@
       D.texto(cx, y, A.fasesTxt + (A.neutroTxt ? '+' + A.neutroTxt + 'N' : '') + (A.tierraTxt ? '+' + A.tierraTxt + 'T' : '') + ' ' + A.mat + ' ' + A.ais, 'u-t b', 'TEXTO', al);
       D.texto(cx, y + 15, f1(A.M139) + ' m · ' + (A.preN || '') + A.AR139 + ' mm ' + A.tuberia + ' · ΔV ' + f2(A.AV139 / r.V * 100) + ' %' + (A.ajustado ? ' · ajustado' : ''), 'u-t', 'TEXTO', al);
       if (A.val && !A.val.ok) D.texto(cx, y + 30, '⚠ no cumple ampacidad corregida', 'u-t mal', 'TEXTO', al);
+      const fin = () => lineaV(x, y0, y1, huecos, 'ALIMENTADOR');
       // segunda acometida: generador o bypass → ATS / MTS / IP sobre la barra
       if (r.alterna) {
         // equipo de transferencia pegado a la barra del tablero; la rama alterna con su propia protección
-        const al = r.alterna, ya = y1 - 15;
-        D.rect(x - 22, ya - 12, 44, 24, 'u-ats', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, ya + 4, al.equipo, 'u-t b', 'TEXTO', 'c');
-        if (al.ats || al.distAts) D.texto(x - 26, ya - 16, (al.ats ? al.ats.modelo + ' · WCR ' + al.wcr + ' kA' : '') + (al.distAts ? ' · ' + f1(al.distAts) + ' m al tablero' : ''), 'u-t', 'TEXTO', 'e');
-        const gx = x + 140, yb2 = ya - 58;
-        D.linea(x + 22, ya, gx, ya, 'u-lin', 'ALIMENTADOR'); D.linea(gx, ya, gx, yb2 - 52, 'u-lin', 'ALIMENTADOR');
+        const al = r.alterna, sym = al.equipo === 'MTS' ? 'MTS' : al.equipo === 'ATS' ? 'ATS' : null;
+        let ya;
+        const gx = x + 140;
+        if (sym) {
+          // transferencia sobre la barra: normal por arriba, alterna por la derecha, carga hacia la barra
+          const S0 = SIMB[sym], ha = S0.alto * S0.k, oy = y1 - 12 - ha, pa = S0.puertos.alterna;
+          ya = oy - pa[1] * S0.k;
+          D.simbolo(sym, x, oy, { MODELO: al.ats ? al.ats.modelo : '', AMPERIOS: al.ats ? String(al.ats.amperios) : String(A.AF139 || ''), WCR: al.wcr ? String(al.wcr) : '', TRANSICION: al.transicion || '' }, { ir: () => App.go('memoria', r.tab.id), title: al.equipo });
+          huecos.push([oy, oy + ha]);
+          D.texto(x - S0.alto * 0 - 6 - (S0.k * 10), oy + 12, al.equipo, 'u-t b', 'TEXTO', 'e');
+          if (al.ats || al.distAts) D.texto(x - S0.k * 10 - 6, oy + 27, (al.ats ? al.ats.modelo + ' · WCR ' + al.wcr + ' kA' : '') + (al.distAts ? ' · ' + f1(al.distAts) + ' m al tablero' : ''), 'u-t', 'TEXTO', 'e');
+          D.linea(x + pa[0] * S0.k, ya, gx, ya, 'u-lin', 'ALIMENTADOR');
+        } else {
+          ya = y1 - 15;
+          D.rect(x - 22, ya - 12, 44, 24, 'u-ats', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, ya + 4, al.equipo, 'u-t b', 'TEXTO', 'c'); huecos.push([ya - 12, ya + 12]);
+          D.linea(x + 22, ya, gx, ya, 'u-lin', 'ALIMENTADOR');
+        }
+        const yb2 = ya - 58;
         // interruptor de la rama alterna: el circuito del bypass en el tablero de origen o el principal del generador
         const origen = al.tipo !== 'generador' ? Object.values(R.res).find(o => o.rows.some(z => z.c.respaldoDe === r.tab.id)) : null;
         const cb = origen ? origen.rows.find(z => z.c.respaldoDe === r.tab.id) : null;
         const bkTxt = cb ? (cb.AF || '–') + ' A ' + (cb.breaker ? cb.polosBreaker + 'P ' + (cb.breaker.ref || cb.breaker.modelo || '') : '') : (A.AF139 || '–') + ' A ' + (fasesPolos(r)) + 'P';
-        interruptor(gx, yb2, bkTxt, cb && cb.breaker && cb.breaker.sccrBajo, () => App.go('memoria', origen ? origen.tab.id : r.tab.id));
+        const hg = interruptor(gx, yb2, bkTxt, cb && cb.breaker && cb.breaker.sccrBajo, () => App.go('memoria', origen ? origen.tab.id : r.tab.id),
+          { polos: cb && cb.breaker ? cb.polosBreaker : fasesPolos(r), amp: cb ? cb.AF : A.AF139, unidad: 'TM', modelo: cb && cb.breaker ? (cb.breaker.ref || cb.breaker.modelo || '') : '', sccr: cb && cb.breaker ? cb.breaker.sccr : '' });
+        D.linea(gx, ya, gx, hg[1], 'u-lin', 'ALIMENTADOR'); D.linea(gx, hg[0], gx, yb2 - 52, 'u-lin', 'ALIMENTADOR');
         if (al.tipo === 'generador') {
-          D.circulo(gx, yb2 - 68, 16, 'u-gen', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(gx, yb2 - 63, 'G', 'u-t b', 'TEXTO', 'c');
+          D.simbolo('GENERADOR', gx, yb2 - 52, { NOMBRE: al.origen || 'Generador', KVA: al.kva ? f1(al.kva) + ' kVA' : '', XD: al.xd ? f1(al.xd) + ' %' : '' }, { ir: () => App.go('memoria', r.tab.id), title: 'Generador' });
           D.texto(gx + 22, yb2 - 74, (al.origen || 'Generador') + (al.xd ? " · X''d " + f1(al.xd) + ' %' : ''), 'u-t b', 'TEXTO');
         } else {
           D.texto(gx + 10, yb2 - 60, 'BYPASS desde ' + (al.origen || '?'), 'u-t b', 'TEXTO');
           if (cb) D.texto(gx + 10, yb2 - 45, 'circuito [' + cb.polos.join(',') + '] en ' + origen.nombre, 'u-t', 'TEXTO');
         }
         D.texto(gx + 8, ya - 26, al.fasesTxt + ' ' + al.mat + ' · ' + f1(al.longitud) + ' m · ΔV ' + f2(al.cv) + ' %', 'u-t', 'TEXTO');
-        D.texto(gx + 8, ya - 11, 'Icc ' + (al.iccA ? f2(al.iccA / 1000) + ' kA' : '—') + (al.carga !== null ? ' · carga ' + f1(al.carga * 100) + ' %' : ''), 'u-t', 'TEXTO');
+        D.texto(gx + 8, ya - 11, 'Icc ' + (al.iccA ? f2(al.iccA / 1000) + ' kA' : '—') + (al.carga !== null ? ' · carga ' + f1(al.carga * 100) + ' %' : '') + (al.iccAtsKA ? ' · en ' + al.equipo + ' ' + f2(al.iccAtsKA) + ' kA' : ''), 'u-t', 'TEXTO');
       }
+      fin();
     }
 
     /** Tabla de datos del tablero (como las tablas de los DU). */
@@ -135,6 +165,11 @@
       const o = r.alterna ? 40 : 0;   // con segunda acometida los datos van debajo de la barra (arriba está la rama alterna)
       D.barra(xa, xb, yb, colorV(r.V), () => App.go('memoria', r.tab.id), r.nombre);
       D.texto(tx, yb - 22 + o, r.nombre, 'u-n', 'TEXTO', null, () => App.go('memoria', r.tab.id));
+      if (!r.padre) {   // barra de tierra del tablero de acometida (conductor del electrodo, 250.66)
+        D.linea(xa + 8, yb, xa + 8, yb + 14, 'u-lin', 'TABLERO');
+        D.simbolo('TIERRA', xa + 8, yb + 14, {}, { title: 'Barra de tierra' });
+        D.texto(xa + 22, yb + 33, 'Tierra' + (r.alim.AP140 ? ' ' + r.alim.AP140 + ' AWG' : ''), 'u-t s', 'TEXTO');
+      }
       if (conTabla) tablaDatos(r, tx, yb - 8 + o);
       else {
         D.texto(tx, yb - 6 + o, r.tab.sistema + ' V · ' + (r.zapatas ? 'zapatas' : (r.alim.AF139 || '–') + ' A') + ' · ' + (r.cat ? r.cat.modelo : ''), 'u-t', 'TEXTO');
@@ -185,6 +220,21 @@
       circulo: (cx, cy, r, cls, capa, ir) => g0.appendChild(S('circle', { cx, cy, r, class: cls + (ir ? ' clic' : ''), onclick: ir })),
       texto: (x, y, t, cls, capa, al, ir, title) => g0.appendChild(S('text', { x, y, class: cls + (ir ? ' clic' : ''), 'text-anchor': al === 'c' ? 'middle' : al === 'e' ? 'end' : null, onclick: ir }, t, tit(title))),
       barra: (x1, x2, y, color, ir, nombre) => g0.appendChild(S('line', { x1, y1: y, x2, y2: y, class: 'u-bus', stroke: color, onclick: ir }, tit('Abrir memoria de cálculo de ' + nombre))),
+      simbolo: (nombre, x, y, vals, o) => {
+        o = o || {}; const Y = SIMB[nombre], k = Y.k, X = px => +(x + px * k).toFixed(2), V = py => +(y - py * k).toFixed(2);
+        const el = S('g', { class: 'u-sim' + (o.mal ? ' mal' : '') + (o.ir ? ' clic' : ''), onclick: o.ir }, tit(o.title));
+        Y.prims.forEach(m => {
+          if (m[0] === 'L') el.appendChild(S('line', { x1: X(m[1]), y1: V(m[2]), x2: X(m[3]), y2: V(m[4]) }));
+          else if (m[0] === 'C') el.appendChild(S('circle', { cx: X(m[1]), cy: V(m[2]), r: +(m[3] * k).toFixed(2) }));
+          else if (m[0] === 'F') el.appendChild(S('circle', { cx: X(m[1]), cy: V(m[2]), r: +(m[3] * k).toFixed(2), class: 'rell' }));
+          else if (m[0] === 'A') {
+            const [cx, cy, r, a1, a2] = [m[1], m[2], m[3], m[4] * Math.PI / 180, m[5] * Math.PI / 180], g = a => [X(cx + r * Math.cos(a)), V(cy + r * Math.sin(a))];
+            const [sx, sy] = g(a1), [ex, ey] = g(a2), grande = ((m[5] - m[4] + 720) % 360) > 180 ? 1 : 0;
+            el.appendChild(S('path', { d: 'M' + sx + ' ' + sy + 'A' + +(r * k).toFixed(2) + ' ' + +(r * k).toFixed(2) + ' 0 ' + grande + ' 0 ' + ex + ' ' + ey }));
+          } else if (m[0] === 'T') el.appendChild(S('text', { x: X(m[1]), y: V(m[2]), class: 'u-st', 'font-size': +(m[3] * k).toFixed(1), 'text-anchor': 'middle', 'dominant-baseline': 'central' }, m[4]));
+        });
+        g0.appendChild(el);
+      },
       boton: (cx, cy, t, ir) => g0.appendChild(S('g', { class: 'u-add no-print', onclick: ir }, S('rect', { x: cx - 32, y: cy - 10, width: 64, height: 18, rx: 9 }), S('text', { x: cx, y: cy + 3, 'text-anchor': 'middle' }, t))),
     };
     dibujar(R, D);
@@ -211,15 +261,39 @@
       },
       barra: (x1, x2, y) => { [-2, 0, 2].forEach(d => linea(x1, y + d, x2, y + d, 'TABLERO')); },
       boton: () => {},
+      simbolo: (nombre, x, y, vals) => {
+        const Y = SIMB[nombre], conAtr = (Y.attrs || []).length > 0, e = ['0', 'INSERT', '8', Y.capa].concat(conAtr ? ['66', 1] : [], ['2', nombre, '10', xx(x), '20', yy(y), '30', 0, '41', Y.k, '42', Y.k, '43', Y.k, '50', 0]);
+        ent.push(e);
+        if (conAtr) {
+          (Y.attrs || []).forEach(([tag, , ax, ay, ah, vis]) => ent.push(['0', 'ATTRIB', '8', Y.capa, '10', xx(x + ax * Y.k), '20', yy(y) + +(ay * Y.k).toFixed(2), '30', 0, '40', +(ah * Y.k).toFixed(2), '1', esc((vals || {})[tag] || ' '), '7', 'SINERGIA', '2', tag, '70', vis ? 0 : 1]));
+          ent.push(['0', 'SEQEND', '8', Y.capa]);
+        }
+      },
     };
     dibujar(R, D);
+    // definiciones de bloque (capa 0: toman la capa del INSERT)
+    const bloques = [];
+    Object.entries(SIMB).forEach(([nombre, Y]) => {
+      const a = ['0', 'BLOCK', '8', '0', '2', nombre, '70', (Y.attrs || []).length ? 2 : 0, '10', 0, '20', 0, '30', 0, '3', nombre];
+      Y.prims.forEach(m => {
+        if (m[0] === 'L') a.push('0', 'LINE', '8', '0', '10', m[1], '20', m[2], '30', 0, '11', m[3], '21', m[4], '31', 0);
+        else if (m[0] === 'C') a.push('0', 'CIRCLE', '8', '0', '10', m[1], '20', m[2], '30', 0, '40', m[3]);
+        else if (m[0] === 'F') { const w = m[3], r2 = +(w / 2).toFixed(3); a.push('0', 'POLYLINE', '8', '0', '66', 1, '10', 0, '20', 0, '30', 0, '40', w, '41', w, '70', 1,
+          '0', 'VERTEX', '8', '0', '10', +(m[1] - r2).toFixed(3), '20', m[2], '30', 0, '42', 1, '0', 'VERTEX', '8', '0', '10', +(m[1] + r2).toFixed(3), '20', m[2], '30', 0, '42', 1, '0', 'SEQEND', '8', '0'); }
+        else if (m[0] === 'A') a.push('0', 'ARC', '8', '0', '10', m[1], '20', m[2], '30', 0, '40', m[3], '50', m[4], '51', m[5]);
+        else if (m[0] === 'T') a.push('0', 'TEXT', '8', '0', '7', 'SINERGIA', '10', m[1], '20', m[2], '30', 0, '40', m[3], '1', esc(m[4]), '72', 1, '73', 2, '11', m[1], '21', m[2], '31', 0);
+      });
+      (Y.attrs || []).forEach(([tag, prompt, ax, ay, ah, vis]) => a.push('0', 'ATTDEF', '8', '0', '10', ax, '20', ay, '30', 0, '40', ah, '1', ' ', '3', esc(prompt), '2', tag, '70', vis ? 0 : 1, '7', 'SINERGIA'));
+      a.push('0', 'ENDBLK', '8', '0');
+      bloques.push(...a);
+    });
     const out = ['0', 'SECTION', '2', 'HEADER', '9', '$ACADVER', '1', 'AC1009', '9', '$DWGCODEPAGE', '3', 'ANSI_1252', '9', '$INSUNITS', '70', 4, '0', 'ENDSEC',
       '0', 'SECTION', '2', 'TABLES',
       '0', 'TABLE', '2', 'LTYPE', '70', 1, '0', 'LTYPE', '2', 'CONTINUOUS', '70', 0, '3', 'Solid line', '72', 65, '73', 0, '40', 0, '0', 'ENDTAB',
       '0', 'TABLE', '2', 'LAYER', '70', Object.keys(CAPAS).length].concat(...Object.entries(CAPAS).map(([k, c]) => ['0', 'LAYER', '2', 'E-' + k, '70', 0, '62', c, '6', 'CONTINUOUS']), ['0', 'ENDTAB',
       '0', 'TABLE', '2', 'STYLE', '70', 1, '0', 'STYLE', '2', 'SINERGIA', '70', 0, '40', 0, '41', 1, '50', 0, '71', 0, '42', 8, '3', 'GOTHIC.TTF', '4', '', '0', 'ENDTAB',
-      '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES']);
-    ent.forEach(e => { const k = e.slice(); k[3] = 'E-' + k[3]; out.push(...k); });
+      '0', 'ENDSEC', '0', 'SECTION', '2', 'BLOCKS'].concat(bloques, ['0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES']));
+    ent.forEach(e => { const k = e.slice(); if (k[2] === '8') k[3] = 'E-' + k[3]; out.push(...k); });
     out.push('0', 'ENDSEC', '0', 'EOF');
     const txt = []; for (let i = 0; i < out.length; i += 2) txt.push(String(out[i]).padStart(3, ' '), String(out[i + 1]));
     return txt.join('\r\n') + '\r\n';

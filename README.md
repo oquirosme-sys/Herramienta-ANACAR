@@ -43,6 +43,13 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
+## Unifilar con bloques de los DU — 2026.1-web.10
+- El DXF (web y Excel) ahora lleva **bloques de AutoCAD** con la geometría de tus DU (`DU prueba.dwg`, `DU ELÉCTRICO 3.dwg`): `INTERRUPTOR_1P/2P/3P` (contactos con arco y un trazo por polo), `TRAFO_SECO`, `ATS` y `MTS` (normal arriba, alterna a la derecha, carga abajo), `GENERADOR` y `TIERRA`. Se ven igual en la pantalla de la herramienta.
+- Cada bloque trae **atributos** (doble clic en AutoCAD o extracción de atributos): interruptor (polos, amperios, unidad, modelo, SCCR), trafo (kVA, Z, voltajes), ATS/MTS (modelo, amperios, WCR, transición), generador (nombre, kVA, X''d). Quedan invisibles para no recargar el dibujo; el texto visible sigue siendo el de antes.
+- Las líneas se cortan donde hay símbolos; el tablero de acometida lleva su barra de tierra con el conductor del electrodo.
+- Para usar sus propios bloques: en AutoCAD redefina el bloque con el mismo nombre (por ejemplo `BLOCKREPLACE`). La biblioteca vive en `js/data/simbolos.js` y se copia a la hoja oculta `CAT_SIMBOLOS` del Excel.
+- Validado abriendo los DXF (web y Excel) en AutoCAD 2026: 0 errores de auditoría.
+
 ## Segunda acometida: ubicación y tipo de ATS — 2026.1-web.9
 - **Distancias**: *longitud fuente → ATS* y *distancia ATS → tablero* (tramo común con el alimentador normal). La caída de voltaje y la corriente de cortocircuito de la fuente alterna se calculan por tramos, y se obtiene la **Icc en el ATS** (la mayor entre la alimentación normal y la alterna en ese punto).
 - **Tipo de transferencia**: transición abierta, retardada (motores), cerrada o con bypass-aislamiento, y MTS; **3 o 4 polos** (neutro conmutado, fuente derivada separadamente 250.30).

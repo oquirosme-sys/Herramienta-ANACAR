@@ -262,3 +262,10 @@ td.ph0 { background: var(--pa); color: var(--pa-i); } td.ph1 { background: var(-
 .leyenda { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; margin-bottom: .6rem; } .leyenda .muestra input { width: 15rem; }
 ol.guia li { margin: .35rem 0; line-height: 1.45; }
 @media (max-width: 760px) { .glo { grid-template-columns: 1fr; } }
+
+/* símbolos del unifilar (bloques de los DU) */
+.unifilar .u-sim line, .unifilar .u-sim path, .unifilar .u-sim circle { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; }
+.unifilar .u-sim circle.rell { fill: var(--ink); stroke: none; }
+.unifilar .u-sim .u-st { fill: var(--ink); stroke: none; font-weight: 700; }
+.unifilar .u-sim.mal line, .unifilar .u-sim.mal path, .unifilar .u-sim.mal circle { stroke: var(--bad); } .unifilar .u-sim.mal circle.rell { fill: var(--bad); }
+.unifilar .u-sim.clic:hover line, .unifilar .u-sim.clic:hover path, .unifilar .u-sim.clic:hover circle { stroke: var(--brand); } .unifilar .u-sim.clic:hover circle.rell { fill: var(--brand); }

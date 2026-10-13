@@ -3,7 +3,9 @@ Attribute VB_Name = "ModDXF"
 ' interruptores, alimentadores con su calibre, segunda acometida (ATS/MTS/IP) y tabla de datos junto a cada tablero.
 Option Explicit
 
-Private buf As String
+Private buf As String, blq As String
+Private sk As Object, sca As Object, sal As Object, spx As Object, spy As Object, sat As Object
+Private Const ESC As Double = 1.15          ' escala de los simbolos en el dibujo (los bloques traen la geometria de los DU)
 Private Const DX As Double = 190      ' separacion horizontal entre tableros
 Private Const DY As Double = 150      ' separacion vertical entre niveles
 Private xs As Object, ys As Object, hoja As Object, hijos As Object, sigX As Double
@@ -46,11 +48,98 @@ Private Sub Rect(capa As String, x1 As Double, y1 As Double, x2 As Double, y2 As
     Ln capa, x1, y1, x2, y1: Ln capa, x2, y1, x2, y2: Ln capa, x2, y2, x1, y2: Ln capa, x1, y2, x1, y1
 End Sub
 
-Private Sub Breaker(x As Double, y As Double, txt As String)
-    ' interruptor: arco simplificado (dos lineas) y texto con amperios
-    Ln "E-PROTECCION", x, y + 6, x + 4, y - 2
-    Ln "E-PROTECCION", x - 2, y + 6, x + 2, y + 6
-    Tx "E-PROTECCION", x + 6, y, 2.5, txt
+Private Function G(codigo As String, valor As Variant) As String
+    G = codigo & vbCrLf & CStr(valor) & vbCrLf
+End Function
+
+Private Function N(v As Variant) As String
+    N = Replace(Format$(CDbl(v), "0.0###"), ",", ".")
+End Function
+
+' lee la hoja CAT_SIMBOLOS y arma las definiciones de bloque (las mismas del diagrama de la herramienta en linea)
+Private Sub CargarSimbolos()
+    Dim ws As Worksheet, d As Variant, i As Long, nm As String, ult As String, nAtt As Object, b As String, u As Long, tp As String
+    Set ws = ThisWorkbook.Worksheets("CAT_SIMBOLOS")
+    u = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    d = ws.Range("A2:K" & u).Value
+    Set sk = CreateObject("Scripting.Dictionary"): Set sca = CreateObject("Scripting.Dictionary"): Set sal = CreateObject("Scripting.Dictionary")
+    Set spx = CreateObject("Scripting.Dictionary"): Set spy = CreateObject("Scripting.Dictionary"): Set sat = CreateObject("Scripting.Dictionary")
+    Set nAtt = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(d, 1)
+        nm = CStr(d(i, 1))
+        sca(nm) = CStr(d(i, 2)): sal(nm) = CDbl(d(i, 4))
+        If CStr(d(i, 5)) = "AD" Then nAtt(nm) = nAtt(nm) + 1
+        If CStr(d(i, 5)) = "PT" Then spx(nm & "|" & d(i, 9)) = CDbl(d(i, 6)): spy(nm & "|" & d(i, 9)) = CDbl(d(i, 7))
+    Next i
+    blq = ""
+    For i = 1 To UBound(d, 1)
+        nm = CStr(d(i, 1)): tp = CStr(d(i, 5))
+        If nm <> ult Then
+            If ult <> "" Then blq = blq & G("0", "ENDBLK") & G("8", "0")
+            blq = blq & G("0", "BLOCK") & G("8", "0") & G("2", nm) & G("70", IIf(nAtt.Exists(nm), 2, 0)) & G("10", 0) & G("20", 0) & G("30", 0) & G("3", nm)
+            ult = nm
+        End If
+        Select Case tp
+            Case "L": blq = blq & G("0", "LINE") & G("8", "0") & G("10", N(d(i, 6))) & G("20", N(d(i, 7))) & G("30", 0) & G("11", N(d(i, 8))) & G("21", N(d(i, 9))) & G("31", 0)
+            Case "C": blq = blq & G("0", "CIRCLE") & G("8", "0") & G("10", N(d(i, 6))) & G("20", N(d(i, 7))) & G("30", 0) & G("40", N(d(i, 8)))
+            Case "F"   ' punto relleno: polilinea cerrada de dos vertices con bulge 1 y ancho = radio
+                blq = blq & G("0", "POLYLINE") & G("8", "0") & G("66", 1) & G("10", 0) & G("20", 0) & G("30", 0) & G("40", N(d(i, 8))) & G("41", N(d(i, 8))) & G("70", 1) & _
+                      G("0", "VERTEX") & G("8", "0") & G("10", N(d(i, 6) - d(i, 8) / 2)) & G("20", N(d(i, 7))) & G("30", 0) & G("42", 1) & _
+                      G("0", "VERTEX") & G("8", "0") & G("10", N(d(i, 6) + d(i, 8) / 2)) & G("20", N(d(i, 7))) & G("30", 0) & G("42", 1) & G("0", "SEQEND") & G("8", "0")
+            Case "A": blq = blq & G("0", "ARC") & G("8", "0") & G("10", N(d(i, 6))) & G("20", N(d(i, 7))) & G("30", 0) & G("40", N(d(i, 8))) & G("50", N(d(i, 9))) & G("51", N(d(i, 10)))
+            Case "T": blq = blq & G("0", "TEXT") & G("8", "0") & G("7", "SINERGIA") & G("10", N(d(i, 6))) & G("20", N(d(i, 7))) & G("30", 0) & G("40", N(d(i, 8))) & G("1", T(d(i, 9))) & G("72", 1) & G("73", 2) & G("11", N(d(i, 6))) & G("21", N(d(i, 7))) & G("31", 0)
+            Case "AD": blq = blq & G("0", "ATTDEF") & G("8", "0") & G("10", N(d(i, 6))) & G("20", N(d(i, 7))) & G("30", 0) & G("40", N(d(i, 8))) & G("1", " ") & G("3", T(d(i, 10))) & G("2", d(i, 9)) & G("70", IIf(CStr(d(i, 11)) = "1", 0, 1)) & G("7", "SINERGIA")
+        End Select
+        If tp = "AD" Then
+            If Not sat.Exists(nm) Then sat.Add nm, New Collection
+            sat(nm).Add Array(CStr(d(i, 9)), CDbl(d(i, 6)), CDbl(d(i, 7)), CDbl(d(i, 8)), CStr(d(i, 11)) = "1")
+        End If
+    Next i
+    If ult <> "" Then blq = blq & G("0", "ENDBLK") & G("8", "0")
+End Sub
+
+' inserta un simbolo (bloque) con sus atributos: vals = Array("TAG", "valor", "TAG2", "valor2", ...)
+Private Sub Simbolo(nombre As String, x As Double, y As Double, Optional vals As Variant)
+    Dim a As Variant, i As Long, v As String, j As Long, conAtt As Boolean
+    conAtt = sat.Exists(nombre)
+    buf = buf & G("0", "INSERT") & G("8", "E-" & sca(nombre)) & IIf(conAtt, G("66", 1), "") & G("2", nombre) & G("10", N(x)) & G("20", N(y)) & G("30", 0) & G("41", N(ESC)) & G("42", N(ESC)) & G("43", N(ESC)) & G("50", 0)
+    If conAtt Then
+        For Each a In sat(nombre)
+            v = " "
+            If Not IsMissing(vals) Then
+                For j = 0 To UBound(vals) Step 2
+                    If UCase$(CStr(vals(j))) = UCase$(CStr(a(0))) Then If CStr(vals(j + 1)) <> "" Then v = CStr(vals(j + 1))
+                Next j
+            End If
+            buf = buf & G("0", "ATTRIB") & G("8", "E-" & sca(nombre)) & G("10", N(x + a(1) * ESC)) & G("20", N(y + a(2) * ESC)) & G("30", 0) & G("40", N(a(3) * ESC)) & G("1", T(v)) & G("7", "SINERGIA") & G("2", a(0)) & G("70", IIf(a(4), 0, 1))
+        Next a
+        buf = buf & G("0", "SEQEND") & G("8", "E-" & sca(nombre))
+    End If
+End Sub
+
+Private Function AltoS(nombre As String) As Double
+    AltoS = sal(nombre) * ESC
+End Function
+
+' interruptor (bloque de 1, 2 o 3 polos) con el origen en su terminal superior; devuelve el borde inferior
+Private Function Breaker(x As Double, ysup As Double, polos As Long, amp As Variant, unidad As String, modelo As String, sccr As Variant, txt As String) As Double
+    Dim np As Long
+    np = polos: If np < 1 Then np = 3
+    If np > 3 Then np = 3
+    Simbolo "INTERRUPTOR_" & np & "P", x, ysup, Array("POLOS", np & "p", "AMPERIOS", IIf(CStr(amp) = "", "", amp & "A"), "UNIDAD", unidad, "MODELO", modelo, "SCCR", CStr(sccr))
+    Tx "E-PROTECCION", x + 7, ysup - AltoS("INTERRUPTOR_3P") / 2, 2.5, txt
+    Breaker = ysup - AltoS("INTERRUPTOR_3P")
+End Function
+
+' linea vertical de y0 (arriba) a y1 (abajo) salteando los huecos de los simbolos: hu(i,0)=borde superior, hu(i,1)=borde inferior (ordenados de arriba hacia abajo)
+Private Sub LineaV(x As Double, y0 As Double, y1 As Double, hu() As Double, n As Long, capa As String)
+    Dim a As Double, i As Long
+    a = y0
+    For i = 1 To n
+        If hu(i, 0) < a Then Ln capa, x, a, x, hu(i, 0)
+        If hu(i, 1) < a Then a = hu(i, 1)
+    Next i
+    If y1 < a Then Ln capa, x, a, x, y1
 End Sub
 
 Private Sub Posiciones(id As String, nivel As Long)
@@ -93,6 +182,7 @@ Public Sub ExportarDXF(Optional destino As String = "")
         sigX = sigX + DX * 0.3
     Next k
     buf = ""
+    CargarSimbolos
     For Each k In hoja.Keys
         Dibujar CStr(k)
     Next k
@@ -102,9 +192,21 @@ Public Sub ExportarDXF(Optional destino As String = "")
     If destino = "" Then MsgBox "Diagrama unifilar exportado:" & vbCrLf & ruta, vbInformation
 End Sub
 
+Private Function PolosB(ws As Worksheet) As Long
+    If NumV(ws.Range("C8").Value) = 3 Then
+        PolosB = 3
+    ElseIf NumV(ws.Range("C7").Value) >= 208 And NumV(ws.Range("C7").Value) <= 240 Then
+        PolosB = 2
+    Else
+        PolosB = 1
+    End If
+End Function
+
 Private Sub Dibujar(id As String)
     Dim ws As Worksheet, x As Double, y As Double, padre As String, c As Collection, k As Variant, x0 As Double, x1 As Double, yb As Double
-    Dim filas As Variant, i As Long, ytop As Double
+    Dim filas As Variant, i As Long, hu() As Double, nh As Long, hb As Double, yBk As Double, yT As Double, yTop As Double, yBot As Double
+    Dim sym As String, yA As Double, ya2 As Double, xa As Double, gx As Double, yBa As Double, yG As Double, ha As Double
+    Dim und As String, mod_ As String, sccr As Variant
     Set ws = hoja(id): x = xs(id): y = ys(id)
     Set c = hijos(id)
     ' barra del tablero (se extiende a sus derivados)
@@ -117,42 +219,80 @@ Private Sub Dibujar(id As String)
     Ln "E-TABLERO", x0, yb, x1, yb, 1
     Ln "E-TABLERO", x0, yb - 1, x1, yb - 1, 1
     Tx "E-TABLERO", x - 24, yb + 2, 4, ws.Range("BX2").Value
-    ' alimentacion
-    ytop = y + 30
+    ReDim hu(1 To 8, 0 To 1): nh = 0
+    hb = AltoS("INTERRUPTOR_3P")
+    und = IIf(OrDefault(ws.Range("F14").Value) = "TM", "TM", CStr(ws.Range("F14").Value))
+    mod_ = CStr(ws.Range("BX72").Value): sccr = ws.Range("BX74").Value
     padre = Trim$(CStr(ws.Range("C10").Value))
+    ' ---- alimentacion normal: interruptor (bloque), transformador seco, UPS ----
     If padre <> "" And hoja.Exists(padre) Then
-        Ln "E-ALIMENTADOR", x, ys(padre) - 21, x, yb
-        Breaker x, ys(padre) - 32, NumV(ws.Range("BX24").Value) & " A"
+        yTop = ys(padre) - 21
+        yBk = ys(padre) - 26
+        Breaker x, yBk, PolosB(ws), ws.Range("BX24").Value, und, mod_, sccr, NumV(ws.Range("BX24").Value) & " A " & PolosB(ws) & "P " & und
+        nh = nh + 1: hu(nh, 0) = yBk: hu(nh, 1) = yBk - hb
         Tx "E-ALIMENTADOR", x - 3, ys(padre) - 45, 2.2, ws.Range("BX99").Value & IIf(ws.Range("BX100").Value <> "", " + " & ws.Range("BX100").Value & "N", "") & IIf(ws.Range("BX101").Value <> "", " + " & ws.Range("BX101").Value & "T", "") & " " & ws.Range("F3").Value & " - " & Format$(NumV(ws.Range("C12").Value), "0.0") & " m", 0, 90
     Else
-        Ln "E-ALIMENTADOR", x, ytop, x, yb
-        Breaker x, y + 2, IIf(ws.Range("C16").Value = "Zapatas", "ZAPATAS", NumV(ws.Range("BX24").Value) & " A")
-        Tx "E-TEXTO", x + 3, ytop + 2, 2.5, IIf(CStr(ws.Range("C11").Value) <> "", ws.Range("C11").Value, "ACOMETIDA")
+        yTop = y + 100
+        Tx "E-TEXTO", x + 3, yTop + 2, 2.5, IIf(CStr(ws.Range("C11").Value) <> "", ws.Range("C11").Value, "ACOMETIDA")
     End If
     If ws.Range("I3").Value = "SI" Then
-        Circ "E-TRAFO", x, y + 18, 5: Circ "E-TRAFO", x, y + 11, 5
-        Tx "E-TRAFO", x + 8, y + 14, 2.5, IIf(CStr(ws.Range("I8").Value) <> "", ws.Range("I8").Value & " ", "") & ws.Range("I4").Value & " kVA  Z " & ws.Range("I5").Value & " %"
+        yT = y + 84
+        Simbolo "TRAFO_SECO", x, yT, Array("KVA", ws.Range("I4").Value & " kVA", "IMPEDANCIA", "Z " & ws.Range("I5").Value & " %", "VOLTAJES", ws.Range("I7").Value & " / " & ws.Range("C6").Value & " V")
+        nh = nh + 1: hu(nh, 0) = yT + 3 * ESC: hu(nh, 1) = yT - AltoS("TRAFO_SECO") - 3 * ESC
+        Tx "E-TRAFO", x + 13, yT - 6, 2.5, IIf(CStr(ws.Range("I8").Value) <> "", ws.Range("I8").Value & " ", "") & ws.Range("I4").Value & " kVA  Z " & ws.Range("I5").Value & " %"
     End If
     If ws.Range("I10").Value = "SI" Then
-        Rect "E-EQUIPOS", x - 7, y + 6, x + 7, y + 18
-        Tx "E-EQUIPOS", x, y + 10, 3, "UPS", 1
-        Tx "E-EQUIPOS", x + 9, y + 10, 2.5, ws.Range("I11").Value & " kVA"
+        Rect "E-EQUIPOS", x - 7, y + 44, x + 7, y + 56
+        Tx "E-EQUIPOS", x, y + 48, 3, "UPS", 1
+        Tx "E-EQUIPOS", x + 9, y + 48, 2.5, ws.Range("I11").Value & " kVA"
+        nh = nh + 1: hu(nh, 0) = y + 56: hu(nh, 1) = y + 44
     End If
+    If padre = "" And ws.Range("C16").Value <> "Zapatas" Then
+        yBk = y + 34
+        Breaker x, yBk, PolosB(ws), ws.Range("BX24").Value, und, mod_, sccr, NumV(ws.Range("BX24").Value) & " A " & PolosB(ws) & "P " & und
+        nh = nh + 1: hu(nh, 0) = yBk: hu(nh, 1) = yBk - hb
+    End If
+    ' ---- segunda acometida: ATS / MTS pegado a la barra, interruptor y generador (o bypass) ----
     If ws.Range("I14").Value = "SI" Then
-        ' segunda acometida con equipo de transferencia pegado a la barra
-        Rect "E-EQUIPOS", x + 12, yb + 4, x + 26, yb + 14
-        Tx "E-EQUIPOS", x + 19, yb + 7.5, 3, ws.Range("I15").Value, 1
-        Ln "E-ALIMENTADOR", x + 19, yb + 4, x + 19, yb
-        Ln "E-ALIMENTADOR", x + 26, yb + 9, x + 45, yb + 9, , "DASHED"
-        If ws.Range("I16").Value = "Generador" Then
-            Circ "E-EQUIPOS", x + 50, yb + 9, 5
-            Tx "E-EQUIPOS", x + 50, yb + 7.5, 3, "G", 1
-            Tx "E-EQUIPOS", x + 56, yb + 9, 2.5, ws.Range("I18").Value & " kVA"
+        sym = IIf(ws.Range("I15").Value = "MTS", "MTS", "ATS")
+        If ws.Range("I15").Value = "IP" Then
+            Rect "E-EQUIPOS", x - 7, yb + 4, x + 7, yb + 14
+            Tx "E-EQUIPOS", x, yb + 7.5, 3, "IP", 1
+            nh = nh + 1: hu(nh, 0) = yb + 14: hu(nh, 1) = yb + 4
+            xa = x + 7: ya2 = yb + 9
         Else
-            Tx "E-EQUIPOS", x + 46, yb + 9, 2.5, "BYPASS desde " & ws.Range("I17").Value
+            ha = AltoS(sym): yA = yb + 1 + ha
+            Simbolo sym, x, yA, Array("MODELO", ws.Range("BX115").Value, "AMPERIOS", ws.Range("BX116").Value, "WCR", ws.Range("BX117").Value, "TRANSICION", ws.Range("I22").Value)
+            nh = nh + 1: hu(nh, 0) = yA: hu(nh, 1) = yA - ha
+            xa = x + spx(sym & "|alterna") * ESC: ya2 = yA + spy(sym & "|alterna") * ESC
+            Tx "E-EQUIPOS", x - 14, yA - 8, 2.4, ws.Range("I15").Value & IIf(CStr(ws.Range("BX115").Value) <> "", " " & ws.Range("BX115").Value & "  WCR " & ws.Range("BX117").Value & " kA", ""), 2
+            If NumV(ws.Range("I23").Value) > 0 Then Tx "E-EQUIPOS", x - 14, yA - 12, 2, Format$(NumV(ws.Range("I23").Value), "0.0") & " m al tablero", 2
         End If
-        Breaker x + 35, yb + 9, NumV(ws.Range("BX24").Value) & " A"
-        Tx "E-ALIMENTADOR", x + 28, yb + 15, 2, ws.Range("BX95").Value
+        gx = x + 48
+        Ln "E-ALIMENTADOR", xa, ya2, gx, ya2
+        yBa = ya2 + 26
+        Ln "E-ALIMENTADOR", gx, ya2, gx, yBa - hb
+        Breaker gx, yBa, PolosB(ws), ws.Range("BX24").Value, "TM", "", "", NumV(ws.Range("BX24").Value) & " A " & PolosB(ws) & "P"
+        yG = ya2 + 46
+        Ln "E-ALIMENTADOR", gx, yBa, gx, yG
+        If ws.Range("I16").Value = "Generador" Then
+            Simbolo "GENERADOR", gx, yG, Array("NOMBRE", IIf(CStr(ws.Range("I18").Value) <> "", "Generador", ""), "KVA", ws.Range("I18").Value & " kVA", "XD", ws.Range("I19").Value & " %")
+            Tx "E-EQUIPOS", gx + 9, yG + 5, 2.5, "Generador " & ws.Range("I18").Value & " kVA  X''d " & ws.Range("I19").Value & " %"
+        Else
+            Tx "E-EQUIPOS", gx + 4, yG, 2.5, "BYPASS desde " & ws.Range("I17").Value
+        End If
+        Tx "E-ALIMENTADOR", gx + 4, ya2 + 3, 2, ws.Range("BX95").Value & "  " & Format$(NumV(ws.Range("I20").Value), "0.0") & " m"
+        If NumV(ws.Range("BX113").Value) > 0 Then Tx "E-ALIMENTADOR", gx + 4, ya2 - 1, 2, "Icc en el " & ws.Range("I15").Value & " " & Format$(NumV(ws.Range("BX113").Value), "0.00") & " kA"
+        Ln "E-ALIMENTADOR", x, hu(nh, 1), x, yb
+        LineaV x, yTop, hu(nh, 1), hu, nh, "E-ALIMENTADOR"
+    Else
+        LineaV x, yTop, yb, hu, nh, "E-ALIMENTADOR"
+    End If
+    ' barra de tierra del tablero de acometida (conductor del electrodo, 250.66)
+    If padre = "" Then
+        Ln "E-TABLERO", x0 + 4, yb, x0 + 4, yb - 6
+        Simbolo "TIERRA", x0 + 4, yb - 6
+        Tx "E-TABLERO", x0 + 9, yb - 13, 2, "Tierra " & IIf(CStr(ws.Range("BX35").Value) <> "", ws.Range("BX35").Value & " AWG", "")
     End If
     ' tabla de datos junto al tablero
     filas = Array("kVA conectados: " & Format$(NumV(ws.Range("BX10").Value), "0.00") & "   demandados: " & Format$(NumV(ws.Range("BX14").Value), "0.00"), _
@@ -166,11 +306,12 @@ Private Sub Dibujar(id As String)
     For i = 0 To UBound(filas)
         Tx "E-TABLA", x + 29, yb - 7 - 4.2 * i, 2.2, filas(i)
     Next i
-    ' derivados: interruptor en la barra
-    For Each k In c
-        Ln "E-ALIMENTADOR", xs(k), yb, xs(k), ys(k) - 21
-    Next k
 End Sub
+
+Private Function OrDefault(v As Variant) As String
+    If IsError(v) Then OrDefault = "": Exit Function
+    If IsEmpty(v) Then OrDefault = "TM" Else If CStr(v) = "" Then OrDefault = "TM" Else OrDefault = CStr(v)
+End Function
 
 Private Sub Escribir(ruta As String)
     Dim h As String, fn As Integer, capas As Variant, colores As Variant, i As Long
@@ -190,6 +331,7 @@ Private Sub Escribir(ruta As String)
     h = h & "0" & vbCrLf & "TABLE" & vbCrLf & "2" & vbCrLf & "STYLE" & vbCrLf & "70" & vbCrLf & "1" & vbCrLf
     h = h & "0" & vbCrLf & "STYLE" & vbCrLf & "2" & vbCrLf & "SINERGIA" & vbCrLf & "70" & vbCrLf & "0" & vbCrLf & "40" & vbCrLf & "0.0" & vbCrLf & "41" & vbCrLf & "1.0" & vbCrLf & "50" & vbCrLf & "0.0" & vbCrLf & "71" & vbCrLf & "0" & vbCrLf & "42" & vbCrLf & "2.5" & vbCrLf & "3" & vbCrLf & "GOTHIC.TTF" & vbCrLf & "4" & vbCrLf & "" & vbCrLf
     h = h & "0" & vbCrLf & "ENDTAB" & vbCrLf & "0" & vbCrLf & "ENDSEC" & vbCrLf
+    h = h & "0" & vbCrLf & "SECTION" & vbCrLf & "2" & vbCrLf & "BLOCKS" & vbCrLf & blq & "0" & vbCrLf & "ENDSEC" & vbCrLf
     h = h & "0" & vbCrLf & "SECTION" & vbCrLf & "2" & vbCrLf & "ENTITIES" & vbCrLf & buf & "0" & vbCrLf & "ENDSEC" & vbCrLf & "0" & vbCrLf & "EOF" & vbCrLf
     fn = FreeFile
     Open ruta For Output As #fn

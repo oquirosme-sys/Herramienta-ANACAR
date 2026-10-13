@@ -11,3 +11,11 @@ for k in claves:
     subprocess.run([CHROME, "--headless=new", "--disable-gpu", "--allow-file-access-from-files", "--hide-scrollbars", "--force-device-scale-factor=2",
                     "--screenshot=" + os.path.join(OUT, k + ".png"), "--window-size=240,180", "file:///" + html.replace("\\", "/")], capture_output=True)
     print(k, os.path.getsize(os.path.join(OUT, k + ".png")))
+
+# ---- simbolos.json: la biblioteca de símbolos de js/data/simbolos.js para la hoja CAT_SIMBOLOS del Excel ----
+import re, html, json
+vol = os.path.join(OUT, "simbolos_dump.html")
+open(vol, "w", encoding="utf8").write('<!doctype html><meta charset="utf-8"><pre id="o"></pre><script src="file:///%s"></script><script>document.getElementById("o").textContent = "JSONINI" + JSON.stringify(window.SIMB) + "JSONFIN";</script>' % os.path.join(ROOT, "js", "data", "simbolos.js").replace("\\", "/"))
+r = subprocess.run([CHROME, "--headless=new", "--disable-gpu", "--allow-file-access-from-files", "--dump-dom", "file:///" + vol.replace("\\", "/")], capture_output=True, text=True, encoding="utf8")
+m = re.search(r"JSONINI(.*?)JSONFIN", html.unescape(r.stdout), re.S)
+open(os.path.join(OUT, "simbolos.json"), "w", encoding="utf8").write(m.group(1)); print("simbolos.json", len(m.group(1)), "bytes,", len(json.loads(m.group(1))), "simbolos")

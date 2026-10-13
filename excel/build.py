@@ -10,6 +10,7 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.drawing.image import Image as XLImage
 
 SEED = sys.argv[1]; OUT = sys.argv[2]; LOGO = sys.argv[3]
+PNG = sys.argv[4] if len(sys.argv) > 4 else ""
 s = open(SEED, encoding="utf8").read()
 D = json.loads(s[s.index("{"):s.rindex("}") + 1])
 
@@ -132,6 +133,17 @@ hoja_tabla("CAT_SPD", ["Marca", "Tipo", "Modelo", "Montaje", "kA L-L", "kA L-N",
            [[x["marca"], x["id"], x["modelo"], x["montaje"], x["kaLL"], x["kaLN"], x["voltaje"], x["fases"], x.get("conexion") or ""] for x in D["supresores"]])
 hoja_tabla("CAT_ATS", ["Tipo", "Marca", "Equipo", "Transición", "Polos", "Amperios", "WCR (kA)", "Entrada de servicio", "Modelo", "Nota"],
            [[a["id"], a["marca"], a["equipo"], a["transicion"], a["polos"], a["amperios"], a["wcr"], "SI" if a.get("entradaServicio") else "NO", a["modelo"], a.get("nota", "")] for a in D.get("ats", [])])
+SIMB = json.load(open(os.path.join(PNG, "simbolos.json"), encoding="utf8")) if PNG and os.path.exists(os.path.join(PNG, "simbolos.json")) else {}
+filas_s = []
+for nm_, y_ in SIMB.items():
+    for m_ in y_["prims"]:
+        t_ = m_[0]; v_ = m_[1:] + [None] * 5
+        filas_s.append([nm_, y_["capa"], y_["k"], y_["alto"], t_, v_[0], v_[1], v_[2], v_[3], v_[4], ""])
+    for a_ in y_.get("attrs", []):
+        filas_s.append([nm_, y_["capa"], y_["k"], y_["alto"], "AD", a_[2], a_[3], a_[4], a_[0], a_[1], a_[5]])
+    for pn_, pv_ in (y_.get("puertos") or {}).items():
+        filas_s.append([nm_, y_["capa"], y_["k"], y_["alto"], "PT", pv_[0], pv_[1], None, pn_, None, ""])
+hoja_tabla("CAT_SIMBOLOS", ["Símbolo", "Capa", "Escala web", "Alto", "Tipo (L,C,F,A,T,AD,PT)", "a", "b", "c", "d", "e", "visible"], filas_s)
 hoja_tabla("CAT_TRAFOS", ["#", "Nombre", "Tipo", "KACC 480", "KACC 240", "KACC 208", "Z %"], [[t["id"], t["nombre"], t["tipo"], t["kacc480"], t["kacc240"], t["kacc208"], t["z"]] for t in D["transformadores"]])
 nombre("L_TRAFOS", "CAT_TRAFOS!$B$2:$B$100")
 
@@ -677,7 +689,6 @@ for nom, rng in [("L_DET_TXT", "E25:E124"), ("L_BK_TXT", "R25:R124"), ("L_BK_TXT
 
 
 # ======================= AYUDA: guía de llenado, glosario y catálogo con ilustraciones =======================
-PNG = sys.argv[4] if len(sys.argv) > 4 else ""
 ay = wb.create_sheet("AYUDA")
 ay.sheet_view.showGridLines = False
 for col_, w_ in {"A": 2, "B": 30, "C": 34, "D": 18, "E": 16, "F": 16, "G": 16, "H": 3, "I": 36}.items(): ay.column_dimensions[col_].width = w_
