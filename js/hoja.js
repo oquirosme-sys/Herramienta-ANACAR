@@ -217,12 +217,15 @@
     const table = h('table', { class: 'hx' }, h('colgroup', null, G.anchos.slice(x0, x1 + 1).map(w => h('col', { style: { width: Math.round(w * 7 + 5) + 'px' } }))), tb);
     const wrap = h('div', { class: 'hx-wrap' + (opts.real ? ' real' : '') }, table);
     // se ajusta al ancho disponible (como "Ajustar a la página" de Excel)
+    // margen de seguridad para la barra de desplazamiento y el redondeo del zoom; se repite al cargar el logo
     const ajustar = () => {
       if (!wrap.isConnected || opts.real || !wrap.clientWidth) return;
       table.style.zoom = 1;
-      const k = Math.min(1, (wrap.clientWidth - 2) / table.scrollWidth); table.style.zoom = k > 0 ? k : 1;
+      const ancho = Math.max(table.scrollWidth, table.getBoundingClientRect().width);
+      const k = Math.min(1, (wrap.clientWidth - 24) / ancho); table.style.zoom = k > 0 ? Math.floor(k * 1000) / 1000 : 1;
     };
-    requestAnimationFrame(ajustar); setTimeout(ajustar, 60);
+    requestAnimationFrame(ajustar); setTimeout(ajustar, 60); setTimeout(ajustar, 400);
+    table.querySelectorAll('img').forEach(i => i.addEventListener('load', ajustar));
     if (window.ResizeObserver) new ResizeObserver(() => ajustar()).observe(wrap);
     return wrap;
   }

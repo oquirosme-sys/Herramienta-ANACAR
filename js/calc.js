@@ -9,6 +9,8 @@
 
   const n = v => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? 0 : Number(v));
   const r2 = v => Math.round(v * 100) / 100;
+  /** Factor de diversidad entre 0 y 1 (multiplica la carga); vacío, 0 o fuera de rango = 1. */
+  const fdiv01 = v => { const x = n(v); return x > 0 && x <= 1 ? x : 1; };
 
   /* ---------- búsquedas en tablas (equivalentes a VLOOKUP/INDEX-MATCH del Excel) ---------- */
   /** VLOOKUP(x, tabla, , TRUE): fila con el mayor umbral <= x. */
@@ -240,7 +242,7 @@
     const det = K.detallesCarga.find(d => String(d.id) === String(c.detalleId)) || {};
     const tiene = v => v !== undefined && v !== null && v !== '';
     const O = n(det.v), P = n(det.fases), Q = n(det.hilos), T = n(det.fp) || 1;
-    const R = tiene(c.fu) ? n(c.fu) : (n(det.fd) || 1), S = tiene(c.fdivC) ? (n(c.fdivC) || 1) : (n(det.fdiv) || 1);   // [R16] factor de uso, [S16] diversidad
+    const R = tiene(c.fu) ? n(c.fu) : (n(det.fd) || 1), S = fdiv01(tiene(c.fdivC) ? c.fdivC : det.fdiv);   // [R16] factor de uso, [S16] diversidad (0 a 1, multiplica)
     const N = ctx.fases, J = n(c.kva);
     const polos = (c.polos || []).map(Number).filter(x => x > 0);
     // [U16:W16] reparto por fases
@@ -249,7 +251,7 @@
       if (N === 1) fase[0] = J;
       else polos.forEach(p => { fase[fasePolo(p, N)] = J / P; });
     }
-    const dem = fase.map(x => x * R / S);                                      // [X16:Z16]
+    const dem = fase.map(x => x * R * S);                                      // [X16:Z16]
     const I = fase.map((u, i) => corriente(u, dem[i], O, P));                // [AA16:AC16]
     const AD = c.mult !== undefined && c.mult !== '' && c.mult !== null ? n(c.mult) : (det.mult || 1.25);
     const AE = !J ? null : N === 3 ? Math.max(I[0], I[1], I[2]) * AD : (fase[0] > 0 ? I[0] * AD : fase[1] > 0 ? I[1] * AD : fase[2] > 0 ? I[2] * AD : null);
@@ -316,19 +318,19 @@
       const conectados = cs.reduce((a, x) => a + x.J, 0), res = conectados * reserva, total = conectados + res;
       const ov = (tab.fd || {})[t.id];
       let fd, demandados;
-      const fdiv = n((tab.fdiv || {})[t.id]) || n(t.fdiv) || 1;
-      if (ov !== undefined && ov !== '' && ov !== null) { fd = n(ov); demandados = total * fd / fdiv; }
+      const fdiv = fdiv01(n((tab.fdiv || {})[t.id]) || t.fdiv);
+      if (ov !== undefined && ov !== '' && ov !== null) { fd = n(ov); demandados = total * fd * fdiv; }
       else if (t.metodo === 'tomas') { demandados = total > 10 ? (total - 10) * 0.5 + 10 : total; fd = total > 0 ? demandados / total : 1; }
-      else if (t.metodo === 'cocina') { const nn = cs.length, f = (K.demanda22056 || []).filter(x => nn >= x.n).pop(); fd = f ? f.fd : 1; demandados = total * fd / fdiv; }
-      else if (t.metodo === '220.53') { fd = cs.length >= 4 ? 0.75 : 1; demandados = total * fd / fdiv; }
-      else { fd = n(t.fd) || 1; demandados = total * fd / fdiv; }
+      else if (t.metodo === 'cocina') { const nn = cs.length, f = (K.demanda22056 || []).filter(x => nn >= x.n).pop(); fd = f ? f.fd : 1; demandados = total * fd * fdiv; }
+      else if (t.metodo === '220.53') { fd = cs.length >= 4 ? 0.75 : 1; demandados = total * fd * fdiv; }
+      else { fd = n(t.fd) || 1; demandados = total * fd * fdiv; }
       return { tipo: t, conectados, reserva: res, total, fd, fdiv, demandados, n: cs.length };
     });
     const W128 = tipos.reduce((a, t) => a + t.conectados, 0), W129 = tipos.reduce((a, t) => a + t.reserva, 0);
     const W130 = W128 + W129, J134 = tipos.reduce((a, t) => a + t.demandados, 0);
 
     // --- 3) alimentador / acometida [fila 139]
-    const R139 = W130 ? J134 / W130 : 1, S139 = n(tab.fdivTablero) || 1, L139 = W130 * R139 / S139, T139 = n(al.fp) || 0.9;
+    const R139 = W130 ? J134 / W130 : 1, S139 = fdiv01(tab.fdivTablero), L139 = W130 * R139 * S139, T139 = n(al.fp) || 0.9;
     const X139 = U117.map(u => L139 * u / 3);
     const AA139 = X139.map(x => (x > 0 ? corrienteAlim(x, V, fases) : 0));
     const AD139 = al.rated100 ? 1 : (al.mult !== undefined && al.mult !== '' ? n(al.mult) : 1.25);

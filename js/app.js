@@ -6,12 +6,13 @@
   const TABS = [
     { id: 'proyecto', label: 'Proyecto' },
     { id: 'unifilar', label: 'Diagrama unifilar' },
-    { id: 'prevista', label: 'Prevista' },
-    { id: 'revit', label: 'Revit' },
     { id: 'memoria', label: 'Memoria de cálculo' },
     { id: 'tab3f', label: 'Tableros 3F' },
     { id: 'tab1f', label: 'Tableros 1F' },
     { id: 'resumen', label: 'Tablas resumen' },
+    { id: 'prevista', label: 'Prevista' },
+    { id: 'revit', label: 'Revit' },
+    { id: 'ayuda', label: 'Ayuda' },
     { id: 'admin', label: 'Administración', admin: true },
     { id: 'reporte', label: 'Reporte', oculto: true },
   ];

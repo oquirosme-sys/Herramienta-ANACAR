@@ -43,6 +43,13 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
+## Novedades 2026.1-web.6
+- **Pestañas**: Prevista y Revit pasan al final; nueva pestaña **Ayuda** con guía de llenado, glosario básico de equipos (tablero, centro de carga, subestación, principal/zapatas, breakers, caja moldeada, unidades LSI/LSIG, GFCI/AFCI, SCCR y serie, SPD, transformador, ATS/MTS, UPS, generador, conductores, canalizaciones, barras, factores, cascada) con ilustraciones, y catálogo de tableros y breakers por familia. El administrador puede subir una foto real para cada término o familia.
+- **Factores de diversidad entre 0 y 1**: multiplican la carga (antes dividían); los valores guardados mayores que 1 se convierten a 1/x al abrir, con el mismo resultado.
+- **Celdas para llenar** en verde más intenso con borde verde (web y Excel).
+- **Cuadros 3F/1F** ajustados para que quepan completos en pantalla.
+- **Excel**: mismos cambios; hoja AYUDA con la guía, el glosario ilustrado y el catálogo; los tableros se insertan antes de PREVISTA / REVIT.
+
 ## Novedades 2026.1-web.5
 - **Arranca limpio**: cada vez que se abre la herramienta empieza con un proyecto en blanco. Los proyectos con datos quedan en *Archivo ▸ Proyectos guardados…* (y en la pantalla de inicio) para abrirlos o eliminarlos; al recargar la página se sigue con el proyecto abierto.
 

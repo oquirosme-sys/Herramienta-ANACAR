@@ -198,8 +198,10 @@ Public Function CrearTablero(id As String, Optional tipo As String = "3F", Optio
     Application.EnableEvents = False: Application.ScreenUpdating = False
     calc = Application.Calculation: Application.Calculation = xlCalculationManual
     Dim w As Worksheet
+    ' los tableros van despues de las tablas resumen y antes de PREVISTA / REVIT / AYUDA
+    Set ult = ThisWorkbook.Worksheets("RESUMEN DU")
     For Each w In ThisWorkbook.Worksheets
-        If w.Visible = xlSheetVisible Then Set ult = w
+        If w.Visible = xlSheetVisible And (EsMC(w) Or Left$(w.Name, 3) = "3F " Or Left$(w.Name, 3) = "1F ") Then Set ult = w
     Next w
     ThisWorkbook.Worksheets("MC_MACHOTE").Visible = xlSheetVisible
     ThisWorkbook.Worksheets("VISTA_MACHOTE").Visible = xlSheetVisible

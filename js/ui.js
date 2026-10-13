@@ -22,6 +22,7 @@
       el.addEventListener('change', () => {
         let v = el.value;
         if (num) { v = parseNum(v); if (Number.isNaN(v)) { el.classList.add('invalid'); UI.toast('Número no válido', 'bad'); return; } }
+        if (num && opts.rango && v !== '' && v !== null && (v <= opts.rango[0] || v > opts.rango[1])) { el.classList.add('invalid'); UI.toast('Debe estar entre ' + opts.rango[0] + ' y ' + opts.rango[1] + ' (p. ej. 0,8)', 'bad'); el.value = val === '' ? '' : String(val).replace('.', ','); return; }
         else if (opts.trim !== false) v = v.trim();
         el.classList.remove('invalid');
         if (opts.validate) { const m = opts.validate(v); if (m) { UI.toast(m, 'bad'); el.value = val; return; } }

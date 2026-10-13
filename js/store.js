@@ -82,9 +82,16 @@
       c.tablerosCat.forEach(t => { if (t.fases === undefined) { const o = s.tablerosCat.find(x => x.id === t.id); if (o) t.fases = o.fases; } });
       Object.keys(s).forEach(k => { if (c[k] === undefined) c[k] = U.clone(s[k]); });
       if (!c.marcas) c.marcas = Store.marcasDe(c);
+      // factores de diversidad: antes dividían (≥ 1, como el Excel); ahora van de 0 a 1 y multiplican (1/x da el mismo resultado)
+      const inv = v => (Number(v) > 1 ? Math.round(1e6 / Number(v)) / 1e6 : v);
+      if (!c.fdiv01) { (c.detallesCarga || []).forEach(d => { d.fdiv = inv(d.fdiv); }); (c.tiposCarga || []).forEach(t => { t.fdiv = inv(t.fdiv); }); c.fdiv01 = true; }
       const p = Store.project;
       ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed', 'resumenSimple', 'ocupacion', 'cargaDerivados', 'previstas'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
       p.tableros.forEach(t => Store.completarTablero(t));
+      if (!p.fdiv01) {
+        p.tableros.forEach(t => { t.fdivTablero = inv(t.fdivTablero); (t.circuitos || []).forEach(x => { x.fdivC = inv(x.fdivC); }); Object.keys(t.fdiv || {}).forEach(k => { t.fdiv[k] = inv(t.fdiv[k]); }); });
+        p.fdiv01 = true;
+      }
     },
 
     /* ---------- tableros y circuitos ---------- */

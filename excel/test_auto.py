@@ -64,6 +64,17 @@ try:
     if "MC TA-2" in [s.Name for s in wb.Worksheets]:
         d = wb.Worksheets("MC TA-2"); chk("copia kVA", d.Range("BX3").Value, ws.Range("BX3").Value - 0)
         chk("copia sin circuito del derivado", len([r for r in range(25, 125) if d.Range("S%d" % r).Value]), 0)
+    # diversidad 0 a 1 (multiplica)
+    ws.Range("C19").Value = 0.8; xl.Calculate()
+    chk("div tablero multiplica", round(ws.Range("BX14").Value, 6), round(ws.Range("BX10").Value * ws.Range("BX12").Value * 0.8, 6))
+    ws.Range("K25").Value = 0.5; xl.Calculate()
+    chk("div circuito multiplica", round(ws.Range("AM25").Value + ws.Range("AN25").Value + ws.Range("AO25").Value, 6), round(ws.Range("X25").Value * ws.Range("AB25").Value * 0.5, 6))
+    chk("validación 0-1", ws.Range("K26").Validation.Formula2, "1")
+    # orden de hojas: tableros antes de PREVISTA / REVIT / AYUDA
+    nombres = [s_.Name for s_ in wb.Worksheets if s_.Visible == -1]
+    chk("orden", nombres.index("PREVISTA") > max(i for i, n_ in enumerate(nombres) if n_.startswith(("MC ", "3F ", "1F "))), True)
+    chk("AYUDA al final", nombres[-1], "AYUDA")
+    wb.Worksheets("AYUDA").ExportAsFixedFormat(0, os.path.abspath("flujo/ayuda.pdf"))
     # balanceo con celdas automáticas
     for r, p in [(27, 5), (28, 7), (29, 9)]:
         pass

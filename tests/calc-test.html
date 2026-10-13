@@ -93,10 +93,12 @@
     check('Catálogo GFCI Eaton', RV.rows[0].breaker.ref, 'QBGF1020');
 
 
-    // Factores: la diversidad del tablero divide la demanda; 100 % rated; bypass sin carga; orden impar/par
-    const td = JSON.parse(JSON.stringify(MACHOTE.tablero)); td.fdivTablero = 1.25;
+    // Factores: la diversidad del tablero (0 a 1) multiplica la demanda; 100 % rated; bypass sin carga; orden impar/par
+    const td = JSON.parse(JSON.stringify(MACHOTE.tablero)); td.fdivTablero = 0.8;
     const RD = Calc.proyecto({ tableros: [td], cvMaxTotal: 5 }, window.SEED).orden[0];
-    check('Diversidad del tablero divide', Math.abs(RD.alim.L139 - T.L139 / 1.25) < 1e-9, true);
+    check('Diversidad del tablero multiplica (0,8)', Math.abs(RD.alim.L139 - T.L139 * 0.8) < 1e-9, true);
+    const tx = JSON.parse(JSON.stringify(MACHOTE.tablero)); tx.fdivTablero = 1.5;
+    check('Diversidad fuera de 0–1 se ignora', Math.abs(Calc.proyecto({ tableros: [tx], cvMaxTotal: 5 }, window.SEED).orden[0].alim.L139 - T.L139) < 1e-9, true);
     const t1 = JSON.parse(JSON.stringify(MACHOTE.tablero)); t1.catalogoId = ''; t1.marca = 'Eaton'; t1.alim = { rated100: true }; t1.iccManual = 10;
     const R1 = Calc.proyecto({ tableros: [t1], cvMaxTotal: 5 }, window.SEED).orden[0];
     check('100 % rated: protección con la carga al 100 %', R1.alim.AD139, 1);

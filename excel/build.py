@@ -1,6 +1,6 @@
 """Construye la plantilla 'ANACAR Web.xlsx' (hojas, fórmulas, catálogos y formatos).
 Las macros VBA se agregan después con importar.py (Excel por COM) y se guarda como .xlsm."""
-import json, sys, re
+import json, sys, re, os
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter as L, column_index_from_string as CI
@@ -15,7 +15,9 @@ D = json.loads(s[s.index("{"):s.rindex("}") + 1])
 
 wb = Workbook()
 FN = "Century Gothic"
-VERDE = PatternFill("solid", fgColor="E6F4E1")
+VERDE = PatternFill("solid", fgColor="C6EFCE")   # celdas para llenar (verde más intenso, con borde verde)
+finoV = Side(style="thin", color="2E8B3A")
+BORDE_IN = Border(left=finoV, right=finoV, top=finoV, bottom=finoV)
 GRIS = PatternFill("solid", fgColor="D9D9D9")
 GRIS2 = PatternFill("solid", fgColor="EDEDED")
 AZUL = PatternFill("solid", fgColor="DDEBF7")
@@ -149,7 +151,7 @@ entradas = [  # (columna etiqueta, columna valor, fila, etiqueta, valor inicial,
     ("B", "C", 10, "Alimentado desde", None, "LISTA_TABLEROS"), ("B", "C", 11, "Conectado a (si es acometida)", "", None), ("B", "C", 12, "Longitud alimentador (m)", 10, None),
     ("B", "C", 13, "Reserva (fracción)", 0.1, None), ("B", "C", 14, "Icc disponible manual (kA)", None, None), ("B", "C", 15, "Marca (vacío = proyecto)", None, "L_MARCAS"),
     ("B", "C", 16, "Principal", "Interruptor", "L_PRINCIPAL"), ("B", "C", 17, "Espacios (vacío = auto)", None, None), ("B", "C", 18, "Montaje", "Superficial", "L_MONTAJES"),
-    ("B", "C", 19, "F. diversidad del tablero", 1, None), ("B", "C", 20, "Tipo de equipo", "Tablero", "L_CLASE"),
+    ("B", "C", 19, "F. diversidad del tablero (0 a 1)", 1, None), ("B", "C", 20, "Tipo de equipo", "Tablero", "L_CLASE"),
     ("E", "F", 3, "Material", "CU", "L_MATERIALES"), ("E", "F", 4, "Aislamiento", "XHHW-2", "L_AISLAMIENTOS"), ("E", "F", 5, "Tubería", "EMT", "L_TUBERIAS"),
     ("E", "F", 6, "# en paralelo (vacío = auto)", None, None), ("E", "F", 7, "Aumento de calibre (%)", 0, None), ("E", "F", 8, "Factor de potencia", 0.9, None),
     ("E", "F", 9, "Factor de protección (%)", 125, None), ("E", "F", 10, "Protección manual (A)", None, None), ("E", "F", 11, "Temp. ambiente (°C)", "26-30", "L_TEMPS"),
@@ -165,7 +167,7 @@ entradas = [  # (columna etiqueta, columna valor, fila, etiqueta, valor inicial,
 dvs = {}
 for le, ve, fila, et, val, lista in entradas:
     f(mc, "%s%d" % (le, fila), et, size=9, al=IZQ)
-    c = f(mc, "%s%d" % (ve, fila), val, size=10, fill=VERDE, borde=True, al=Alignment(horizontal="center"))
+    c = f(mc, "%s%d" % (ve, fila), val, size=10, fill=VERDE, borde=True, al=Alignment(horizontal="center")); c.border = BORDE_IN
     if lista:
         if lista not in dvs:
             dvs[lista] = DataValidation(type="list", formula1="=" + lista, allow_blank=True); mc.add_data_validation(dvs[lista])
@@ -192,7 +194,7 @@ rx(3, "kVA conectados sin reserva [J116]", '=SUMIFS($X$25:$X$124,$T$25:$T$124,""
 rx(4, "kVA fase A", '=SUMIFS($AJ$25:$AJ$124,$T$25:$T$124,"")'); rx(5, "kVA fase B", '=SUMIFS($AK$25:$AK$124,$T$25:$T$124,"")'); rx(6, "kVA fase C", '=SUMIFS($AL$25:$AL$124,$T$25:$T$124,"")')
 rx(7, "% desbalance", '=IFERROR(ROUND(IF($C$8=3,(MAX(BX4:BX6)-MIN(BX4:BX6))/MAX(BX4:BX6)*100,IF($C$8=2,(MAX(BX4:BX5)-MIN(BX4:BX5))/MAX(BX4:BX5)*100,0)),2),0)')
 rx(8, "kVA conectados [W128]", '=$F$146'); rx(9, "kVA reserva [W129]", '=$G$146'); rx(10, "kVA totales [W130]", '=$H$146'); rx(11, "kVA demandados [J134]", '=$L$146')
-rx(12, "Factor de demanda [R139]", '=IF(BX10=0,1,BX11/BX10)'); rx(13, "F. diversidad [S139]", '=IF(N($C$19)>0,$C$19,1)'); rx(14, "kVA demandados alimentador [L139]", '=BX10*BX12/BX13')
+rx(12, "Factor de demanda [R139]", '=IF(BX10=0,1,BX11/BX10)'); rx(13, "F. diversidad [S139] (0 a 1)", '=IF(AND(N($C$19)>0,N($C$19)<=1),$C$19,1)'); rx(14, "kVA demandados alimentador [L139]", '=BX10*BX12*BX13')
 rx(15, "Factor de potencia [T139]", '=IF(N($F$8)>0,$F$8,0.9)')
 for i, fila in enumerate((16, 17, 18)): rx(fila, "kVA dem. fase " + "ABC"[i], '=IF($BX$3=0,0,$BX$14*BX%d/$BX$3)' % (4 + i))
 for i, fila in enumerate((19, 20, 21)): rx(fila, "Corriente fase " + "ABC"[i] + " (A)", "=" + corr_alim("BX%d" % (16 + i)))
@@ -309,7 +311,7 @@ for i in range(100):
     pos = 2 * i + 1 if i < 50 else 2 * (i - 50) + 2
     mc.cell(r, 2, pos).font = Font(name=FN, bold=True)
     for col in list("ACDEFGHIJKLMNOPQRSTUV"):
-        c = mc[col + str(r)]; c.fill = VERDE; c.border = BORDE; c.font = Font(name=FN, size=9)
+        c = mc[col + str(r)]; c.fill = VERDE; c.border = BORDE_IN; c.font = Font(name=FN, size=9)
     def cur(u, x):
         return ('IF({u}=0,0,IF(AND($Y{r}=120,$Z{r}=1),{x}*1000/$Y{r},IF(AND($Y{r}=208,$Z{r}=1),{x}*1000/$Y{r},IF(AND($Y{r}=208,$Z{r}=2),{u}*2*1000/$Y{r},'
                 'IF(AND($Y{r}=230,$Z{r}=1),{x}*1000/$Y{r},IF(AND($Y{r}=240,$Z{r}=1),{x}*1000/($Y{r}/2),IF(AND($Y{r}=277,$Z{r}=1),{x}*1000/$Y{r},{x}*1000/($Y{r}/1.732))))))))').format(u=u, x=x, r=r)
@@ -318,7 +320,7 @@ for i in range(100):
     forms = {
         "W": '=IF($F{r}<>"",$F{r},IFERROR(VLOOKUP($E{r},T_DET,3,FALSE),""))', "X": '=IF(ISNUMBER($G{r}),$G{r},0)',
         "Y": '=IFERROR(VLOOKUP($E{r},T_DET,4,FALSE),0)', "Z": '=IFERROR(VLOOKUP($E{r},T_DET,5,FALSE),0)', "AA": '=IFERROR(VLOOKUP($E{r},T_DET,6,FALSE),0)',
-        "AB": '=IF(ISNUMBER($J{r}),$J{r},IFERROR(VLOOKUP($E{r},T_DET,7,FALSE),1))', "AC": '=IF(N($K{r})>0,$K{r},IFERROR(VLOOKUP($E{r},T_DET,8,FALSE),1))',
+        "AB": '=IF(ISNUMBER($J{r}),$J{r},IFERROR(VLOOKUP($E{r},T_DET,7,FALSE),1))', "AC": '=IF(AND(N($K{r})>0,N($K{r})<=1),$K{r},IFERROR(VLOOKUP($E{r},T_DET,8,FALSE),1))',
         "AD": '=IFERROR(VLOOKUP($E{r},T_DET,9,FALSE),1)', "AE": '=IFERROR(VLOOKUP($E{r},T_DET,2,FALSE),"")',
         "AF": '=IF(ISNUMBER($I{r}),$I{r}/100,IFERROR(VLOOKUP($E{r},T_DET,11,FALSE),1.25))',
         "AG": '=IF(N($B{r})>0,MOD(INT(($B{r}-1)/2),IF($C$8=3,3,2)),-1)', "AH": '=IF(N($CA{r})>0,MOD(INT(($CA{r}-1)/2),IF($C$8=3,3,2)),-1)', "AI": '=IF(N($CB{r})>0,MOD(INT(($CB{r}-1)/2),IF($C$8=3,3,2)),-1)',
@@ -326,7 +328,7 @@ for i in range(100):
         "AJ": '=IF(OR($X{r}=0,$Z{r}=0),0,IF($C$8=1,$X{r},IF(OR($AG{r}=0,$AH{r}=0,$AI{r}=0),$X{r}/$Z{r},0)))',
         "AK": '=IF(OR($X{r}=0,$Z{r}=0,$C$8=1),0,IF(OR($AG{r}=1,$AH{r}=1,$AI{r}=1),$X{r}/$Z{r},0))',
         "AL": '=IF(OR($X{r}=0,$Z{r}=0,$C$8<3),0,IF(OR($AG{r}=2,$AH{r}=2,$AI{r}=2),$X{r}/$Z{r},0))',
-        "AM": '=$AJ{r}*$AB{r}/$AC{r}', "AN": '=$AK{r}*$AB{r}/$AC{r}', "AO": '=$AL{r}*$AB{r}/$AC{r}',
+        "AM": '=$AJ{r}*$AB{r}*$AC{r}', "AN": '=$AK{r}*$AB{r}*$AC{r}', "AO": '=$AL{r}*$AB{r}*$AC{r}',
         "AP": "=" + cur("$AJ{r}".format(r=r), "$AM{r}".format(r=r)), "AQ": "=" + cur("$AK{r}".format(r=r), "$AN{r}".format(r=r)), "AR": "=" + cur("$AL{r}".format(r=r), "$AO{r}".format(r=r)),
         "AS": '=IF($X{r}=0,"",IF($C$8=3,MAX($AP{r}:$AR{r}),IF($AJ{r}>0,$AP{r},IF($AK{r}>0,$AQ{r},$AR{r})))*$AF{r})',
         "AT": '=IF($AS{r}="","",IF(N($P{r})>0,$P{r},VLOOKUP($AS{r},T_PROT,2,TRUE)))',
@@ -360,6 +362,8 @@ mc.column_dimensions["F"].width = 34; mc.column_dimensions["W"].width = 30; mc.c
 for col in ["E", "S", "T"]:
     pass
 dv = DataValidation(type="list", formula1="=L_MATERIALES", allow_blank=True); mc.add_data_validation(dv); dv.add("L25:L124")
+dv = DataValidation(type="decimal", operator="between", formula1="0.0001", formula2="1", allow_blank=True, showErrorMessage=True, errorTitle="Factor de diversidad", error="El factor de diversidad va de 0 a 1 (por ejemplo 0,8).")
+mc.add_data_validation(dv); dv.add("K25:K124"); dv.add("C19")
 dv = DataValidation(type="list", formula1="=L_AISLAMIENTOS", allow_blank=True); mc.add_data_validation(dv); dv.add("M25:M124")
 dv = DataValidation(type="list", formula1="=L_UNIDADES", allow_blank=True); mc.add_data_validation(dv); dv.add("Q25:Q124")
 dv = DataValidation(type="list", formula1='"SI"', allow_blank=True); mc.add_data_validation(dv); dv.add("A25:A124")
@@ -367,7 +371,7 @@ mc.freeze_panes = "C25"
 
 # factores de demanda (filas 127 a 146)
 f(mc, "B126", "FACTORES DE DEMANDA Y DIVERSIDAD (deje F. demanda vacío para usar el del catálogo; tomas: 100 % de 10 kVA + 50 % del resto, 220.44)", bold=True)
-for j, t in enumerate(["Código", "Tipo de carga", "Método", "Circuitos", "kVA conectados", "Reserva", "kVA totales", "F. demanda (manual)", "F. demanda", "F. diversidad", "kVA demandados"]):
+for j, t in enumerate(["Código", "Tipo de carga", "Método", "Circuitos", "kVA conectados", "Reserva", "kVA totales", "F. demanda (manual)", "F. demanda", "F. diversidad (0-1)", "kVA demandados"]):
     c = mc.cell(127, 2 + j, t); c.font = Font(name=FN, bold=True, size=9); c.fill = GRIS; c.alignment = CENT; c.border = BORDE
 EXCL = 'IF(CARGA_DERIV="demandada",COUNTIFS($S$25:$S$124,"",{0}),{1})'
 for k in range(16):
@@ -380,7 +384,7 @@ for k in range(16):
     mc["G%d" % r] = '=F{r}*N($C$13)'.format(r=r); mc["H%d" % r] = '=F{r}+G{r}'.format(r=r)
     mc["J%d" % r] = '=IF($B{r}="",1,IF(ISNUMBER($I{r}),$I{r},IF($D{r}="tomas",IF($H{r}>0,IF($H{r}>10,($H{r}-10)*0.5+10,$H{r})/$H{r},1),IF($D{r}="cocina",LOOKUP($E{r},{{0,1,2,3,4,5,6}},{{1,1,1,0.9,0.8,0.7,0.65}}),IF($D{r}="220.53",IF($E{r}>=4,0.75,1),N(INDEX(T_TIPOS,{k},4)))))))'.format(r=r, k=k + 1)
     mc["K%d" % r] = '=IF($B{r}="",1,IF(N(INDEX(T_TIPOS,{k},5))>0,INDEX(T_TIPOS,{k},5),1))'.format(r=r, k=k + 1)
-    mc["L%d" % r] = '=IF(AND($D{r}="tomas",NOT(ISNUMBER($I{r}))),IF($H{r}>10,($H{r}-10)*0.5+10,$H{r}),$H{r}*$J{r}/$K{r})'.format(r=r)
+    mc["L%d" % r] = '=IF(AND($D{r}="tomas",NOT(ISNUMBER($I{r}))),IF($H{r}>10,($H{r}-10)*0.5+10,$H{r}),$H{r}*$J{r}*$K{r})'.format(r=r)
     mc["I%d" % r].fill = VERDE
 r = 144
 mc["C%d" % r] = "TABLEROS DERIVADOS (demanda ya aplicada)"
@@ -496,12 +500,12 @@ except Exception as e:
 pj = wb.create_sheet("PROYECTO", 0)
 f(pj, "B1", "ANACAR — ANÁLISIS DE CARGAS DE TABLEROS ELÉCTRICOS", bold=True, size=18, color="006600")
 for fila, et, nm, val in [(3, "Nombre del proyecto", "P_NOMBRE", ""), (4, "Proyecto N.º", "P_NUMERO", ""), (5, "Ubicación", "P_UBIC", ""), (6, "Fecha", "P_FECHA", ""), (7, "Elaboró", "P_ELABORO", ""), (8, "Revisión", "P_REV", "")]:
-    f(pj, "B%d" % fila, et, size=10); f(pj, "C%d" % fila, val, fill=VERDE, borde=True); nombre(nm, "PROYECTO!$C$%d" % fila)
+    f(pj, "B%d" % fila, et, size=10); f(pj, "C%d" % fila, val, fill=VERDE, borde=True).border = BORDE_IN; nombre(nm, "PROYECTO!$C$%d" % fila)
 crit = [(3, "ΔV máx. alimentador (%)", "CVMAX_ALIM", 3, None), (4, "ΔV máx. total (%)", "CVMAX_TOT", 5, None), (5, "Desbalance máx. (%)", "DESB_MAX", 10, None), (6, "Long. máx. para Icc (m) (0 = sin límite)", "ICC_LMAX", 20, None),
         (7, "Marca por defecto", "MARCA_DEF", "Eaton", "L_MARCAS"), (8, "Reserva de espacios (%)", "RESERVA_ESP", 20, None), (9, "Ocupación (NEC)", "OCUPACION", "comercial", "L_OCUP"),
         (10, "Icc de la red (kA) (vacío = infinita)", "ICC_RED", None, None), (11, "Carga de tableros derivados", "CARGA_DERIV", "conectada", "L_CDERIV"), (12, "Aumentar calibre si no cumple 310.15", "AUTO_AMP", "SI", "L_SINO")]
 for fila, et, nm, val, lista in crit:
-    f(pj, "E%d" % fila, et, size=10); c = f(pj, "F%d" % fila, val, fill=VERDE, borde=True); nombre(nm, "PROYECTO!$F$%d" % fila)
+    f(pj, "E%d" % fila, et, size=10); c = f(pj, "F%d" % fila, val, fill=VERDE, borde=True); c.border = BORDE_IN; nombre(nm, "PROYECTO!$F$%d" % fila)
     if lista:
         dv = DataValidation(type="list", formula1="=" + lista, allow_blank=True); pj.add_data_validation(dv); dv.add("F%d" % fila)
 pj.column_dimensions["B"].width = 26; pj.column_dimensions["C"].width = 30; pj.column_dimensions["E"].width = 38; pj.column_dimensions["F"].width = 16
@@ -521,7 +525,7 @@ cabv = ["Área", "Tipo de uso", "m²", "Ilum. VA/m²", "Tomas VA/m²", "Clima VA
 for j, t in enumerate(cabv):
     c = pv.cell(4, 2 + j, t); c.font = Font(name=FN, bold=True, size=9); c.fill = GRIS; c.alignment = CENT; c.border = BORDE
 for r in range(5, 55):
-    for col in "BCDEFGHIJ": pv["%s%d" % (col, r)].fill = VERDE; pv["%s%d" % (col, r)].border = BORDE
+    for col in "BCDEFGHIJ": pv["%s%d" % (col, r)].fill = VERDE; pv["%s%d" % (col, r)].border = BORDE_IN
     pv["K%d" % r] = '=IF($C{r}="","",IF(ISNUMBER($E{r}),$E{r},IFERROR(VLOOKUP($C{r},T_USOS,2,FALSE),0)))'.format(r=r)
     pv["L%d" % r] = '=IF($C{r}="","",IF(ISNUMBER($F{r}),$F{r},IFERROR(VLOOKUP($C{r},T_USOS,3,FALSE),0)))'.format(r=r)
     pv["M%d" % r] = '=IF($C{r}="","",IF(ISNUMBER($G{r}),$G{r},IFERROR(VLOOKUP($C{r},T_USOS,4,FALSE),0)))'.format(r=r)
@@ -651,12 +655,102 @@ lista_txt("CAT_SPD", "J", '=B{r}&" · "&A{r}&" "&C{r}&" · "&G{r}&" V · "&E{r}&
 for nom, rng in [("L_DET_TXT", "E25:E124"), ("L_BK_TXT", "R25:R124"), ("L_BK_TXT", "F16"), ("L_TAB_TXT", "F17"), ("L_SPD_TXT", "F18")]:
     dv = DataValidation(type="list", formula1="=" + nom, allow_blank=True, showErrorMessage=False); mc.add_data_validation(dv); dv.add(rng)
 
+
+# ======================= AYUDA: guía de llenado, glosario y catálogo con ilustraciones =======================
+PNG = sys.argv[4] if len(sys.argv) > 4 else ""
+ay = wb.create_sheet("AYUDA")
+ay.sheet_view.showGridLines = False
+for col_, w_ in {"A": 2, "B": 30, "C": 34, "D": 18, "E": 16, "F": 16, "G": 16, "H": 3, "I": 36}.items(): ay.column_dimensions[col_].width = w_
+src_ay = open(os.path.join(os.path.dirname(SEED), "..", "ui-ayuda.js"), encoding="utf8").read()
+
+
+def lit(x):
+    return x[1:-1].replace("\\'", "'")
+
+
+GLO = []
+for m in re.finditer(r"\{ k: '([^']+)', t: '([^']+)', il: '([^']+)'(?:, o: \{[^}]*\})?, d: ('(?:[^'\\]|\\.)*'|\"[^\"]*\") \}", src_ay):
+    GLO.append((m.group(1), m.group(2), m.group(3), lit(m.group(4))))
+i0 = src_ay.index("const GUIA")
+GUIA = [(a, lit(b)) for a, b in re.findall(r"\['([^']+)', ('(?:[^'\\]|\\.)*')\]", src_ay[i0:src_ay.index("];", i0)])]
+
+
+def img(cel, clave, ancho=250):
+    pth = os.path.join(PNG, clave + ".png")
+    if PNG and os.path.exists(pth):
+        im = XLImage(pth); im.width, im.height = ancho, int(ancho * 0.75); ay.add_image(im, cel)
+
+
+f(ay, "B1", "AYUDA — Guía de llenado, glosario y catálogo", bold=True, size=20, color="006600")
+y = 3
+f(ay, "B%d" % y, "GUÍA DE LLENADO", bold=True, size=13, color="006600"); y += 1
+c = ay["B%d" % y]; c.value = "Celda para llenar"; c.fill = VERDE; c.border = BORDE_IN; c.font = Font(name=FN, size=10)
+c = ay["C%d" % y]; c.value = "Automático (gris)"; c.fill = VERDE; c.border = BORDE_IN; c.font = Font(name=FN, size=10, italic=True, color="808080")
+f(ay, "D%d" % y, "Las celdas verdes se llenan. El valor en gris cursiva es el automático: escriba encima para cambiarlo y bórrelo para volver al automático.", size=9); y += 2
+GUIA.append(("Excel", "Los botones de INICIO y de cada hoja MC hacen lo mismo que la versión en línea: crear tableros, importar de Revit, autobalancear, prevista, PDF, unifilar DXF y tablas para Revit. Los factores de diversidad van de 0 a 1 y multiplican la carga."))
+for i, (a, b) in enumerate(GUIA):
+    f(ay, "B%d" % y, "%d. %s" % (i + 1, a), bold=True, size=10, al=Alignment(vertical="top"))
+    ay.merge_cells("C%d:I%d" % (y, y)); c = ay["C%d" % y]; c.value = b; c.font = Font(name=FN, size=10); c.alignment = Alignment(wrap_text=True, vertical="top")
+    ay.row_dimensions[y].height = 15 * (1 + len(b) // 115); y += 1
+y += 1
+f(ay, "B%d" % y, "GLOSARIO BÁSICO", bold=True, size=13, color="006600"); y += 1
+for k, t_, il, d_ in GLO:
+    f(ay, "B%d" % y, t_, bold=True, size=12, color="0B5CAB")
+    ay.merge_cells("B%d:G%d" % (y + 1, y + 10)); c = ay["B%d" % (y + 1)]; c.value = d_; c.font = Font(name=FN, size=10); c.alignment = Alignment(wrap_text=True, vertical="top")
+    img("I%d" % y, "cajaMoldeadaE" if k == "unidad" else il)
+    for yy in range(y, y + 12): ay.row_dimensions[yy].height = 15.5
+    y += 13
+
+
+def familia(lista, marca, modelo):
+    for r_ in lista:
+        if r_["marca"] == marca and re.search(r_["patron"], str(modelo or ""), re.I): return r_
+    return None
+
+
+def bloque_cat(titulo, items, clave_fam, cab, fila_fn, il_fn):
+    global y
+    f(ay, "B%d" % y, titulo, bold=True, size=13, color="006600"); y += 1
+    grupos = {}
+    for x in items:
+        fm = clave_fam(x); k = (fm["marca"] + " · " + fm["familia"]) if fm else ((x.get("marca") or x.get("fabricante")) + " · otros")
+        grupos.setdefault(k, (fm, []))[1].append(x)
+    for k, (fm, xs) in grupos.items():
+        f(ay, "B%d" % y, k, bold=True, size=12, color="0B5CAB", al=Alignment(vertical="top"))
+        if fm:
+            ay.merge_cells("C%d:G%d" % (y, y)); c = ay["C%d" % y]
+            c.value = (fm.get("nota") or "") + ("  Ramales: " + fm["ramales"] if fm.get("ramales") else "") + ("  Principales: " + fm["principales"] if fm.get("principales") else "") + ("  Número de catálogo: " + fm["plantilla"] if fm.get("plantilla") else "")
+            c.font = Font(name=FN, size=9); c.alignment = Alignment(wrap_text=True, vertical="top"); ay.row_dimensions[y].height = 42
+        img("I%d" % y, il_fn(fm), 200)
+        y += 1; y0 = y
+        for j, h_ in enumerate(cab):
+            c = ay.cell(y, 2 + j, h_); c.font = Font(name=FN, bold=True, size=9); c.fill = GRIS; c.border = BORDE
+        y += 1
+        for x in xs:
+            for j, v in enumerate(fila_fn(x)):
+                c = ay.cell(y, 2 + j, v); c.font = Font(name=FN, size=9); c.border = BORDE
+            y += 1
+        y = max(y, y0 + 10) + 1
+
+
+ilT = lambda fm: "tablero" if not fm else ("subestacion" if fm.get("clase") == "subestacion" else ("centroCarga" if fm["familia"] in ("CH", "NQ") else "tablero"))
+ilB = lambda fm: "enchufable" if not fm else ("gfci" if "GFCI" in fm["familia"] else ("enchufable" if fm["familia"] in ("BAB", "QBHW", "GHB", "QOB", "QOB-VH") else "cajaMoldeada"))
+y += 1
+bloque_cat("CATÁLOGO DE TABLEROS", D["tablerosCat"], lambda x: familia(D["reglas"]["tableros"], x["fabricante"], x["modelo"]),
+           ["Tipo", "Modelo", "Barras F/N/T (A)", "Espacios", "Fases", "Principal"],
+           lambda x: [x["id"], x["modelo"], "%s / %s / %s" % (x["barraFase"], x["barraNeutro"], x["barraTierra"]), "secciones" if x["espacios"] >= 999 else x["espacios"], x.get("fases", ""), x.get("principal", "")], ilT)
+y += 1
+bloque_cat("CATÁLOGO DE BREAKERS", D["breakers"], lambda x: familia(D["reglas"]["breakers"], x["marca"], x.get("modelo")),
+           ["Tipo", "Modelo", "Amperios", "Polos", "Unidad", "SCCR (kA) @ V"],
+           lambda x: [x["id"], x.get("modelo") or "", x.get("amperios"), x.get("polos"), x.get("unidad") or "STD", "%s @ %s" % (x.get("sccr"), x.get("vSccr"))], ilB)
+ay.page_setup.orientation = "portrait"; ay.page_setup.fitToWidth = 1; ay.page_setup.fitToHeight = 0; ay.sheet_properties.pageSetUpPr.fitToPage = True
+
 # orden y visibilidad
 for nm in wb.sheetnames:
     if nm.startswith("CAT_"): wb[nm].sheet_state = "hidden"
 wb["MC_MACHOTE"].sheet_state = "hidden"; wb["VISTA_MACHOTE"].sheet_state = "hidden"
 del wb["Sheet"]
-orden = ["INICIO", "PROYECTO", "PREVISTA", "REVIT", "CAMBIOS REVIT", "TABLA RESUMEN", "RESUMEN VERTICAL", "RESUMEN DU", "MC_MACHOTE", "VISTA_MACHOTE"]
+orden = ["INICIO", "PROYECTO", "TABLA RESUMEN", "RESUMEN VERTICAL", "RESUMEN DU", "PREVISTA", "REVIT", "CAMBIOS REVIT", "AYUDA", "MC_MACHOTE", "VISTA_MACHOTE"]
 wb._sheets = [wb[n] for n in orden] + [s for s in wb._sheets if s.title not in orden]
 wb.save(OUT)
 print("ok", OUT, len(wb.sheetnames))
