@@ -169,6 +169,15 @@
     const ok = l.filter(b => normV(b.voltaje) === normV(sistema) && Number(b.fases) === fs).sort((a, b) => n(a.kaLL) - n(b.kaLL));
     return ok.find(b => n(b.kaLL) >= n(kaMin)) || ok[ok.length - 1] || null;
   }
+  /** Equipo de transferencia del catálogo: tipo (ATS/MTS), transición y polos elegidos; amperaje ≥ protección y WCR ≥ Icc en el equipo (el menor que cumpla). */
+  function transferencia(altD, equipo, amp, iccKA) {
+    const l = K.ats || [];
+    if (n(altD.atsId)) return l.find(x => String(x.id) === String(altD.atsId)) || null;
+    const tr = equipo === 'MTS' ? 'manual' : (altD.transicion || 'abierta'), pol = n(altD.polosAts) || 3, marca = altD.atsMarca || '';
+    const c = l.filter(x => x.equipo === (equipo === 'MTS' ? 'MTS' : 'ATS') && x.transicion === tr && n(x.polos) === pol && n(x.amperios) >= n(amp) && (!marca || x.marca === marca))
+      .sort((a, b) => n(a.amperios) - n(b.amperios) || n(a.wcr) - n(b.wcr));
+    return c.find(x => !iccKA || n(x.wcr) >= iccKA) || c[c.length - 1] || null;
+  }
   /** Tablero de catálogo: familias del fabricante válidas para el voltaje y el tipo (1F/3F), barras ≥ protección principal,
       espacios ≥ espacios usados + reserva; la familia más sencilla primero (orden), luego barras y espacios. */
   function tableroCat(tab, prot, espaciosUsados, V, reservaEsp) {
@@ -390,7 +399,7 @@
     const ampCond = fAmp ? n(fAmp[mat + '|' + (al.tempBorne || 90)]) * AI139 : null;
 
     // --- 4) cortocircuito (punto a punto) [AQ8:AQ10]
-    let iccA = null, iccFuente = '';
+    let iccA = null, iccFuente = '', iccAntes = null;   // iccAntes: Icc al inicio del alimentador (para la Icc en el ATS)
     const lmax = n(P && P.iccLongMax) || 0;
     const cIcc = () => {
       const f = (K.constC || []).find(x => x.cal === calStr(AL139)); if (!f) return null;
@@ -416,12 +425,12 @@
       let Is;
       if (Ip) { const f = (k3 ? Ip * Vp * 1.732 : Ip * Vp) * trafo.z / (100000 * trafo.kva); Is = (Vp / V) * Ip / (1 + f); }
       else Is = trafo.kva * 1000 / ((k3 ? 1.732 : 1) * V * trafo.z / 100);          // red de capacidad infinita
-      trafo.iccPrim = Ip; trafo.iccSec = Is; iccA = p2p(Is); iccFuente = 'transformador';
+      trafo.iccPrim = Ip; trafo.iccSec = Is; iccAntes = Is; iccA = p2p(Is); iccFuente = 'transformador';
     } else if (tab.transformadorId) {
       const t0 = K.transformadores.find(t => String(t.id) === String(tab.transformadorId));
       const k = t0 ? (V >= 440 ? t0.kacc480 : V >= 230 ? t0.kacc240 : t0.kacc208) : null;
-      if (k) { iccA = p2p(n(k)); iccFuente = 'transformador (KACC)'; }
-    } else if (ctxIn && ctxIn.iccInicioA && (!Vpadre || Vpadre === V)) { iccA = p2p(ctxIn.iccInicioA); iccFuente = 'cascada'; }
+      if (k) { iccAntes = n(k); iccA = p2p(n(k)); iccFuente = 'transformador (KACC)'; }
+    } else if (ctxIn && ctxIn.iccInicioA && (!Vpadre || Vpadre === V)) { iccAntes = ctxIn.iccInicioA; iccA = p2p(ctxIn.iccInicioA); iccFuente = 'cascada'; }
     if (ups) { iccA = p2p(iccA ? Math.min(ups.icc, iccA) : ups.icc); iccFuente = 'UPS (limitado por el inversor)'; }
 
     // --- segunda acometida (generador o bypass desde otro tablero) con ATS / MTS / interruptor
@@ -439,6 +448,8 @@
       }
       const af = facAjustado(ac ? fac(ac, am, T139) : null, V, fases, true);
       const avd = af !== null && W130 ? AL * 3.28 * Iv * af / (10000 * an) : 0;
+      // ubicación del ATS: la fuente alterna llega al ATS (AL) y del ATS al tablero va el tramo común del alimentador (dAts)
+      const dAts = Math.max(0, n(altD.distAts)), dropCom = AT139 !== null && W130 && dAts ? dAts * 3.28 * Iv * AT139 / (10000 * AI139) : 0;
       let v0 = V, iSrc = null, carga = null, origen = '';
       if (altD.tipo === 'generador') {
         const kva = n(altD.kva), xd = n(altD.xd) || 12;
@@ -449,10 +460,18 @@
         origen = altOrigen.nombre;
       }
       const pre = an === 1 ? (fases === 3 ? '3#' : '2#') : an + 'x' + (fases === 3 ? '3#' : '2#'), pN = an === 1 ? '' : an + 'x';
-      const iAlt = iSrc ? p2pCal(iSrc, ac, aa, at, an, AL) : null;
-      alterna = { equipo: altD.equipo || 'ATS', tipo: altD.tipo || 'generador', origen, nombre: altD.nombre || '', cal: ac, par: an, mat: am, ais: aa, tuberia: at, longitud: AL, val: av,
+      const iAtsAlt = iSrc ? p2pCal(iSrc, ac, aa, at, an, AL) : null;                       // Icc en el ATS por la fuente alterna
+      const iAlt = iAtsAlt ? (dAts ? p2pCal(iAtsAlt, AL139, ais, tuberia, AI139, dAts) : iAtsAlt) : null;   // y en bornes del tablero
+      const iAtsNor = n(tab.iccManual) ? null : iccAntes ? p2pCal(iccAntes, AL139, ais, tuberia, AI139, Math.max(0, M139 - dAts)) : (!dAts ? iccA : null);
+      const iccAtsKA = Math.max(iAtsAlt || 0, iAtsNor || 0, !dAts && iccA ? iccA : 0) / 1000 || null;
+      const equipo = altD.equipo || 'ATS', esTr = /ATS|MTS/.test(equipo);
+      const atsSel = esTr ? transferencia(altD, equipo, AF139, iccAtsKA) : null;
+      const wcr = n(altD.sccr) || (atsSel ? n(atsSel.wcr) : 0);
+      alterna = { equipo, tipo: altD.tipo || 'generador', origen, nombre: altD.nombre || '', cal: ac, par: an, mat: am, ais: aa, tuberia: at, longitud: AL, val: av,
         fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + tierra(AF139, am) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
-        caida: avd, vBornes: v0 - avd, cv: (V - (v0 - avd)) * 100 / V, iccA: iAlt, carga, kva: n(altD.kva), xd: n(altD.xd) || 12 };
+        caida: avd + dropCom, caidaFuente: avd, caidaComun: dropCom, distAts: dAts, vBornes: v0 - avd - dropCom, cv: (V - (v0 - avd - dropCom)) * 100 / V, iccA: iAlt, iccAtsKA,
+        ats: atsSel, wcr, wcrOk: !wcr || !iccAtsKA || wcr >= iccAtsKA, transicion: altD.transicion || (equipo === 'MTS' ? 'manual' : 'abierta'), polosAts: n(altD.polosAts) || 3,
+        carga, kva: n(altD.kva), xd: n(altD.xd) || 12 };
       if (iAlt && (!iccA || iAlt > iccA)) { iccA = iAlt; iccFuente = (iccFuente ? iccFuente + ' · ' : '') + 'máx. por ' + (alterna.tipo === 'generador' ? 'generador' : 'bypass'); }
     }
     const iccKA = iccA ? iccA / 1000 : null;
@@ -489,11 +508,11 @@
     if (spd) nec.push({ art: '242', nivel: 'info', txt: 'SPD ' + (!ctxIn ? 'tipo 1 o 2 en la acometida' : 'tipo 2 en el lado de carga') + '; MCOV ≥ ' + (V >= 440 ? '320 V L-N (550 V L-L)' : V === 240 ? '150 V L-N (320 V L-L)' : '150 V L-N') + '; In = 20 kA; SCCR del SPD ≥ Icc.' });
     if (AF139 >= 1200) nec.push({ art: '240.87', nivel: 'aviso', txt: 'Interruptor de ' + AF139 + ' A: requiere un método de reducción de energía de arco (ARMS, ZSI, relé diferencial o mitigación activa), ajustado por debajo de la corriente de arco, probado y documentado. Usar disparo con ARMS (p. ej. PXR25 LSIG+ARMS).' });
     if (AF139 >= 1200 && !ctxIn) nec.push({ art: '110.16(B)', nivel: 'info', txt: 'Acometida ≥ 1200 A: etiqueta de arco eléctrico con voltaje, corriente de falla, tiempo de despeje y fecha.' });
-    if (alterna && /ATS|MTS/.test(alterna.equipo)) nec.push({ art: '700.5(E) / 702.5', nivel: n(altD.sccr) && iccKA && n(altD.sccr) < iccKA ? 'error' : 'aviso', txt: 'Rotular en campo el SCCR del ' + alterna.equipo + (n(altD.sccr) ? ' (' + altD.sccr + ' kA)' : '') + ' según el dispositivo de protección aguas arriba; debe ser ≥ ' + (iccKA ? r2(iccKA) + ' kA' : 'la corriente de falla') + '.' });
+    if (alterna && /ATS|MTS/.test(alterna.equipo)) nec.push({ art: '700.5(E) / 702.5', nivel: !alterna.wcrOk ? 'error' : 'aviso', txt: 'Rotular en campo el SCCR (WCR) del ' + alterna.equipo + (alterna.wcr ? ' (' + alterna.wcr + ' kA)' : '') + ' según el dispositivo de protección aguas arriba; debe ser ≥ la corriente de falla en el ' + alterna.equipo + (alterna.iccAtsKA ? ' (' + r2(alterna.iccAtsKA) + ' kA)' : '') + '.' });
     rows.filter(x => x.nec && !x.c.unidad).forEach(x => nec.push({ art: x.nec.motivo.split(':')[0], nivel: 'info', txt: (x.descripcion || '') + ' [' + x.polos.join(',') + ']: interruptor ' + x.nec.unidad + ' (' + x.nec.motivo + ').' }));
-    nec.filter(x => x.nivel === 'error').forEach(x => avisos.push('NEC ' + x.art + ': ' + x.txt));
 
     const avisos = [];
+    nec.filter(x => x.nivel === 'error').forEach(x => avisos.push('NEC ' + x.art + ': ' + x.txt));
     if (AY139 > n(P && P.cvMaxAlim || 3)) avisos.push('Caída acumulada en bornes ' + r2(AY139) + ' % (máx. ' + n(P && P.cvMaxAlim || 3) + ' %)');
     if (val && !val.ok) avisos.push('El alimentador no cumple ampacidad corregida: ' + r2(val.cap) + ' A disponibles' + (val.okI ? '' : ' < ' + r2(AE139) + ' A requeridos') + (val.okP ? '' : ', protección ' + AF139 + ' A mayor que la permitida') + (val.ft ? '' : ' (temperatura ambiente fuera del rango del aislamiento)'));
     if (ajustado && val && val.ok) avisos.push('Calibre del alimentador aumentado por temperatura/agrupamiento: ' + (parBase > 1 ? parBase + 'x' : '') + calBase + ' → ' + (AI139 > 1 ? AI139 + 'x' : '') + AL139 + ' AWG/kcmil');
@@ -513,6 +532,8 @@
       if (alterna.cv > n(P && P.cvMaxAlim || 3)) avisos.push('Segunda acometida (' + alterna.equipo + '): caída ' + r2(alterna.cv) + ' % (máx. ' + n(P && P.cvMaxAlim || 3) + ' %)');
       if (alterna.val && !alterna.val.ok) avisos.push('Segunda acometida: el conductor no cumple ampacidad corregida');
       if (alterna.carga > 1) avisos.push('Generador cargado al ' + r2(alterna.carga * 100) + ' %');
+      if (!alterna.wcrOk) avisos.push(alterna.equipo + ': WCR ' + alterna.wcr + ' kA < Icc en el ' + alterna.equipo + ' ' + r2(alterna.iccAtsKA) + ' kA');
+      if (/ATS|MTS/.test(alterna.equipo) && !alterna.ats && !n(altD.atsId)) avisos.push('No hay ' + alterna.equipo + ' en el catálogo para ' + AF139 + ' A (' + alterna.transicion + ', ' + alterna.polosAts + ' polos)');
       if (alterna.tipo !== 'generador' && !altOrigen) avisos.push('Segunda acometida: elija el tablero de origen del bypass');
     }
     if (Vpadre && Vpadre !== V && !trafo) avisos.push('Voltaje distinto al del tablero que lo alimenta: agregue el transformador (diagrama unifilar o memoria)');

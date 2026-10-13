@@ -90,6 +90,7 @@
         // equipo de transferencia pegado a la barra del tablero; la rama alterna con su propia protección
         const al = r.alterna, ya = y1 - 15;
         D.rect(x - 22, ya - 12, 44, 24, 'u-ats', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, ya + 4, al.equipo, 'u-t b', 'TEXTO', 'c');
+        if (al.ats || al.distAts) D.texto(x - 26, ya - 16, (al.ats ? al.ats.modelo + ' · WCR ' + al.wcr + ' kA' : '') + (al.distAts ? ' · ' + f1(al.distAts) + ' m al tablero' : ''), 'u-t', 'TEXTO', 'e');
         const gx = x + 140, yb2 = ya - 58;
         D.linea(x + 22, ya, gx, ya, 'u-lin', 'ALIMENTADOR'); D.linea(gx, ya, gx, yb2 - 52, 'u-lin', 'ALIMENTADOR');
         // interruptor de la rama alterna: el circuito del bypass en el tablero de origen o el principal del generador

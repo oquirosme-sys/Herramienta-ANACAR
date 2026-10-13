@@ -43,6 +43,13 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
+## Segunda acometida: ubicación y tipo de ATS — 2026.1-web.9
+- **Distancias**: *longitud fuente → ATS* y *distancia ATS → tablero* (tramo común con el alimentador normal). La caída de voltaje y la corriente de cortocircuito de la fuente alterna se calculan por tramos, y se obtiene la **Icc en el ATS** (la mayor entre la alimentación normal y la alterna en ese punto).
+- **Tipo de transferencia**: transición abierta, retardada (motores), cerrada o con bypass-aislamiento, y MTS; **3 o 4 polos** (neutro conmutado, fuente derivada separadamente 250.30).
+- **Modelo de catálogo** (Administración ▸ Transferencias; hoja CAT_ATS en Excel): se elige el de esa transición y polos con amperaje ≥ protección y **WCR ≥ Icc en el ATS**; se puede fijar el modelo o escribir el WCR del fabricante. Los WCR genéricos son típicos: reemplácelos por los del fabricante.
+- Aviso y revisión NEC 700.5(E)/702.5 cuando el WCR es menor que la Icc en el ATS; el diagrama unifilar muestra el modelo y la distancia.
+- Corregido: un aviso NEC de nivel "error" detenía el cálculo del tablero.
+
 ## Detalles de carga (como DCARGAS) — 2026.1-web.8
 - Nueva pestaña **Detalles de carga** (web) y hoja **DETALLES DE CARGA** (Excel), editables por todos: voltaje, fases, hilos, tipo de carga, factores, FP, continua, multiplicador y **palabras clave (Revit)**. En la web también se editan los tipos de carga (demanda). No se puede borrar un detalle que use el proyecto.
 - **Importación de Revit**: el detalle se elige primero por las palabras clave ("uc-" reconoce "UC-01", "ue" a "UE2-03", "dh-" a "DH-03", "calentador de paso"…). El ⚠ indica un detalle propuesto sin coincidencia segura: al corregirlo se aplica a los circuitos con el mismo nombre y **se recuerda** como palabra clave para la próxima importación. Los alimentadores de tableros toman el detalle de tablero. En el Excel los detalles por revisar quedan en naranja con un comentario.

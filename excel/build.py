@@ -115,7 +115,7 @@ listas = {"CH": ("Sistemas", D["listas"]["sistemas"], "L_SISTEMAS"), "CI": ("Mat
           "CK": ("Tuberías", D["listas"]["tuberias"], "L_TUBERIAS"), "CL": ("Montajes", D["listas"]["montajes"], "L_MONTAJES"), "CM": ("Temperaturas", D["listas"]["temperaturas"], "L_TEMPS"),
           "CN": ("Agrupamientos", D["listas"]["agrupamientos"], "L_AGRUP"), "CO": ("Marcas", sorted({b["marca"] for b in D["breakers"]}), "L_MARCAS"),
           "CP": ("Unidades", ["STD", "GFCI", "AFCI", "AFCI/GFCI", "HACR", "SHT"], "L_UNIDADES"), "CQ": ("Disparo principal", ["TM", "LI", "LSI", "LSIG"], "L_DISPARO"),
-          "CR": ("SI/NO", ["SI", "NO"], "L_SINO"), "CS": ("Tipo", ["3F", "1F"], "L_TIPO"), "CT": ("Principal", ["Interruptor", "Zapatas"], "L_PRINCIPAL"),
+          "CR": ("SI/NO", ["SI", "NO"], "L_SINO"), "CZ": ("Transición", ["Abierta 3P", "Abierta 4P", "Retardada 3P", "Retardada 4P", "Cerrada 3P", "Cerrada 4P", "Bypass 3P", "Bypass 4P", "Manual 3P", "Manual 4P"], "L_TRANSICION"), "CS": ("Tipo", ["3F", "1F"], "L_TIPO"), "CT": ("Principal", ["Interruptor", "Zapatas"], "L_PRINCIPAL"),
           "CU": ("Tipo de equipo", ["Tablero", "Subestación"], "L_CLASE"), "CV": ("Transferencia", ["ATS", "MTS", "IP"], "L_TRANSF"), "CW": ("Fuente alterna", ["Generador", "Tablero"], "L_FUENTE"),
           "CX": ("Ocupación", ["comercial", "vivienda", "hotel", "hospital", "industrial"], "L_OCUP"), "CY": ("Carga derivados", ["conectada", "demandada"], "L_CDERIV")}
 for col, (t, vals, nm) in listas.items():
@@ -130,6 +130,8 @@ hoja_tabla("CAT_TABLEROS", ["Tipo", "Modelo", "Fabricante", "Barra fase", "Barra
            [[t["id"], t["modelo"], t["fabricante"], t["barraFase"], t["barraNeutro"], t["barraTierra"], t["espacios"], t.get("fases", "3F"), t.get("principal", "Ambos"), t.get("nota") or ""] for t in D["tablerosCat"]])
 hoja_tabla("CAT_SPD", ["Marca", "Tipo", "Modelo", "Montaje", "kA L-L", "kA L-N", "Voltaje", "Fases", "Conexión"],
            [[x["marca"], x["id"], x["modelo"], x["montaje"], x["kaLL"], x["kaLN"], x["voltaje"], x["fases"], x.get("conexion") or ""] for x in D["supresores"]])
+hoja_tabla("CAT_ATS", ["Tipo", "Marca", "Equipo", "Transición", "Polos", "Amperios", "WCR (kA)", "Entrada de servicio", "Modelo", "Nota"],
+           [[a["id"], a["marca"], a["equipo"], a["transicion"], a["polos"], a["amperios"], a["wcr"], "SI" if a.get("entradaServicio") else "NO", a["modelo"], a.get("nota", "")] for a in D.get("ats", [])])
 hoja_tabla("CAT_TRAFOS", ["#", "Nombre", "Tipo", "KACC 480", "KACC 240", "KACC 208", "Z %"], [[t["id"], t["nombre"], t["tipo"], t["kacc480"], t["kacc240"], t["kacc208"], t["z"]] for t in D["transformadores"]])
 nombre("L_TRAFOS", "CAT_TRAFOS!$B$2:$B$100")
 
@@ -173,7 +175,8 @@ entradas = [  # (columna etiqueta, columna valor, fila, etiqueta, valor inicial,
     ("H", "I", 10, "Alimentado por UPS", "NO", "L_SINO"), ("H", "I", 11, "UPS kVA", None, None), ("H", "I", 12, "Icc del inversor (× In)", 2, None),
     ("H", "I", 14, "Segunda acometida", "NO", "L_SINO"), ("H", "I", 15, "Equipo de transferencia", "ATS", "L_TRANSF"), ("H", "I", 16, "Fuente alterna", "Generador", "L_FUENTE"),
     ("H", "I", 17, "Tablero de origen (bypass)", None, "LISTA_TABLEROS"), ("H", "I", 18, "Generador kVA", None, None), ("H", "I", 19, "X''d del generador (%)", 12, None),
-    ("H", "I", 20, "Longitud segunda acometida (m)", None, None), ("H", "I", 21, "SCCR del equipo (kA)", None, None)]
+    ("H", "I", 20, "Longitud fuente → ATS (m)", None, None), ("H", "I", 21, "WCR / SCCR del ATS (kA) (vacío = modelo)", None, None),
+    ("H", "I", 22, "Transferencia: transición y polos", "Abierta 3P", "L_TRANSICION"), ("H", "I", 23, "Distancia ATS → tablero (m)", None, None)]
 dvs = {}
 for le, ve, fila, et, val, lista in entradas:
     f(mc, "%s%d" % (le, fila), et, size=9, al=IZQ)
@@ -261,9 +264,16 @@ rx(84, "Segunda acometida", '=$I$14="SI"')
 rx(85, "2ª acometida: validación", '=IF(OR(NOT(BX84),BX24=""),"",CAL_AJUSTE(VLOOKUP(BX24*BX26/BX25,CHOOSE(IF(%s,2,1),T_AMPCU,T_AMPAL),2,TRUE),%s,BX25,%s,IF($F$11="","26-30",$F$11),IF(N($F$12)>0,$F$12,75),BX28,BX23,BX24,AUTO_AMP="SI",BX26))' % (ESAL, MAT, AIS))
 rx(86, "2ª acometida: paralelos", '=IF(BX85="","",PARTEN(BX85,1))'); rx(87, "2ª acometida: calibre", '=IF(BX85="","",PARTE(BX85,2))')
 ALTP2P = 'BX87,%s,%s,BX86,N($I$20),$C$7,$C$8,ICC_LMAX' % (AIS, TUB)
+rx(111, "2ª acometida: Icc en el ATS (A)", '=IF(OR(NOT(BX84),BX87=""),"",IF($I$16="Generador",IF(N($I$18)>0,P2P($I$18*1000/(IF($C$8=3,1.732,1)*$C$7*IF(N($I$19)>0,$I$19,12)/100),%s),""),IF($I$17<>"",IF(N(BX109)>0,P2P(BX109,%s),""),"")))' % (ALTP2P, ALTP2P))
+rx(112, "Icc en el ATS por la alimentación normal (A)", '=IF(OR(NOT(BX84),N($C$14)>0),"",IF(N($I$23)=0,N(BX55),IF($I$3="SI",IF(N(BX57)>0,P2P(BX57,BX31,%s,%s,BX30,MAX(0,BX40-N($I$23)),$C$7,$C$8,ICC_LMAX),""),IF(N(BX46)>0,P2P(BX46,BX31,%s,%s,BX30,MAX(0,BX40-N($I$23)),$C$7,$C$8,ICC_LMAX),""))))' % (AIS, TUB, AIS, TUB))
+rx(113, "Icc en el ATS (kA)", '=IF(NOT(BX84),"",MAX(N(BX111),N(BX112),IF(N($I$23)=0,N(BX56),0))/1000)')
+rx(114, "ATS / MTS (tipo de catálogo)", '=IF(OR(NOT(BX84),$I$15="IP"),"",ATS_SEL(IF($I$15="MTS","Manual "&RIGHT($I$22,2),$I$22),N(BX24),N(BX113)))')
+rx(115, "ATS: modelo", '=IF(BX114="","",ATS_DATO(BX114,"modelo"))'); rx(116, "ATS: amperios", '=IF(BX114="","",ATS_DATO(BX114,"amperios"))')
+rx(117, "ATS: WCR efectivo (kA)", '=IF(N($I$21)>0,$I$21,IF(BX114="","",ATS_DATO(BX114,"wcr")))')
 rx(88, "2ª acometida: Icc (A)", '=IF(OR(NOT(BX84),BX87=""),"",IF($I$16="Generador",IF(N($I$18)>0,P2P($I$18*1000/(IF($C$8=3,1.732,1)*$C$7*IF(N($I$19)>0,$I$19,12)/100),%s),""),IF($I$17<>"",IF(N(BX109)>0,P2P(BX109,%s),""),"")))' % (ALTP2P, ALTP2P))
+mc["BX88"] = '=IF(N(BX111)=0,"",IF(N($I$23)>0,P2P(BX111,BX31,%s,%s,BX30,N($I$23),$C$7,$C$8,ICC_LMAX),BX111))' % (AIS, TUB); BX[88] = mc["BX88"].value
 rx(90, "2ª acometida: FAC ajustado", '=IF(BX87="","",IFERROR(INDEX(CHOOSE(IF(%s,2,1),T_FAC_CU,T_FAC_AL),IF(BX15=1,1,IF(BX15>0.949,2,IF(BX15>0.899,3,4))),MATCH(BX87,T_FAC_H,0))*IF(AND($C$8=2,$C$7=240),1.15,1),""))' % ESAL)
-rx(89, "2ª acometida: caída (V)", '=IF(OR(BX87="",BX90=""),"",N($I$20)*3.28*BX39*BX90/(10000*BX86))')
+rx(89, "2ª acometida: caída (V)", '=IF(OR(BX87="",BX90=""),"",N($I$20)*3.28*BX39*BX90/(10000*BX86)+IF(OR(N($I$23)=0,BX38=""),0,N($I$23)*3.28*BX39*BX38/(10000*BX30)))')
 rx(91, "2ª acometida: voltaje de partida", '=IF($I$16="Generador",$C$7,IF(N(BX110)>0,BX110,$C$7))')
 rx(92, "2ª acometida: bornes (V)", '=IF(BX89="","",BX91-BX89)'); rx(93, "2ª acometida: caída (%)", '=IF(BX92="","",($C$7-BX92)*100/$C$7)')
 rx(94, "Carga del generador", '=IF(AND(BX84,$I$16="Generador",N($I$18)>0),BX14/$I$18,"")')
@@ -277,7 +287,7 @@ rx(104, "Prefijo paralelos", '=IF(BX30=1,"",BX30&"x")')
 rx(97, "Avisos", '=TRIM(IF(BX51>CVMAX_ALIM,"Caída acumulada "&FIXED(BX51,2)&" % > "&CVMAX_ALIM&" %. ","")&IF(AND(BX29<>"",PARTE(BX29,3)="0"),"Alimentador no cumple ampacidad corregida. ","")'
              '&IF(BX62="","Sin tablero de catálogo. ","")&IF(AND(N(BX67)>0,N(BX67)<BX61),"Faltan espacios. ","")&IF(AND(BX74<>"",N(BX74)<BX58),"SCCR del principal < Icc. ","")&IF(BX7>DESB_MAX,"Desbalance "&FIXED(BX7,1)&" %. ","")'
              '&IF(AND(BX41<>"",N(BX41)>1),"Transformador sobrecargado. ","")&IF(AND(N(BX44)>0,N(BX44)<>$C$7,$I$3<>"SI"),"Voltaje distinto al del padre: agregue transformador. ","")'
-             '&IF(AND(BX93<>"",N(BX93)>CVMAX_ALIM),"Caída de la 2ª acometida alta. ","")&IF(AND($I$14="SI",OR($I$15="ATS",$I$15="MTS"),N($I$21)>0,N($I$21)<BX58),"SCCR del "&$I$15&" < Icc. ","")'
+             '&IF(AND(BX93<>"",N(BX93)>CVMAX_ALIM),"Caída de la 2ª acometida alta. ","")&IF(AND($I$14="SI",OR($I$15="ATS",$I$15="MTS"),N(BX117)>0,N(BX117)<N(BX113)),"WCR del "&$I$15&" "&BX117&" kA < Icc en el "&$I$15&" "&FIXED(N(BX113),2)&" kA. ","")&IF(AND($I$14="SI",OR($I$15="ATS",$I$15="MTS"),BX114=""),"Sin "&$I$15&" de catálogo. ","")'
              '&IF(BX80<>"",IF(N(BX80)<BX77,"SPD de "&BX80&" kA < "&BX77&" kA recomendados (242). ",""),"")&IF(N(BX24)>=1200,"240.87: reducción de energía de arco. ","")'
              '&IF(COUNTIF($BU$25:$BU$124,"?*")>0,COUNTIF($BU$25:$BU$124,"?*")&" circuito(s) con aviso. ",""))')
 mc.column_dimensions["CA"].hidden = True; mc.column_dimensions["CB"].hidden = True
@@ -299,7 +309,7 @@ for cel, et, ref in panel:
     if cel == "K15": v = '=BX72&" "&BX73&" · "&BX74&" kA"'
     if cel == "K16": v = '=BX79&" · "&BX80&"/"&BX81&" kA"'
     if cel == "K18": v = '=IF(BX29="","",IF(PARTE(BX29,3)="1","Cumple","NO CUMPLE")&" · disponible "&FIXED(PARTEN(BX29,4),1)&" A vs "&FIXED(N(BX23),1)&" A")'
-    if cel == "K19": v = '=IF(BX84,$I$15&" · "&BX95&" · ΔV "&FIXED(N(BX93),2)&" % · Icc "&FIXED(N(BX88)/1000,2)&" kA","")'
+    if cel == "K19": v = '=IF(BX84,$I$15&IF(BX115<>""," "&BX115&" (WCR "&BX117&" kA, Icc "&FIXED(N(BX113),2)&" kA)","")&" · "&BX95&" · ΔV "&FIXED(N(BX93),2)&" % · Icc bornes "&FIXED(N(BX88)/1000,2)&" kA","")'
     c = mc.cell(int(r), CI("L")); c.value = v; c.font = Font(name=FN, size=10, bold=True); c.border = BORDE
     mc.merge_cells("L%s:R%s" % (r, r))
 mc.column_dimensions["K"].width = 30

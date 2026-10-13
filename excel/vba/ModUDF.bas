@@ -9,6 +9,7 @@ Private cBK As Variant, cTB As Variant, cSPD As Variant, cRT As Variant, cRB As 
 Private cAMP As Variant, cTEMP As Variant, cAGR As Variant, cCC As Variant, cPROT As Variant, cCOND As Variant, cDET As Variant
 Private cAmpCU As Variant, cAmpAL As Variant
 Private cargado As Boolean
+Private cATS As Variant
 Private famBK() As Long, famTB() As Long, vscBK() As Double
 
 Public Sub RecargarCatalogo()
@@ -40,6 +41,7 @@ Private Sub Cargar()
     cAmpCU = ThisWorkbook.Names("T_AMPCU").RefersToRange.Value
     cAmpAL = ThisWorkbook.Names("T_AMPAL").RefersToRange.Value
     cDET = Tabla("DETALLES DE CARGA", 12)
+    cATS = Tabla("CAT_ATS", 10)
     Dim i As Long
     ReDim famBK(1 To UBound(cBK, 1)): ReDim vscBK(1 To UBound(cBK, 1)): ReDim famTB(1 To UBound(cTB, 1))
     For i = 1 To UBound(cBK, 1)
@@ -479,6 +481,57 @@ fallo:
 End Function
 
 ' ================== CONDUCTORES ==================
+' ================== TRANSFERENCIAS (ATS / MTS) ==================
+' "Retardada 4P": la de esa transicion y polos con amperios >= proteccion y WCR >= Icc en el equipo (la menor que cumpla)
+Public Function ATS_SEL(tipo As String, amp As Variant, iccKA As Variant) As Variant
+    On Error GoTo fallo
+    Cargar
+    Dim tr As String, pol As Double, eq As String, i As Long, best As Long, mayor As Long
+    tr = LCase$(Trim$(Left$(tipo, InStr(tipo & " ", " ") - 1))): pol = Val(Mid$(tipo, InStr(tipo & " ", " ") + 1))
+    If tr = "" Then tr = "abierta"
+    If pol = 0 Then pol = 3
+    eq = IIf(tr = "manual", "MTS", "ATS")
+    For i = 1 To UBound(cATS, 1)
+        If Sx(cATS(i, 3)) = eq And LCase$(Sx(cATS(i, 4))) = tr And Nm(cATS(i, 5)) = pol And Nm(cATS(i, 6)) >= Nm(amp) Then
+            If Nm(cATS(i, 7)) >= Nm(iccKA) Then
+                If best = 0 Then
+                    best = i
+                ElseIf Nm(cATS(i, 6)) < Nm(cATS(best, 6)) Or (Nm(cATS(i, 6)) = Nm(cATS(best, 6)) And Nm(cATS(i, 7)) < Nm(cATS(best, 7))) Then
+                    best = i
+                End If
+            End If
+            If mayor = 0 Then mayor = i Else If Nm(cATS(i, 7)) > Nm(cATS(mayor, 7)) Then mayor = i
+        End If
+    Next i
+    If best = 0 Then best = mayor
+    If best = 0 Then ATS_SEL = "" Else ATS_SEL = cATS(best, 1)
+    Exit Function
+fallo:
+    ATS_SEL = ""
+End Function
+
+Public Function ATS_DATO(id As Variant, campo As String) As Variant
+    On Error GoTo fallo
+    Cargar
+    Dim i As Long
+    ATS_DATO = ""
+    For i = 1 To UBound(cATS, 1)
+        If Sx(cATS(i, 1)) = Sx(id) Then
+            Select Case LCase$(campo)
+                Case "modelo": ATS_DATO = Sx(cATS(i, 9))
+                Case "amperios": ATS_DATO = cATS(i, 6)
+                Case "wcr": ATS_DATO = cATS(i, 7)
+                Case "polos": ATS_DATO = cATS(i, 5)
+                Case "transicion": ATS_DATO = Sx(cATS(i, 4))
+            End Select
+            Exit Function
+        End If
+    Next i
+    Exit Function
+fallo:
+    ATS_DATO = ""
+End Function
+
 Public Function PARTE(texto As Variant, i As Long) As Variant
     Dim a As Variant
     a = Split(Sx(texto), "|")

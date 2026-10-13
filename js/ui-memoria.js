@@ -74,8 +74,12 @@
           a.tipo === 'generador' ? UI.field('Nombre', UI.input(a, 'nombre', { fk: k + 'gn' })) : UI.field('Tablero de origen', UI.bind(a, 'origenId', UI.opts(otros.map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— elegir —'), { fk: k + 'or' })),
           a.tipo === 'generador' ? UI.field('Generador (kVA)', UI.input(a, 'kva', { type: 'num', fk: k + 'gk' })) : null,
           a.tipo === 'generador' ? UI.field("Reactancia X''d (%)", UI.input(a, 'xd', { type: 'num', fk: k + 'gx', placeholder: '12' })) : null,
-          /ATS|MTS/.test(a.equipo) ? UI.field('SCCR del ' + a.equipo + ' (kA)', UI.input(a, 'sccr', { type: 'num', fk: k + 'sc' })) : null,
-          UI.field('Longitud (m)', UI.input(a, 'longitud', { type: 'num', fk: k + 'al' })),
+          a.equipo === 'ATS' || !a.equipo ? UI.field('Tipo de transferencia', UI.bind(a, 'transicion', [{ value: 'abierta', label: 'Transición abierta (estándar)' }, { value: 'retardada', label: 'Transición retardada (motores)' }, { value: 'cerrada', label: 'Transición cerrada' }, { value: 'bypass', label: 'Con bypass-aislamiento' }], { fk: k + 'tr' })) : null,
+          /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field('Polos', UI.bind(a, 'polosAts', [{ value: 3, label: '3 polos (neutro sólido)' }, { value: 4, label: '4 polos (neutro conmutado)' }], { num: true, fk: k + 'po' }), 'Con 4 polos el generador es fuente derivada separadamente (250.30)') : null,
+          /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field('Modelo (catálogo)', UI.bind(a, 'atsId', [{ value: '', label: A && A.ats ? 'Auto: ' + A.ats.modelo + ' · ' + A.ats.amperios + ' A · ' + A.ats.wcr + ' kA' : 'Automático' }].concat((Store.catalog.ats || []).filter(x => x.equipo === (a.equipo === 'MTS' ? 'MTS' : 'ATS') && x.transicion === (a.equipo === 'MTS' ? 'manual' : (a.transicion || 'abierta')) && Number(x.polos) === (Number(a.polosAts) || 3)).map(x => ({ value: x.id, label: x.marca + ' · ' + x.modelo + ' · ' + x.amperios + ' A · WCR ' + x.wcr + ' kA', group: x.transicion + ' · ' + x.polos + ' polos' }))), { num: true, fk: k + 'mo' })) : null,
+          /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field('WCR / SCCR del ' + (a.equipo || 'ATS') + ' (kA)', UI.input(a, 'sccr', { type: 'num', fk: k + 'sc', placeholder: A && A.ats ? 'Auto ' + A.ats.wcr : '' }), 'Vacío = el del modelo') : null,
+          UI.field(/ATS|MTS/.test(a.equipo || 'ATS') ? 'Longitud fuente → ' + (a.equipo || 'ATS') + ' (m)' : 'Longitud (m)', UI.input(a, 'longitud', { type: 'num', fk: k + 'al' })),
+          /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field('Distancia ' + (a.equipo || 'ATS') + ' → tablero (m)', UI.input(a, 'distAts', { type: 'num', fk: k + 'da', placeholder: '0 (junto al tablero)' }), 'Tramo común con el alimentador normal') : null,
           UI.field('Material', UI.bind(a, 'material', L.materiales, { fk: k + 'am' })), UI.field('Aislamiento', UI.bind(a, 'aislamiento', Store.catalog.aislamientos, { fk: k + 'aa' })),
           UI.field('Tubería', UI.bind(a, 'tuberia', L.tuberias, { fk: k + 'at' })), UI.field('# en paralelo', UI.input(a, 'paralelos', { type: 'num', fk: k + 'ap', placeholder: A ? 'Auto ' + A.par : 'Auto' }))) : null,
         A ? h('table', { class: 'kv mt' }, h('tbody', null,
@@ -83,8 +87,11 @@
           fila('Conductores', h('b', null, A.fasesTxt + (A.neutroTxt ? ' + ' + A.neutroTxt + ' N' : '') + (A.tierraTxt ? ' + ' + A.tierraTxt + ' T' : '') + ' ' + A.mat + ' ' + A.ais)),
           fila('Tubería', A.tubo + ' mm ' + A.tuberia),
           fila('Ampacidad corregida', A.val ? f1(A.val.cap) + ' A ' + (A.val.ok ? '✓' : '✗') : '—', A.val && !A.val.ok ? 'bad' : ''),
+          A.ats ? fila(A.equipo + ' (catálogo)', h('b', null, A.ats.modelo + ' · ' + A.ats.amperios + ' A · ' + A.ats.polos + ' polos · transición ' + A.ats.transicion)) : null,
+          A.distAts ? fila('Caída fuente → ' + A.equipo + ' / ' + A.equipo + ' → tablero', f2(A.caidaFuente) + ' V · ' + f2(A.caidaComun) + ' V (' + f1(A.distAts) + ' m)') : null,
           fila('Caída / voltaje en bornes', f2(A.caida) + ' V · ' + f2(A.vBornes) + ' V · ΔV ' + f2(A.cv) + ' %', A.cv > Store.project.cvMaxAlim ? 'bad' : ''),
-          fila('Icc por esta fuente', A.iccA ? f2(A.iccA / 1000) + ' kA' : '—'),
+          /ATS|MTS/.test(A.equipo) ? fila('Icc en el ' + A.equipo + ' / WCR', (A.iccAtsKA ? f2(A.iccAtsKA) + ' kA' : '—') + ' · WCR ' + (A.wcr || '—') + ' kA ' + (A.wcrOk ? '✓' : '✗'), A.wcrOk ? '' : 'bad') : null,
+          fila('Icc por esta fuente (en bornes)', A.iccA ? f2(A.iccA / 1000) + ' kA' : '—'),
           A.carga !== null ? fila('Carga del generador', f1(A.carga * 100) + ' %', A.carga > 1 ? 'bad' : '') : null)) : null)));
   }
 
