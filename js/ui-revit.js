@@ -7,7 +7,7 @@
 
   /* ---------- lectura ---------- */
   const COLS = [
-    ['voltaje', /volt/i], ['nombre', /load name|nombre|descrip/i], ['carga', /true load|apparent load|carga|load|kva|potencia/i], ['panel', /panel|tablero/i],
+    ['voltaje', /volt/i], ['nombre', /load name|nombre|descrip/i], ['carga', /true (load|power)|apparent (load|power)|potencia|carga|kva|^\s*(load|power)\s*$/i], ['panel', /panel|tablero/i],
     ['circuito', /circuit|circuito/i], ['polos', /pole|polo/i], ['longitud', /length|longitud|largo/i],
   ];
   function mapear(filas) {
@@ -50,10 +50,12 @@
   }
   function procesar(filas, origen) {
     filas = filas.filter(f => f && f.some(x => x !== '' && x !== null && x !== undefined));
-    const { inicio, m } = mapear(filas), grupos = {};
-    filas.slice(inicio).forEach(f => {
+    const { inicio, m } = mapear(filas), grupos = {}, omitidas = [];
+    if (m.carga === undefined) UI.toast('No se encontró la columna de carga (True Power / True Load): las cargas quedarán en 0', 'bad');
+    filas.slice(inicio).forEach((f, i) => {
       const panel = reparar(f[m.panel]).trim();
-      if (!panel || /electrical|schedule|^panel$/i.test(panel)) return;
+      if (!panel) { omitidas.push({ fila: inicio + i + 1, txt: f.map(x => reparar(x)).filter(x => x !== '').join(' | '), motivo: 'Sin tablero (fila de resumen de Revit)' }); return; }
+      if (/electrical|schedule|^panel$/i.test(panel)) return;
       const nPolos = Number(numero(f[m.polos])) || 1, v = Number(numero(f[m.voltaje])) || 0;
       const lon = numero(f[m.longitud]);
       const c = { nombre: reparar(f[m.nombre]).trim(), voltaje: v, polos: polosDe(f[m.circuito], nPolos), nPolos, kva: Number(numero(f[m.carga])) || 0,
@@ -69,7 +71,18 @@
       return { panel, destino: existente ? existente.id : 'nuevo', tipo: tres || sistema === '120/208' ? '3F' : '1F', sistema, modo: existente ? 'actualizar' : 'reemplazar', incluir: true, circuitos: cs };
     });
     if (!paneles.length) throw new Error('No se encontraron circuitos. Verifique que la tabla tenga las columnas Panel y Circuit Number.');
-    sesion = { paneles, origen, unidad: paneles.some(p => p.circuitos.some(c => c.enPies)) ? 'pies-detectado' : 'm' };
+    // circuitos que alimentan otro tablero de la tabla: por el nombre de la carga o, si el nombre no coincide, por la misma carga
+    const tot = {}; paneles.forEach(p => { tot[p.panel] = p.circuitos.reduce((a, c) => a + c.kva, 0); });
+    paneles.forEach(p => p.circuitos.forEach(c => {
+      const hijo = paneles.find(o => o !== p && norm(o.panel) === norm(c.nombre));
+      if (hijo) { c.alimenta = hijo.panel; c.alimentaPor = 'nombre'; }
+    }));
+    paneles.forEach(h => {
+      if (paneles.some(p => p.circuitos.some(c => c.alimenta === h.panel))) return;
+      const cand = []; paneles.forEach(p => { if (p !== h) p.circuitos.forEach(c => { if (!c.alimenta && c.nPolos >= 2 && tot[h.panel] > 0 && Math.abs(c.kva - tot[h.panel]) < 0.005 && !paneles.some(o => norm(o.panel) === norm(c.nombre))) cand.push(c); }); });
+      if (cand.length === 1) { cand[0].alimenta = h.panel; cand[0].alimentaPor = 'carga'; }
+    });
+    sesion = { paneles, origen, omitidas, unidad: paneles.some(p => p.circuitos.some(c => c.enPies)) ? 'pies-detectado' : 'm' };
     App.refresh();
   }
   const norm = s => String(s || '').toUpperCase().replace(/^TABLERO\s+/, '').replace(/\s+/g, '');
@@ -89,7 +102,8 @@
     try {
       if (/\.xls[xm]$/i.test(f.name)) {
         const hojas = await XlsxRead.read(await UI.readBuffer(f));
-        const hoja = hojas.find(s => s.state === 'visible' && s.rows.some(r => r.some(x => /panel/i.test(String(x))))) || hojas[0];
+        const enc = r => r.some(x => /^\s*(panel|tablero)\s*$/i.test(String(x))) && r.some(x => /circuit/i.test(String(x)) && !/name/i.test(String(x)));
+        const hoja = hojas.find(s => s.state === 'visible' && s.rows.slice(0, 30).some(enc)) || hojas.find(s => s.state === 'visible' && s.rows.some(r => r.some(x => /panel/i.test(String(x))))) || hojas[0];
         procesar(hoja.rows, f.name + ' · ' + hoja.name);
       } else procesar(textoAFilas(await UI.readText(f)), f.name);
     } catch (e) { UI.alert(e.message, 'No se pudo importar'); }
@@ -103,20 +117,22 @@
       const num = c.polos.join(',');
       const lon = c.longitud === null ? '' : Math.round(c.longitud * factor * 100) / 100;
       // por número de circuito en Revit (o la posición), por un cambio ya pasado a Revit, o por el nombre
-      let e = t.circuitos.find(x => !usados.has(x) && !x.tableroHijoId && (x.circuitoRevit === num || (!x.circuitoRevit && (x.polos || []).join(',') === num)));
+      const hijoT = c.alimenta && Store.project.tableros.find(o => norm(o.nombre) === norm(c.alimenta));
+      let e = hijoT ? t.circuitos.find(x => !usados.has(x) && x.tableroHijoId === hijoT.id) : null;
+      if (!e) e = t.circuitos.find(x => !usados.has(x) && !x.tableroHijoId && (x.circuitoRevit === num || (!x.circuitoRevit && (x.polos || []).join(',') === num)));
       const camb = (t.cambiosRevit || []).find(x => !x.aplicado && x.a === num && !usados.has(t.circuitos.find(z => z.id === x.circuitoId)));
       if (!e && camb) { e = t.circuitos.find(z => z.id === camb.circuitoId); if (e) { camb.aplicado = true; res.aplicados++; } }
       if (!e) e = t.circuitos.find(x => !usados.has(x) && !x.tableroHijoId && normN(x.descripcion) === normN(c.nombre));
       if (e) {
         usados.add(e);
         const cambio = Number(e.kva) !== c.kva || String(e.longitud) !== String(lon) || e.descripcion !== c.nombre;
-        e.kva = c.kva; e.longitud = lon; e.descripcion = c.nombre; e.circuitoRevit = num; e.origen = 'revit';
+        e.kva = c.kva; e.longitud = lon; e.descripcion = c.nombre; e.circuitoRevit = num; e.origen = 'revit'; c.obj = e;
         if (cambio) res.actualizados.push(t.nombre + ' ' + num + ' ' + c.nombre);
       } else {
         const libres = c.polos.filter(x => !t.circuitos.some(o => (o.polos || []).includes(x)));
         const nuevo = { id: U.uid(), polos: libres.length === c.polos.length ? c.polos : Store.posicionLibre(t, c.polos.length), detalleId: c.detalleId, descripcion: c.nombre, kva: c.kva,
           longitud: lon, material: 'CU', aislamiento: 'THHN', mult: '', paralelos: '', aumento: 1, breakerId: '', prot: '', tableroHijoId: '', origen: 'revit', circuitoRevit: num };
-        t.circuitos.push(nuevo); usados.add(nuevo); res.nuevos.push(t.nombre + ' ' + num + ' ' + c.nombre);
+        t.circuitos.push(nuevo); usados.add(nuevo); c.obj = nuevo; res.nuevos.push(t.nombre + ' ' + num + ' ' + c.nombre);
       }
     });
     const faltan = t.circuitos.filter(x => !usados.has(x) && !x.tableroHijoId && x.origen === 'revit');
@@ -134,16 +150,40 @@
       if (p.modo === 'reemplazar') t.circuitos = t.circuitos.filter(c => c.tableroHijoId);
       p.circuitos.forEach(c => {
         const libres = c.polos.filter(x => !t.circuitos.some(o => (o.polos || []).includes(x)));
-        t.circuitos.push({ id: U.uid(), polos: libres.length === c.polos.length ? c.polos : Store.posicionLibre(t, c.polos.length), detalleId: c.detalleId, descripcion: c.nombre, kva: c.kva,
-          longitud: c.longitud === null ? '' : Math.round(c.longitud * factor * 100) / 100, material: 'CU', aislamiento: 'THHN', mult: '', paralelos: '', aumento: 1, breakerId: '', prot: '', tableroHijoId: '', origen: 'revit', circuitoRevit: c.polos.join(',') });
+        const nuevo = { id: U.uid(), polos: libres.length === c.polos.length ? c.polos : Store.posicionLibre(t, c.polos.length), detalleId: c.detalleId, descripcion: c.nombre, kva: c.kva,
+          longitud: c.longitud === null ? '' : Math.round(c.longitud * factor * 100) / 100, material: 'CU', aislamiento: 'THHN', mult: '', paralelos: '', aumento: 1, breakerId: '', prot: '', tableroHijoId: '', origen: 'revit', circuitoRevit: c.polos.join(',') };
+        t.circuitos.push(nuevo); c.obj = nuevo;
         nC++;
       });
     });
+    // alimentadores: el circuito queda enlazado al tablero derivado (su carga sale del cálculo del derivado)
+    const enlaces = [];
+    sesion.paneles.filter(p => p.incluir).forEach(p => p.circuitos.forEach(c => {
+      if (!c.alimenta || !c.obj) return;
+      const padre = Store.project.tableros.find(t => t.circuitos.includes(c.obj)), hijo = Store.project.tableros.find(o => norm(o.nombre) === norm(c.alimenta));
+      if (!padre || !hijo || padre === hijo || Store.posiblesPadres(hijo).indexOf(padre) < 0) return;
+      Store.project.tableros.forEach(o => { if (o !== padre) o.circuitos = o.circuitos.filter(x => !(x.tableroHijoId === hijo.id && x.auto)); });
+      c.obj.tableroHijoId = hijo.id; c.obj.detalleId = Store.detalleTablero(hijo, padre);
+      hijo.padreId = padre.id; if (c.obj.longitud !== '') hijo.longitud = c.obj.longitud;
+      enlaces.push(Calc.nombreTablero(padre) + ' [' + c.polos.join(',') + '] → ' + Calc.nombreTablero(hijo) + (c.alimentaPor === 'carga' ? ' (por carga: en Revit el circuito se llama "' + c.nombre + '")' : ''));
+    }));
+    // conciliación: lo que trae el archivo frente a lo que quedó en ANACAR
+    const conc = sesion.paneles.filter(p => p.incluir).map(p => {
+      const ok = p.circuitos.filter(c => c.obj), t = Store.project.tableros.find(x => ok.length && x.circuitos.includes(ok[0].obj));
+      const movidos = ok.filter(c => c.obj.polos.join(',') !== c.polos.join(','));
+      return { panel: p.panel, nA: p.circuitos.length, kA: p.circuitos.reduce((a, c) => a + c.kva, 0), nI: ok.length, kI: ok.reduce((a, c) => a + Number(c.obj.kva || 0), 0), movidos, tab: t };
+    });
+    const omit = sesion.omitidas || [];
     Store.save(); sesion = null;
-    const hayAct = res.actualizados.length || res.nuevos.length || res.faltan.length || res.aplicados;
-    if (!hayAct) { UI.toast(nC + ' circuitos importados' + (nT ? ', ' + nT + ' tablero(s) nuevos' : ''), 'ok'); App.go('proyecto'); return; }
     const lst = (titulo, arr) => arr.length ? h('div', null, h('h4', null, titulo + ' (' + arr.length + ')'), h('ul', { class: 'help' }, arr.slice(0, 60).map(x => h('li', null, x)))) : null;
-    UI.modal('Actualización desde Revit', h('div', null,
+    const difs = conc.filter(x => x.nA !== x.nI || Math.abs(x.kA - x.kI) > 0.005);
+    UI.modal('Importación desde Revit', h('div', null,
+      h('p', null, h('b', null, difs.length ? '⚠ Hay diferencias entre el archivo y lo importado.' : '✓ Todos los circuitos del archivo están en ANACAR.'), ' ' + conc.reduce((a, x) => a + x.nI, 0) + ' de ' + conc.reduce((a, x) => a + x.nA, 0) + ' circuitos' + (nT ? ' · ' + nT + ' tablero(s) nuevo(s)' : '') + '.'),
+      h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl mini' }, h('thead', null, h('tr', null, ['Tablero', 'Circuitos en el archivo', 'kVA en el archivo', 'Circuitos importados', 'kVA importados', 'Movidos a otra posición', ''].map(x => h('th', null, x)))),
+        h('tbody', null, conc.map(x => h('tr', null, h('td', null, x.panel), h('td', { class: 'r' }, x.nA), h('td', { class: 'r' }, U.fmt(x.kA, 2)), h('td', { class: 'r' }, x.nI), h('td', { class: 'r' }, U.fmt(x.kI, 2)),
+          h('td', null, x.movidos.map(c => '[' + c.polos.join(',') + ']→[' + c.obj.polos.join(',') + ']').join(' ')), h('td', null, x.nA === x.nI && Math.abs(x.kA - x.kI) < 0.005 ? '✓' : '⚠')))))),
+      lst('Alimentadores enlazados a su tablero derivado', enlaces),
+      lst('Filas del archivo que no son circuitos de un tablero (no se importan)', omit.map(o => 'Fila ' + o.fila + ': ' + o.motivo + ' — ' + o.txt)),
       nC ? h('p', null, nC + ' circuitos importados en tableros nuevos o reemplazados.') : null,
       res.aplicados ? h('p', null, res.aplicados + ' cambio(s) de posición ya aparecen en Revit y se marcaron como aplicados.') : null,
       lst('Circuitos con carga, longitud o nombre actualizados', res.actualizados), lst('Circuitos nuevos agregados', res.nuevos),
@@ -152,7 +192,9 @@
       res.faltan.length ? { label: 'Eliminar los que ya no están', cls: 'danger', onclick: () => { res.faltan.forEach(x => { x.t.circuitos = x.t.circuitos.filter(c => c !== x.c); }); Store.save(); App.go('proyecto'); } } : null,
       { label: 'Listo', cls: 'primary', onclick: () => App.go('proyecto') },
     ].filter(Boolean), { wide: true });
+    App.ultimaImportacion = { conc, enlaces, omit, difs: difs.length };
   }
+  window.RevitImport = { procesar: (filas, origen) => procesar(filas, origen), importar: () => importar(), sesion: () => sesion, textoAFilas };
 
   /* ---------- cambios de circuito pendientes para pasar a Revit ---------- */
   let verAplicados = false;
@@ -207,7 +249,7 @@
       h('a', { class: 'chip' + (sub === 'cambios' ? ' active' : ''), href: '#revit/cambios' }, 'Cambios para Revit (' + Store.project.tableros.reduce((a, t) => a + (t.cambiosRevit || []).filter(e => !e.aplicado).length, 0) + ')')));
     if (sub === 'cambios') { view.appendChild(h('div', { class: 'page-h' }, h('h2', null, 'Cambios para Revit'), h('p', { class: 'muted' }, 'Lista de circuitos que cambiaron de posición (autobalanceo o edición) para actualizar el modelo de Revit.'))); vistaCambios(view); return; }
     view.appendChild(h('div', { class: 'page-h' }, h('h2', null, 'Importar circuitos de Revit'), h('p', { class: 'muted' },
-      'Los tableros se alimentan con la tabla de circuitos de Revit (Electrical Circuit Schedule) con las columnas Voltage, True Load, Panel, Circuit Number, Number of Poles, Load Name y Length.')));
+      'Proceso: 1) en Revit exporte la tabla "Electrical Circuit Schedule" (.csv); 2) ábrala con el libro Circuitos revit-excel.xlsm (botón IMPORTAR DATOS) y revise su hoja Revision; 3) importe aquí ese libro. Columnas: Voltage, True Power (o True Load), Panel, Circuit Number, Number of Poles, Load Name y Length.')));
     if (!sesion) {
       const area = h('textarea', { rows: 8, placeholder: 'Pegue aquí las filas copiadas de Revit o de Excel (incluya la fila de encabezados)…' });
       view.appendChild(h('div', { class: 'cols' },
@@ -238,8 +280,8 @@
         UI.field('Destino', UI.select(destinos, p.destino, v => { p.destino = v; App.refresh(); })),
         p.destino === 'nuevo' ? UI.field('Tipo / sistema', h('div', { class: 'row' }, UI.select(['3F', '1F'], p.tipo, v => { p.tipo = v; }), UI.select(Store.catalog.listas.sistemas, p.sistema, v => { p.sistema = v; }))) :
           UI.field('Circuitos existentes', UI.select([{ value: 'actualizar', label: 'Actualizar cargas y distancias (conserva ajustes)' }, { value: 'reemplazar', label: 'Reemplazar (conserva los de tableros derivados)' }, { value: 'agregar', label: 'Agregar' }], p.modo, v => { p.modo = v; })));
-      const tbl = h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Circuito', 'Posición', 'Nombre de carga (Revit)', 'V', 'Polos', 'kVA', 'Long.', 'Detalle de carga'].map(x => h('th', null, x)))),
-        h('tbody', null, p.circuitos.map((c, ci) => h('tr', { class: c.seguro ? '' : 'row-warn' }, h('td', null, c.circuitoTxt), h('td', null, c.polos.join(',')), h('td', null, c.nombre),
+      const tbl = h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Circuito', 'Posición', 'Nombre de carga (Revit)', 'Alimenta a', 'V', 'Polos', 'kVA', 'Long.', 'Detalle de carga'].map(x => h('th', null, x)))),
+        h('tbody', null, p.circuitos.map((c, ci) => h('tr', { class: c.seguro ? '' : 'row-warn' }, h('td', null, c.circuitoTxt), h('td', null, c.polos.join(',')), h('td', null, c.nombre), h('td', null, c.alimenta ? h('b', { title: c.alimentaPor === 'carga' ? 'Detectado por la misma carga: revise el nombre del circuito en Revit' : 'Detectado por el nombre' }, '→ ' + c.alimenta + (c.alimentaPor === 'carga' ? ' ⚠' : '')) : ''),
           h('td', { class: 'r' }, c.voltaje), h('td', { class: 'r' }, c.nPolos), h('td', { class: 'r' }, U.fmt(c.kva, 2)), h('td', { class: 'r' }, c.longitud === null ? '' : U.fmt(c.longitud, 2)),
           h('td', null, c.seguro ? null : h('span', { title: 'Revisar: detalle propuesto por coincidencia aproximada' }, '⚠ '), UI.select(dOpts, c.detalleId, v => { c.detalleId = Number(v); c.seguro = true; }, { class: 'w-det', fk: 'rv:' + pi + ':' + ci }))))));
       view.appendChild(UI.card('Panel ' + p.panel + ' (' + p.circuitos.length + ' circuitos · ' + U.fmt(p.circuitos.reduce((a, c) => a + c.kva, 0), 2) + ' kVA)', h('div', null, head, h('div', { class: 'tbl-wrap', 'data-scroll': 'rv' + pi }, tbl))));

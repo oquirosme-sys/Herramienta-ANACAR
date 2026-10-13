@@ -43,6 +43,19 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
+## Proceso Revit → ANACAR (sin pérdida de circuitos) — 2026.1-web.7
+1. **Revit**: exportar la tabla *Electrical Circuit Schedule* (.csv).
+2. **`Circuitos revit-excel.xlsm`** (versión nueva en esta carpeta): botón *IMPORTAR DATOS* → limpia y acomoda la tabla de *Hoja1* (mismas columnas C–J) y deja la hoja **Revision** con líneas leídas, circuitos escritos, filas omitidas con su motivo, kVA/polos por tablero, posiciones repetidas, longitudes faltantes y qué circuito alimenta a cada tablero.
+   - Lee UTF-8 (acentos correctos), busca las columnas por nombre (*True Power* o *True Load*), lee números con punto o coma sin depender de la configuración regional y guarda el número de circuito como texto ("24,26").
+   - Ya no descarta filas sin voltaje; las filas sin tablero (resumen de Revit: tablero principal, ATS) se listan como omitidas.
+3. **ANACAR** (web o Excel) importa ese libro:
+   - Reconoce *True Power* y el circuito como texto.
+   - **Enlaza los alimentadores** a su tablero derivado: por el nombre de la carga o, si no coincide, por la misma carga (p. ej. "2PIS1" → 2MS1). La longitud del circuito pasa al alimentador del derivado.
+   - Muestra la **conciliación**: circuitos y kVA por tablero en el archivo frente a lo importado, y los movidos de posición.
+   - Al reimportar se actualiza sin duplicar.
+
+Probado con el proyecto real: 86 líneas → 84 circuitos en 7 tableros + 2 filas de resumen; 0 perdidos; kVA idénticos por tablero (web y Excel). Los scripts y la macro del formateador están en `excel/revit/`.
+
 ## Novedades 2026.1-web.6
 - **Pestañas**: Prevista y Revit pasan al final; nueva pestaña **Ayuda** con guía de llenado, glosario básico de equipos (tablero, centro de carga, subestación, principal/zapatas, breakers, caja moldeada, unidades LSI/LSIG, GFCI/AFCI, SCCR y serie, SPD, transformador, ATS/MTS, UPS, generador, conductores, canalizaciones, barras, factores, cascada) con ilustraciones, y catálogo de tableros y breakers por familia. El administrador puede subir una foto real para cada término o familia.
 - **Factores de diversidad entre 0 y 1**: multiplican la carga (antes dividían); los valores guardados mayores que 1 se convierten a 1/x al abrir, con el mismo resultado.

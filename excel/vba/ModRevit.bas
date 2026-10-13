@@ -81,7 +81,9 @@ Public Sub ImportarArchivoRevit(Optional ruta As String = "")
             If ws.Visible = xlSheetVisible And Not encontrada Then
                 For r = 1 To 30
                     For c = 1 To 15
-                        If CStr(ws.Cells(r, c).Value) Like "*panel*" Then encontrada = True: Set hoja = ws: Exit For
+                        If Trim$(CStr(ws.Cells(r, c).Value)) Like "panel" Or Trim$(CStr(ws.Cells(r, c).Value)) Like "tablero" Then
+                            If Application.WorksheetFunction.CountIf(ws.Rows(r), "*circuit*") > 0 Then encontrada = True: Set hoja = ws: Exit For
+                        End If
                     Next c
                     If encontrada Then Exit For
                 Next r
@@ -228,7 +230,7 @@ Private Sub Procesar(datos As Variant, origen As String)
                 cV = c
             ElseIf cN = 0 And (txt Like "*load name*" Or txt Like "*nombre*" Or txt Like "*descrip*") Then
                 cN = c
-            ElseIf cK = 0 And (txt Like "*true load*" Or txt Like "*apparent load*" Or txt Like "*carga*" Or txt Like "*load*" Or txt Like "*kva*" Or txt Like "*potencia*") Then
+            ElseIf cK = 0 And (txt Like "*true load*" Or txt Like "*true power*" Or txt Like "*apparent*" Or txt Like "*carga*" Or txt Like "*load*" Or txt Like "*power*" Or txt Like "*kva*" Or txt Like "*potencia*") Then
                 cK = c
             ElseIf cP = 0 And (txt Like "*panel*" Or txt Like "*tablero*") Then
                 cP = c
@@ -244,9 +246,18 @@ Private Sub Procesar(datos As Variant, origen As String)
     Next r
     If ini = 0 Then ini = 1: cV = 1: cK = 2: cP = 3: cC = 4: cPo = 5: cN = 6: cL = 7     ' orden de la macro ImportarCircuitosRevit
     Set paneles = CreateObject("Scripting.Dictionary")
+    Dim omitidas As String, nOmit As Long, kc As Long, txtFila As String
+    If cK = 0 Then MsgBox "No se encontro la columna de carga (True Power / True Load): las cargas quedaran en 0.", vbExclamation
     For r = ini To UBound(datos, 1)
         panel = ""
         If cP <= UBound(datos, 2) Then panel = Reparar(Trim$(CStr(datos(r, cP))))
+        If panel = "" Then
+            txtFila = ""
+            For kc = 1 To UBound(datos, 2)
+                If Trim$(CStr(datos(r, kc))) <> "" Then txtFila = txtFila & IIf(txtFila = "", "", " | ") & Trim$(CStr(datos(r, kc)))
+            Next kc
+            If txtFila <> "" Then nOmit = nOmit + 1: omitidas = omitidas & vbCrLf & "  Fila " & r & ": " & Left$(txtFila, 90)
+        End If
         If panel <> "" And Not (panel Like "*electrical*" Or panel Like "*schedule*" Or panel = "panel") Then
             Dim cir As Object, np As Long, v As Double, lon As Variant
             Set cir = CreateObject("Scripting.Dictionary")
@@ -266,6 +277,7 @@ Private Sub Procesar(datos As Variant, origen As String)
         End If
     Next r
     If paneles.Count = 0 Then MsgBox "No se encontraron circuitos. Verifique que la tabla tenga las columnas Panel y Circuit Number.", vbExclamation: Exit Sub
+    DetectarAlimentadores paneles
     Dim factor As Double, resp As VbMsgBoxResult, lista As String, existentes As Long
     factor = 1
     If enPies Then factor = 0.3048
@@ -300,12 +312,124 @@ Private Sub Procesar(datos As Variant, origen As String)
         Actualizar ws, paneles(k), factor, nCirc, faltan
 siguiente:
     Next k
+    Dim enlaces As String
+    enlaces = EnlazarAlimentadores(paneles, factor)
     Application.EnableEvents = True
     ActualizarProyecto
+    Dim difs As Long
+    difs = Conciliar(paneles, origen, omitidas, nOmit, enlaces)
     Application.ScreenUpdating = True
-    MsgBox "Tableros nuevos: " & nNuevos & vbCrLf & "Tableros actualizados: " & nAct & vbCrLf & "Circuitos nuevos o con cambios: " & nCirc & _
-           IIf(faltan <> "", vbCrLf & vbCrLf & "Circuitos importados antes de Revit que ya no estan en la tabla (revise y borre si corresponde):" & faltan, ""), vbInformation, "Importar desde Revit"
+    MsgBox IIf(difs = 0, "Todos los circuitos del archivo estan en ANACAR.", "ATENCION: " & difs & " tablero(s) con diferencias entre el archivo y lo importado (vea la hoja REVIT).") & vbCrLf & vbCrLf & _
+           "Tableros nuevos: " & nNuevos & vbCrLf & "Tableros actualizados: " & nAct & vbCrLf & "Circuitos nuevos o con cambios: " & nCirc & _
+           IIf(enlaces <> "", vbCrLf & vbCrLf & "Alimentadores enlazados a su tablero derivado:" & enlaces, "") & _
+           IIf(nOmit > 0, vbCrLf & vbCrLf & nOmit & " fila(s) sin tablero (resumen de Revit), no se importan:" & omitidas, "") & _
+           IIf(faltan <> "", vbCrLf & vbCrLf & "Circuitos importados antes de Revit que ya no estan en la tabla (revise y borre si corresponde):" & faltan, ""), IIf(difs = 0, vbInformation, vbExclamation), "Importar desde Revit"
 End Sub
+
+' circuito que alimenta a otro tablero de la tabla: por el nombre de la carga o, si no coincide, por la misma carga
+Private Sub DetectarAlimentadores(paneles As Object)
+    Dim k As Variant, k2 As Variant, it As Variant, tot As Object, cand As Object, n As Long, ya As Boolean, t As Double
+    Set tot = CreateObject("Scripting.Dictionary")
+    For Each k In paneles.Keys
+        t = 0
+        For Each it In paneles(k): t = t + it("kva"): it("alimenta") = "": it("por") = "": Next it
+        tot(k) = t
+    Next k
+    For Each k In paneles.Keys
+        For Each it In paneles(k)
+            For Each k2 In paneles.Keys
+                If k2 <> k And NormPanel(CStr(it("nombre"))) = NormPanel(CStr(k2)) Then it("alimenta") = k2: it("por") = "nombre"
+            Next k2
+        Next it
+    Next k
+    For Each k2 In paneles.Keys
+        ya = False
+        For Each k In paneles.Keys
+            For Each it In paneles(k)
+                If it("alimenta") = k2 Then ya = True
+            Next it
+        Next k
+        If Not ya And tot(k2) > 0 Then
+            n = 0: Set cand = Nothing
+            For Each k In paneles.Keys
+                If k <> k2 Then
+                    For Each it In paneles(k)
+                        If it("alimenta") = "" And it("np") >= 2 And Abs(it("kva") - tot(k2)) < 0.005 And Not paneles.Exists(CStr(it("nombre"))) Then n = n + 1: Set cand = it
+                    Next it
+                End If
+            Next k
+            If n = 1 Then cand("alimenta") = k2: cand("por") = "carga"
+        End If
+    Next k2
+End Sub
+
+Private Function EnlazarAlimentadores(paneles As Object, factor As Double) As String
+    Dim k As Variant, it As Variant, padre As Worksheet, hijo As Worksheet, r As Long, txt As String
+    For Each k In paneles.Keys
+        Set padre = BuscarTablero(CStr(k))
+        If Not padre Is Nothing Then
+            For Each it In paneles(k)
+                If it("alimenta") <> "" And it("fila") > 0 Then
+                    Set hijo = BuscarTablero(CStr(it("alimenta")))
+                    If Not hijo Is Nothing And Not hijo Is padre Then
+                        r = it("fila")
+                        padre.Cells(r, 19).Value = IdDe(hijo)
+                        padre.Cells(r, 5).Value = DetalleTablero(IIf(hijo.Range("C5").Value = "1F", 1, 3), NumV(hijo.Range("C7").Value), NumV(padre.Range("C7").Value))
+                        If Not IsEmpty(it("lon")) Then hijo.Range("C12").Value = Round(it("lon") * factor, 2)
+                        hijo.Range("C10").Value = IdDe(padre)
+                        ConectarTablero hijo, True
+                        txt = txt & vbCrLf & "  " & IdDe(padre) & " [" & it("num") & "] -> " & IdDe(hijo) & IIf(it("por") = "carga", " (por carga; en Revit el circuito se llama '" & it("nombre") & "')", "")
+                    End If
+                End If
+            Next it
+        End If
+    Next k
+    EnlazarAlimentadores = txt
+End Function
+
+' compara el archivo con lo importado y deja el detalle en la hoja REVIT (columnas L a S)
+Private Function Conciliar(paneles As Object, origen As String, omitidas As String, nOmit As Long, enlaces As String) As Long
+    Dim rv As Worksheet, r As Long, k As Variant, it As Variant, nA As Long, nI As Long, kA As Double, kI As Double, mov As String
+    Set rv = ThisWorkbook.Worksheets("REVIT")
+    rv.Range("L4:S400").Clear
+    rv.Range("L4").Value = "CONCILIACION DE LA ULTIMA IMPORTACION": rv.Range("L4").Font.Bold = True
+    rv.Range("L5").Value = "Origen: " & origen & " (" & Format$(Now, "yyyy-mm-dd hh:nn") & ")"
+    r = 7
+    rv.Cells(r, 12).Resize(1, 7).Value = Array("Tablero", "Circuitos en el archivo", "kVA en el archivo", "Circuitos importados", "kVA importados", "Movidos a otra posicion", "Estado")
+    rv.Cells(r, 12).Resize(1, 7).Font.Bold = True: rv.Cells(r, 12).Resize(1, 7).Interior.Color = RGB(217, 217, 217)
+    For Each k In paneles.Keys
+        nA = 0: nI = 0: kA = 0: kI = 0: mov = ""
+        For Each it In paneles(k)
+            nA = nA + 1: kA = kA + it("kva")
+            If it("fila") > 0 Then
+                nI = nI + 1: kI = kI + it("kva")
+                If it("pos") <> it("num") Then mov = mov & "[" & it("num") & "]->[" & it("pos") & "] "
+            End If
+        Next it
+        r = r + 1
+        rv.Cells(r, 12).Value = k: rv.Cells(r, 13).Value = nA: rv.Cells(r, 14).Value = Round(kA, 3): rv.Cells(r, 15).Value = nI: rv.Cells(r, 16).Value = Round(kI, 3): rv.Cells(r, 17).Value = mov
+        If nA = nI And Abs(kA - kI) < 0.005 Then
+            rv.Cells(r, 18).Value = "OK"
+        Else
+            rv.Cells(r, 18).Value = "DIFERENCIA": rv.Cells(r, 18).Interior.Color = RGB(255, 199, 206): Conciliar = Conciliar + 1
+        End If
+    Next k
+    r = r + 2
+    If enlaces <> "" Then
+        rv.Cells(r, 12).Value = "Alimentadores enlazados:": rv.Cells(r, 12).Font.Bold = True
+        For Each it In Split(Mid$(enlaces, 3), vbCrLf)
+            r = r + 1: rv.Cells(r, 12).Value = Trim$(it)
+        Next it
+        r = r + 2
+    End If
+    If nOmit > 0 Then
+        rv.Cells(r, 12).Value = "Filas sin tablero (resumen de Revit), no se importan:": rv.Cells(r, 12).Font.Bold = True
+        For Each it In Split(Mid$(omitidas, 3), vbCrLf)
+            r = r + 1: rv.Cells(r, 12).Value = Trim$(it)
+        Next it
+    End If
+    rv.Columns("L").ColumnWidth = 16: rv.Columns("M:P").ColumnWidth = 13: rv.Columns("Q").ColumnWidth = 30: rv.Columns("R").ColumnWidth = 12
+End Function
 
 Private Function Celda(d As Variant, r As Long, c As Long) As Variant
     If c < 1 Or c > UBound(d, 2) Then Celda = Empty Else Celda = d(r, c)
@@ -370,8 +494,23 @@ Private Sub Actualizar(ws As Worksheet, cs As Collection, factor As Double, ByRe
     Set usados = CreateObject("Scripting.Dictionary")
     Set cm = ThisWorkbook.Worksheets("CAMBIOS REVIT")
     For Each it In cs
-        fila = 0: pl = it("polos")
+        fila = 0: pl = it("polos"): it("fila") = 0
         If IsEmpty(it("lon")) Then lon = Empty Else lon = Round(it("lon") * factor, 2)
+        If it("alimenta") <> "" Then
+            Dim hijoW As Worksheet
+            Set hijoW = BuscarTablero(CStr(it("alimenta")))
+            If Not hijoW Is Nothing Then
+                For r = FILA1 To FILAN
+                    If Not usados.Exists(r) And Trim$(CStr(ws.Cells(r, 19).Value)) = IdDe(hijoW) Then fila = r: Exit For
+                Next r
+            End If
+            If fila > 0 Then
+                usados(fila) = True: it("fila") = fila: it("pos") = Join(PolosTxt(ws, fila), ",")
+                ws.Cells(fila, 21).Value = it("num")
+                If Not IsEmpty(lon) Then hijoW.Range("C12").Value = lon
+                GoTo sig
+            End If
+        End If
         ' 2) por un cambio de posicion pendiente (balanceo) ya pasado a Revit
         If fila = 0 Then
             For rr = 2 To cm.Cells(cm.Rows.Count, 1).End(xlUp).Row
@@ -419,7 +558,7 @@ Private Sub Actualizar(ws As Worksheet, cs As Collection, factor As Double, ByRe
             If Not libre And np >= 3 Then ws.Cells(fila, 4).Value = p + 4
             nCirc = nCirc + 1
         End If
-        usados(fila) = True
+        usados(fila) = True: it("fila") = fila: it("pos") = Join(PolosTxt(ws, fila), ",")
         ws.Cells(fila, 6).Value = it("nombre")
         ws.Cells(fila, 7).Value = it("kva")
         ws.Cells(fila, 8).Value = lon
