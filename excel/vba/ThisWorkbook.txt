@@ -9,6 +9,10 @@ End Sub
 Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
     On Error GoTo fin
     If ModTableros.enProceso Then Exit Sub
+    If Sh.Name = "DETALLES DE CARGA" Then
+        ModUDF.RecargarCatalogo
+        Exit Sub
+    End If
     If Left$(Sh.Name, 4) = "CAT_" Then
         ModUDF.RecargarCatalogo
         Exit Sub
@@ -33,6 +37,7 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
         Application.EnableEvents = False
         For Each c In Intersect(Target, Sh.Range("E25:E124")).Cells
             If Len(c.Formula) > 0 Then ModTableros.CompletarPolos Sh, c.Row
+            If c.Interior.Color = RGB(255, 192, 0) Then c.Interior.Color = RGB(198, 239, 206): c.ClearComments
         Next c
     End If
     If Not Intersect(Target, Sh.Range("C6,C17,E25:E124,G25:G124,F17")) Is Nothing Then ModTableros.AjustarVista Sh

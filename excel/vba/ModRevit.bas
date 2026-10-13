@@ -182,20 +182,39 @@ Private Function SinAc(s As String) As String
     SinAc = s
 End Function
 
-Public Function DetalleRevit(nombre As String, voltaje As Double, polos As Long) As Variant
-    Dim t As Variant, i As Long, s As Long, bestS As Long, best As Long, nm As String, dn As String, cl As String, w As Variant, hayV As Boolean
-    t = ThisWorkbook.Names("T_DET").RefersToRange.Value
-    nm = SinAc(nombre): cl = Clave(nm)
+Public Function DetalleRevit(nombre As String, voltaje As Double, polos As Long, Optional ByRef seguro As Boolean) As Variant
+    ' 1) palabras clave del detalle (hoja DETALLES DE CARGA, columna N); 2) clave por tipo y palabras del nombre; 3) generico
+    Dim t As Variant, cl As Variant, i As Long, s As Long, bestS As Long, best As Long, nm As String, dn As String, cla As String, w As Variant, hayV As Boolean, k As Variant, kk As String
+    Dim ws As Worksheet, u As Long
+    Set ws = ThisWorkbook.Worksheets("DETALLES DE CARGA")
+    u = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row: If u < 2 Then u = 2
+    t = ws.Range("A2:N" & u).Value
+    nm = SinAc(nombre): cla = Clave(nm): seguro = False
     If polos < 1 Then polos = 1
     For i = 1 To UBound(t, 1)
-        If NumV(t(i, 4)) = voltaje And NumV(t(i, 5)) = polos Then hayV = True: Exit For
+        If NumV(t(i, 4)) = voltaje And Compat(t, i, polos) Then hayV = True: Exit For
     Next i
     bestS = -1
     For i = 1 To UBound(t, 1)
-        If NumV(t(i, 5)) = polos And (Not hayV Or NumV(t(i, 4)) = voltaje) Then
+        If Compat(t, i, polos) And (Not hayV Or NumV(t(i, 4)) = voltaje) Then
+            For Each k In Split(Replace(CStr(t(i, 14)), ";", ","), ",")
+                kk = SinAc(Trim$(CStr(k)))
+                If kk <> "" Then
+                    If ContieneClave(nm, kk) Then
+                        s = 1000 + Len(kk) * 10 + IIf(NumV(t(i, 4)) = voltaje, 5, 0) + IIf(NumV(t(i, 5)) = polos, 2, 0)
+                        If s > bestS Then bestS = s: best = i
+                    End If
+                End If
+            Next k
+        End If
+    Next i
+    If bestS >= 1000 Then seguro = True: DetalleRevit = t(best, 1): Exit Function
+    bestS = -1
+    For i = 1 To UBound(t, 1)
+        If Compat(t, i, polos) And (Not hayV Or NumV(t(i, 4)) = voltaje) Then
             dn = SinAc(CStr(t(i, 3))): s = 0
-            If cl <> "" Then
-                If Clave(dn) = cl Then s = s + 5
+            If cla <> "" Then
+                If Clave(dn) = cla Then s = s + 5
             End If
             For Each w In Split(Replace(Replace(Replace(nm, "-", " "), "_", " "), "/", " "), " ")
                 If Len(w) > 3 Then
@@ -206,6 +225,7 @@ Public Function DetalleRevit(nombre As String, voltaje As Double, polos As Long)
             If s > bestS Then bestS = s: best = i
         End If
     Next i
+    seguro = (hayV And bestS >= 5)
     If bestS < 2 Then
         For i = 1 To UBound(t, 1)
             If NumV(t(i, 5)) = polos And (Not hayV Or NumV(t(i, 4)) = voltaje) Then
@@ -215,6 +235,25 @@ Public Function DetalleRevit(nombre As String, voltaje As Double, polos As Long)
         Next i
     End If
     If best = 0 Then DetalleRevit = "" Else DetalleRevit = t(best, 1)
+End Function
+
+' mismo numero de fases; en 2 polos a 208/240 V tambien los detalles monofasicos de ese voltaje
+Private Function Compat(t As Variant, i As Long, polos As Long) As Boolean
+    Compat = (NumV(t(i, 5)) = polos) Or (polos = 2 And NumV(t(i, 5)) = 1 And NumV(t(i, 4)) >= 208 And NumV(t(i, 4)) <= 240)
+End Function
+
+' la palabra clave aparece al inicio de una palabra ("uc-" en "uc-01"; "ue" en "ue2-03"; "toma" no en "tomacorriente")
+Private Function ContieneClave(nm As String, k As String) As Boolean
+    Dim p As Long, antes As String, despues As String
+    p = InStr(1, nm, k, vbBinaryCompare)
+    Do While p > 0
+        If p = 1 Then antes = " " Else antes = Mid$(nm, p - 1, 1)
+        despues = Mid$(nm, p + Len(k), 1)
+        If Not (antes Like "[a-z0-9]") Then
+            If Not (Right$(k, 1) Like "[a-z0-9]") Or despues = "" Or Not (despues Like "[a-z]") Then ContieneClave = True: Exit Function
+        End If
+        p = InStr(p + 1, nm, k, vbBinaryCompare)
+    Loop
 End Function
 
 ' ---- procesamiento
@@ -271,7 +310,9 @@ Private Sub Procesar(datos As Variant, origen As String)
             cir("lon") = lon
             cir("polos") = PolosDe(Celda(datos, r, cC), np)
             cir("num") = Join(cir("polos"), ",")
-            cir("det") = DetalleRevit(CStr(cir("nombre")), v, IIf(np = 2 And v >= 208, 2, np))
+            Dim seg As Boolean
+            cir("det") = DetalleRevit(CStr(cir("nombre")), v, IIf(np = 2 And v >= 208, 2, np), seg)
+            cir("seguro") = seg
             If Not paneles.Exists(panel) Then paneles.Add panel, New Collection
             paneles(panel).Add cir
         End If
@@ -410,6 +451,9 @@ Private Function Conciliar(paneles As Object, origen As String, omitidas As Stri
         rv.Cells(r, 12).Value = k: rv.Cells(r, 13).Value = nA: rv.Cells(r, 14).Value = Round(kA, 3): rv.Cells(r, 15).Value = nI: rv.Cells(r, 16).Value = Round(kI, 3): rv.Cells(r, 17).Value = mov
         If nA = nI And Abs(kA - kI) < 0.005 Then
             rv.Cells(r, 18).Value = "OK"
+            For Each it In paneles(k)
+                If it("fila") > 0 And Not it("seguro") And it("alimenta") = "" Then rv.Cells(r, 18).Value = "OK - revisar detalles en naranja": rv.Cells(r, 18).Interior.Color = RGB(255, 235, 156): Exit For
+            Next it
         Else
             rv.Cells(r, 18).Value = "DIFERENCIA": rv.Cells(r, 18).Interior.Color = RGB(255, 199, 206): Conciliar = Conciliar + 1
         End If
@@ -564,6 +608,13 @@ Private Sub Actualizar(ws As Worksheet, cs As Collection, factor As Double, ByRe
         ws.Cells(fila, 8).Value = lon
         ws.Cells(fila, 21).Value = it("num")
         ws.Cells(fila, 22).Value = "revit"
+        If Not it("seguro") And it("alimenta") = "" And Len(ws.Cells(fila, 19).Formula) = 0 Then
+            ws.Cells(fila, 5).Interior.Color = RGB(255, 192, 0)
+            On Error Resume Next
+            ws.Cells(fila, 5).ClearComments
+            ws.Cells(fila, 5).AddComment "Detalle propuesto sin coincidencia segura con el nombre de Revit (" & it("nombre") & "). Elija el correcto o agregue una palabra clave en la hoja DETALLES DE CARGA."
+            On Error GoTo 0
+        End If
 sig:
     Next it
     For r = FILA1 To FILAN

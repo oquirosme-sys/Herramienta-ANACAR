@@ -59,9 +59,19 @@ def hoja_tabla(nombre_hoja, cab, filas):
     return ws
 
 
-ws = hoja_tabla("CAT_DET", ["Detalle", "Tipo", "Descripción", "V", "Fases", "Hilos", "F. demanda", "F. diversidad", "FP", "Continua", "Mult.", "Fundamento"],
+ws = hoja_tabla("DETALLES DE CARGA", ["Detalle", "Tipo", "Descripción", "V", "Fases", "Hilos", "F. demanda", "F. diversidad (0-1)", "FP", "Continua", "Mult.", "Fundamento"],
                 [[d["id"], d["tipo"], d["descripcion"], d["v"], d["fases"], d["hilos"], d["fd"], d["fdiv"], d["fp"], "SI" if d.get("continua") else "NO", d.get("mult", 1.25), d.get("fundamento", "")] for d in D["detallesCarga"]])
-nombre("T_DET", "CAT_DET!$A$2:$L$300"); nombre("L_DET", "CAT_DET!$A$2:$A$300")
+nombre("T_DET", "'DETALLES DE CARGA'!$A$2:$L$300"); nombre("L_DET", "'DETALLES DE CARGA'!$A$2:$A$300")
+# hoja visible y editable (como DCARGAS): celdas verdes; columna N = palabras clave para reconocer las cargas de Revit
+ws["N1"] = "Palabras clave (Revit)"; ws["N1"].font = Font(name=FN, bold=True); ws["N1"].fill = GRIS
+for k_, d_ in enumerate(D["detallesCarga"]): ws.cell(2 + k_, 14, d_.get("claves", ""))
+for r_ in range(2, 302):
+    for c_ in list(range(1, 13)) + [14]:
+        cc_ = ws.cell(r_, c_); cc_.fill = VERDE; cc_.border = BORDE_IN
+ws.column_dimensions["C"].width = 34; ws.column_dimensions["L"].width = 40; ws.column_dimensions["M"].width = 30; ws.column_dimensions["N"].width = 48
+ws["P1"] = "Catálogo de detalles de carga (equivale a DCARGAS). Agregue filas o edite las celdas verdes. Palabras clave: nombres o prefijos de las cargas en Revit separados por coma (p. ej. uc-, condensadora); al importar, el circuito que las contiene toma ese detalle. Fases = 1 a 208/240 V en 2 polos reparte la carga entre los 2 polos."
+ws["P1"].font = Font(name=FN, size=9, italic=True); ws["P1"].alignment = Alignment(wrap_text=True, vertical="top"); ws.column_dimensions["P"].width = 60
+ws.sheet_properties.tabColor = "70AD47"
 ws = hoja_tabla("CAT_TIPOS", ["Código", "Nombre", "Método", "F. demanda", "F. diversidad"], [[t["id"], t["nombre"], t["metodo"], t["fd"], t["fdiv"]] for t in D["tiposCarga"]])
 nombre("T_TIPOS", "CAT_TIPOS!$A$2:$E$40")
 
@@ -319,7 +329,7 @@ for i in range(100):
     ESALR = 'OR($L{r}="AL",$L{r}="AL-MC")'.format(r=r)
     forms = {
         "W": '=IF($F{r}<>"",$F{r},IFERROR(VLOOKUP($E{r},T_DET,3,FALSE),""))', "X": '=IF(ISNUMBER($G{r}),$G{r},0)',
-        "Y": '=IFERROR(VLOOKUP($E{r},T_DET,4,FALSE),0)', "Z": '=IFERROR(VLOOKUP($E{r},T_DET,5,FALSE),0)', "AA": '=IFERROR(VLOOKUP($E{r},T_DET,6,FALSE),0)',
+        "Y": '=IFERROR(VLOOKUP($E{r},T_DET,4,FALSE),0)', "Z": '=IFERROR(IF(AND(VLOOKUP($E{r},T_DET,5,FALSE)=1,VLOOKUP($E{r},T_DET,4,FALSE)>=208,VLOOKUP($E{r},T_DET,4,FALSE)<=240,COUNT($B{r}:$D{r})=2),2,VLOOKUP($E{r},T_DET,5,FALSE)),0)', "AA": '=IFERROR(VLOOKUP($E{r},T_DET,6,FALSE),0)',
         "AB": '=IF(ISNUMBER($J{r}),$J{r},IFERROR(VLOOKUP($E{r},T_DET,7,FALSE),1))', "AC": '=IF(AND(N($K{r})>0,N($K{r})<=1),$K{r},IFERROR(VLOOKUP($E{r},T_DET,8,FALSE),1))',
         "AD": '=IFERROR(VLOOKUP($E{r},T_DET,9,FALSE),1)', "AE": '=IFERROR(VLOOKUP($E{r},T_DET,2,FALSE),"")',
         "AF": '=IF(ISNUMBER($I{r}),$I{r}/100,IFERROR(VLOOKUP($E{r},T_DET,11,FALSE),1.25))',
@@ -647,8 +657,8 @@ def lista_txt(hoja, col, fm, n, nom):
     ws_ = wb[hoja]
     ws_[col + "1"] = "Lista"
     for i in range(n): ws_["%s%d" % (col, 2 + i)] = fm.format(r=2 + i)
-    nombre(nom, "%s!$%s$2:$%s$%d" % (hoja, col, col, 1 + n))
-lista_txt("CAT_DET", "M", '=A{r}&" · "&C{r}&" ("&D{r}&" V "&E{r}&"F)"', len(D["detallesCarga"]), "L_DET_TXT")
+    nombre(nom, "'%s'!$%s$2:$%s$%d" % (hoja, col, col, 1 + n))
+lista_txt("DETALLES DE CARGA", "M", '=A{r}&" · "&C{r}&" ("&D{r}&" V "&E{r}&"F)"', len(D["detallesCarga"]), "L_DET_TXT")
 lista_txt("CAT_BREAKERS", "K", '=B{r}&" · "&A{r}&" "&C{r}&" "&E{r}&" A "&IF(F{r}="","STD",F{r})&" "&G{r}&"P "&H{r}&" kA @"&I{r}&" V"', len(D["breakers"]), "L_BK_TXT")
 lista_txt("CAT_TABLEROS", "K", '=A{r}&" · "&C{r}&" "&B{r}&" · "&D{r}&" A · "&G{r}&" esp."', len(D["tablerosCat"]), "L_TAB_TXT")
 lista_txt("CAT_SPD", "J", '=B{r}&" · "&A{r}&" "&C{r}&" · "&G{r}&" V · "&E{r}&" kA"', len(D["supresores"]), "L_SPD_TXT")
@@ -750,7 +760,7 @@ for nm in wb.sheetnames:
     if nm.startswith("CAT_"): wb[nm].sheet_state = "hidden"
 wb["MC_MACHOTE"].sheet_state = "hidden"; wb["VISTA_MACHOTE"].sheet_state = "hidden"
 del wb["Sheet"]
-orden = ["INICIO", "PROYECTO", "TABLA RESUMEN", "RESUMEN VERTICAL", "RESUMEN DU", "PREVISTA", "REVIT", "CAMBIOS REVIT", "AYUDA", "MC_MACHOTE", "VISTA_MACHOTE"]
+orden = ["INICIO", "PROYECTO", "TABLA RESUMEN", "RESUMEN VERTICAL", "RESUMEN DU", "PREVISTA", "REVIT", "CAMBIOS REVIT", "DETALLES DE CARGA", "AYUDA", "MC_MACHOTE", "VISTA_MACHOTE"]
 wb._sheets = [wb[n] for n in orden] + [s for s in wb._sheets if s.title not in orden]
 wb.save(OUT)
 print("ok", OUT, len(wb.sheetnames))

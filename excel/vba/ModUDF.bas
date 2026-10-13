@@ -39,7 +39,7 @@ Private Sub Cargar()
     cCOND = ThisWorkbook.Names("T_CONDUIT").RefersToRange.Value
     cAmpCU = ThisWorkbook.Names("T_AMPCU").RefersToRange.Value
     cAmpAL = ThisWorkbook.Names("T_AMPAL").RefersToRange.Value
-    cDET = Tabla("CAT_DET", 12)
+    cDET = Tabla("DETALLES DE CARGA", 12)
     Dim i As Long
     ReDim famBK(1 To UBound(cBK, 1)): ReDim vscBK(1 To UBound(cBK, 1)): ReDim famTB(1 To UBound(cTB, 1))
     For i = 1 To UBound(cBK, 1)

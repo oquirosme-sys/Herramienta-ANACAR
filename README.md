@@ -43,6 +43,13 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
+## Detalles de carga (como DCARGAS) — 2026.1-web.8
+- Nueva pestaña **Detalles de carga** (web) y hoja **DETALLES DE CARGA** (Excel), editables por todos: voltaje, fases, hilos, tipo de carga, factores, FP, continua, multiplicador y **palabras clave (Revit)**. En la web también se editan los tipos de carga (demanda). No se puede borrar un detalle que use el proyecto.
+- **Importación de Revit**: el detalle se elige primero por las palabras clave ("uc-" reconoce "UC-01", "ue" a "UE2-03", "dh-" a "DH-03", "calentador de paso"…). El ⚠ indica un detalle propuesto sin coincidencia segura: al corregirlo se aplica a los circuitos con el mismo nombre y **se recuerda** como palabra clave para la próxima importación. Los alimentadores de tableros toman el detalle de tablero. En el Excel los detalles por revisar quedan en naranja con un comentario.
+- **Cargas monofásicas a 208/240 V en 2 polos** (calentador de paso, minisplit, cargador de vehículo…): la carga se reparte entre los 2 polos con la corriente correcta (antes se duplicaba en cada polo). Los circuitos de 2 polos también buscan estos detalles.
+- Nuevo detalle 67 **DESHUMIDIFICADOR DH-XX** (120 V).
+- Con el proyecto real: de 43 circuitos ⚠ quedan 0 al reconocer las palabras clave, salvo "Other".
+
 ## Proceso Revit → ANACAR (sin pérdida de circuitos) — 2026.1-web.7
 1. **Revit**: exportar la tabla *Electrical Circuit Schedule* (.csv).
 2. **`Circuitos revit-excel.xlsm`** (versión nueva en esta carpeta): botón *IMPORTAR DATOS* → limpia y acomoda la tabla de *Hoja1* (mismas columnas C–J) y deja la hoja **Revision** con líneas leídas, circuitos escritos, filas omitidas con su motivo, kVA/polos por tablero, posiciones repetidas, longitudes faltantes y qué circuito alimenta a cada tablero.

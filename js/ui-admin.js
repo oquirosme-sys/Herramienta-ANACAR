@@ -11,7 +11,7 @@
   const SECC = {
     marcas: { title: 'Marcas', especial: true },
     tiposCarga: { title: 'Tipos de carga (demanda)', cols: [['id', 'Código', 'num'], ['nombre', 'Nombre'], ['metodo', 'Método', 'sel', () => [{ value: 'fijo', label: 'Factor fijo' }, { value: 'tomas', label: 'Tomas: 10 kVA + 50 %' }, { value: 'cocina', label: 'Cocina: tabla 220.56' }, { value: '220.53', label: '≥ 4 equipos: 75 % (220.53)' }]], ['fd', 'F. demanda', 'num'], ['fdiv', 'F. diversidad (0–1)', 'num']] },
-    detallesCarga: { title: 'Detalles de carga (DCARGAS)', cols: [['id', 'Detalle', 'num'], ['tipo', 'Tipo de carga', 'sel', tipos, true], ['descripcion', 'Descripción'], ['v', 'V', 'num'], ['fases', 'Fases', 'num'], ['hilos', 'Hilos', 'num'], ['fd', 'F. dem.', 'num'], ['fdiv', 'F. diversidad (0–1)', 'num'], ['fp', 'FP', 'num'], ['continua', 'Continua', 'bool'], ['mult', 'Mult.', 'num'], ['fundamento', 'Fundamento NEC']] },
+    detallesCarga: { title: 'Detalles de carga (DCARGAS)', cols: [['id', 'Detalle', 'num'], ['tipo', 'Tipo de carga', 'sel', tipos, true], ['descripcion', 'Descripción'], ['v', 'V', 'num'], ['fases', 'Fases', 'num'], ['hilos', 'Hilos', 'num'], ['fd', 'F. dem.', 'num'], ['fdiv', 'F. diversidad (0–1)', 'num'], ['fp', 'FP', 'num'], ['continua', 'Continua', 'bool'], ['mult', 'Mult.', 'num'], ['claves', 'Palabras clave (Revit)'], ['fundamento', 'Fundamento NEC']] },
     tablerosCat: { title: 'Tableros', marca: 'fabricante', cols: [['id', 'Tipo', 'num'], ['modelo', 'Modelo de referencia'], ['fabricante', 'Fabricante', 'sel', marcas], ['fases', 'Fases', 'sel', () => ['3F', '1F', '1F/3F']], ['barraFase', 'Barra fase (A)', 'num'], ['barraNeutro', 'Barra neutro (A)', 'num'], ['barraTierra', 'Barra tierra (A)', 'num'], ['espacios', 'Espacios', 'num'], ['nota', 'Nota']] },
     breakers: { title: 'Breakers', marca: 'marca', cols: [['marca', 'Marca', 'sel', marcas], ['id', 'Tipo', 'num'], ['modelo', 'Modelo'], ['marco', 'Marco (A)', 'num'], ['amperios', 'Amperios (rango)'], ['unidad', 'Tipo de unidad'], ['polos', 'Polos', 'num'], ['sccr', 'SCCR (kA)', 'num'], ['vSccr', 'SCCR a (V)', 'num'], ['nota', 'Nota']] },
     reglasTableros: { title: 'Reglas: familias de tableros', get: () => C().reglas.tableros, ayuda: 'El tablero automático se elige entre las familias de la marca cuyo voltaje máximo y fases sirven, con barras ≥ protección principal y espacios ≥ usados + reserva; primero la de menor "Preferencia". Los breakers ramales y principales se buscan solo en las familias indicadas (separadas por coma) y se elige el de menor SCCR que supere el Icc del tablero.', cols: [['marca', 'Marca', 'sel', marcas], ['familia', 'Familia'], ['patron', 'Patrón del modelo (expresión regular)'], ['vMax', 'V máx.', 'num'], ['fases', 'Fases (1F/3F)'], ['ramales', 'Breakers ramales'], ['principales', 'Breakers principales'], ['orden', 'Preferencia', 'num'], ['nota', 'Nota']] },
@@ -42,7 +42,8 @@
       return UI.input(x, k, { type: tp === 'num' ? 'num' : 'text', fk, class: tp === 'num' ? 'w-num' : '', after: () => {} });
     };
     const body = h('tbody', null, filas.slice(0, 400).map(({ x, i }) => h('tr', null, def.cols.map(c => h('td', null, cel(x, c, i))),
-      h('td', { class: 'acc' }, UI.iconBtn('⧉', 'Duplicar', () => { lista.splice(i + 1, 0, U.clone(x)); Store.save(); App.refresh(); }), UI.iconBtn('🗑', 'Eliminar', () => { lista.splice(i, 1); Store.save(); App.refresh(); }, 'danger')))));
+      h('td', { class: 'acc' }, UI.iconBtn('⧉', 'Duplicar', () => { const o = U.clone(x); if (o.id !== undefined && def.idNuevo) o.id = def.idNuevo(lista); lista.splice(i + 1, 0, o); Store.save(); App.refresh(); }),
+        UI.iconBtn('🗑', 'Eliminar', () => { const m = def.enUso && def.enUso(x); if (m) { UI.alert(m, 'No se puede eliminar'); return; } lista.splice(i, 1); Store.save(); App.refresh(); }, 'danger')))));
     const nuevo = () => {
       const o = {}; def.cols.forEach(([k, , tp]) => { o[k] = tp === 'num' ? '' : tp === 'bool' ? false : ''; });
       if (def.cols[0][0] === 'id' || def.cols.some(c => c[0] === 'id')) o.id = Math.max(0, ...lista.filter(x => !def.marca || !filtroMarca || x[def.marca] === filtroMarca).map(x => Number(x.id) || 0)) + 1;
@@ -119,6 +120,8 @@
           UI.btn('Restablecer al Excel original', async () => { if (await UI.confirm('¿Reemplazar todo el catálogo por el del Excel ANACAR 2026.1? Se pierden los cambios del administrador.', 'Restablecer')) { Store.resetCatalog(); App.refresh(); } }, 'danger small')))));
   }
 
+  App.tablaCatalogo = (key, def) => tabla(key, def || SECC[key]);
+  App.defCatalogo = key => SECC[key];
   App.views.admin = function (view, R, sec) {
     if (!Auth.isAdmin()) { view.appendChild(h('div', { class: 'empty' }, 'Solo el administrador puede ver esta pestaña.')); return; }
     sec = SECC[sec] ? sec : 'marcas';

@@ -10,6 +10,7 @@
     { id: 'tab3f', label: 'Tableros 3F' },
     { id: 'tab1f', label: 'Tableros 1F' },
     { id: 'resumen', label: 'Tablas resumen' },
+    { id: 'detalles', label: 'Detalles de carga' },
     { id: 'prevista', label: 'Prevista' },
     { id: 'revit', label: 'Revit' },
     { id: 'ayuda', label: 'Ayuda' },

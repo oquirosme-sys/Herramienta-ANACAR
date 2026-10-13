@@ -82,6 +82,13 @@
       const cand = []; paneles.forEach(p => { if (p !== h) p.circuitos.forEach(c => { if (!c.alimenta && c.nPolos >= 2 && tot[h.panel] > 0 && Math.abs(c.kva - tot[h.panel]) < 0.005 && !paneles.some(o => norm(o.panel) === norm(c.nombre))) cand.push(c); }); });
       if (cand.length === 1) { cand[0].alimenta = h.panel; cand[0].alimentaPor = 'carga'; }
     });
+    // el alimentador de un tablero lleva el detalle de tablero (su carga sale del cálculo del derivado)
+    paneles.forEach(p => p.circuitos.forEach(c => {
+      if (!c.alimenta) return;
+      const D = Store.catalog.detallesCarga, f = c.nPolos === 3 ? 3 : 2;
+      const d = D.find(x => /tablero/i.test(x.descripcion) && Number(x.v) === c.voltaje && Number(x.fases) === f) || D.find(x => /tablero/i.test(x.descripcion) && Number(x.fases) === f);
+      if (d) { c.detalleId = d.id; c.seguro = true; }
+    }));
     sesion = { paneles, origen, omitidas, unidad: paneles.some(p => p.circuitos.some(c => c.enPies)) ? 'pies-detectado' : 'm' };
     App.refresh();
   }
@@ -107,6 +114,28 @@
         procesar(hoja.rows, f.name + ' · ' + hoja.name);
       } else procesar(textoAFilas(await UI.readText(f)), f.name);
     } catch (e) { UI.alert(e.message, 'No se pudo importar'); }
+  }
+
+  /** Nombre base de una carga para recordarla: sin números de equipo ("UC-01" → "uc-", "CALENTADOR DE PASO 2" → "calentador de paso"). */
+  const base = s => { const t = String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const m = /^([a-z]{1,4})-?\s*\d/.exec(t); return m ? m[1] + '-' : t.replace(/\s*(n\d+|nivel \d+|\d+[a-z]?|#\d+)\s*$/g, '').trim(); };
+  /** El usuario corrige el detalle: se aplica a los circuitos con el mismo nombre base que aún no estaban seguros y se recordará al importar. */
+  function elegirDetalle(c, id) {
+    const b = base(c.nombre); let n = 0;
+    sesion.paneles.forEach(p => p.circuitos.forEach(o => { if (o === c || (!o.seguro && base(o.nombre) === b && o.nPolos === c.nPolos)) { o.detalleId = id; o.seguro = true; o.elegido = true; if (o !== c) n++; } }));
+    if (n) UI.toast('También se aplicó a ' + n + ' circuito(s) con el mismo nombre', 'ok');
+    App.refresh();
+  }
+  /** Guarda como palabra clave del detalle los nombres que el usuario eligió, para la próxima importación. */
+  function recordar() {
+    let n = 0;
+    sesion.paneles.forEach(p => p.circuitos.forEach(c => {
+      if (!c.elegido) return;
+      const d = Store.catalog.detallesCarga.find(x => x.id === c.detalleId), b = base(c.nombre); if (!d || !b || b.length < 2) return;
+      const ks = String(d.claves || '').split(/[,;]/).map(x => x.trim().toLowerCase()).filter(Boolean);
+      if (!ks.includes(b)) { ks.push(b); d.claves = ks.join(', '); n++; }
+    }));
+    return n;
   }
 
   /* ---------- aplicar ---------- */
@@ -141,6 +170,7 @@
 
   function importar() {
     let nT = 0, nC = 0;
+    const aprendidas = sesion.recordar !== false ? recordar() : 0;
     const res = { actualizados: [], nuevos: [], faltan: [], aplicados: 0 };
     const factor = sesion.unidad === 'pies' || sesion.unidad === 'pies-detectado' ? 0.3048 : 1;
     sesion.paneles.filter(p => p.incluir).forEach(p => {
@@ -183,6 +213,7 @@
         h('tbody', null, conc.map(x => h('tr', null, h('td', null, x.panel), h('td', { class: 'r' }, x.nA), h('td', { class: 'r' }, U.fmt(x.kA, 2)), h('td', { class: 'r' }, x.nI), h('td', { class: 'r' }, U.fmt(x.kI, 2)),
           h('td', null, x.movidos.map(c => '[' + c.polos.join(',') + ']→[' + c.obj.polos.join(',') + ']').join(' ')), h('td', null, x.nA === x.nI && Math.abs(x.kA - x.kI) < 0.005 ? '✓' : '⚠')))))),
       lst('Alimentadores enlazados a su tablero derivado', enlaces),
+      aprendidas ? h('p', { class: 'hint' }, aprendidas + ' nombre(s) de carga se guardaron como palabras clave de su detalle (Detalles de carga): en la próxima importación se reconocen solos.') : null,
       lst('Filas del archivo que no son circuitos de un tablero (no se importan)', omit.map(o => 'Fila ' + o.fila + ': ' + o.motivo + ' — ' + o.txt)),
       nC ? h('p', null, nC + ' circuitos importados en tableros nuevos o reemplazados.') : null,
       res.aplicados ? h('p', null, res.aplicados + ' cambio(s) de posición ya aparecen en Revit y se marcaron como aplicados.') : null,
@@ -273,7 +304,9 @@
       h('span', null, h('b', null, total + ' circuitos'), ' en ', h('b', null, sesion.paneles.length + ' tableros'), ' · ' + sesion.origen + (dudosos ? ' · ' : ''), dudosos ? h('span', { class: 'warnc' }, dudosos + ' por revisar ⚠') : null),
       h('span', { class: 'grow' }),
       UI.field('Longitudes en', UI.select([{ value: 'm', label: 'metros' }, { value: 'pies', label: 'pies' }], sesion.unidad === 'pies-detectado' ? 'pies' : sesion.unidad, v => { sesion.unidad = v; }), null, 'inline'),
+      h('label', { class: 'chk', title: 'Los detalles que corrija se guardan como palabras clave en Detalles de carga' }, h('input', { type: 'checkbox', checked: sesion.recordar !== false, onchange: e => { sesion.recordar = e.target.checked; } }), ' Recordar los detalles elegidos'),
       UI.btn('Cancelar', () => { sesion = null; App.refresh(); }), UI.btn('Importar', importar, 'primary')));
+    if (dudosos) view.appendChild(h('p', { class: 'hint' }, '⚠ = el detalle de carga se propuso sin una coincidencia segura con el nombre de Revit. Elija el correcto: se aplica a los demás circuitos con el mismo nombre y se recuerda para la próxima vez. También puede agregar palabras clave en la pestaña ', h('a', { href: '#detalles' }, 'Detalles de carga'), '.'));
     sesion.paneles.forEach((p, pi) => {
       const head = h('div', { class: 'grid4' },
         UI.field('Incluir', h('input', { type: 'checkbox', checked: p.incluir, onchange: e => { p.incluir = e.target.checked; } })),
@@ -283,7 +316,7 @@
       const tbl = h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Circuito', 'Posición', 'Nombre de carga (Revit)', 'Alimenta a', 'V', 'Polos', 'kVA', 'Long.', 'Detalle de carga'].map(x => h('th', null, x)))),
         h('tbody', null, p.circuitos.map((c, ci) => h('tr', { class: c.seguro ? '' : 'row-warn' }, h('td', null, c.circuitoTxt), h('td', null, c.polos.join(',')), h('td', null, c.nombre), h('td', null, c.alimenta ? h('b', { title: c.alimentaPor === 'carga' ? 'Detectado por la misma carga: revise el nombre del circuito en Revit' : 'Detectado por el nombre' }, '→ ' + c.alimenta + (c.alimentaPor === 'carga' ? ' ⚠' : '')) : ''),
           h('td', { class: 'r' }, c.voltaje), h('td', { class: 'r' }, c.nPolos), h('td', { class: 'r' }, U.fmt(c.kva, 2)), h('td', { class: 'r' }, c.longitud === null ? '' : U.fmt(c.longitud, 2)),
-          h('td', null, c.seguro ? null : h('span', { title: 'Revisar: detalle propuesto por coincidencia aproximada' }, '⚠ '), UI.select(dOpts, c.detalleId, v => { c.detalleId = Number(v); c.seguro = true; }, { class: 'w-det', fk: 'rv:' + pi + ':' + ci }))))));
+          h('td', null, c.seguro ? null : h('span', { title: 'Detalle propuesto sin coincidencia segura con el nombre de Revit: elija el correcto (se recordará)' }, '⚠ '), UI.select(dOpts, c.detalleId, v => elegirDetalle(c, Number(v)), { class: 'w-det', fk: 'rv:' + pi + ':' + ci }))))));
       view.appendChild(UI.card('Panel ' + p.panel + ' (' + p.circuitos.length + ' circuitos · ' + U.fmt(p.circuitos.reduce((a, c) => a + c.kva, 0), 2) + ' kVA)', h('div', null, head, h('div', { class: 'tbl-wrap', 'data-scroll': 'rv' + pi }, tbl))));
     });
   };

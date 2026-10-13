@@ -241,7 +241,9 @@
   function circuito(c, tab, ctx) {
     const det = K.detallesCarga.find(d => String(d.id) === String(c.detalleId)) || {};
     const tiene = v => v !== undefined && v !== null && v !== '';
-    const O = n(det.v), P = n(det.fases), Q = n(det.hilos), T = n(det.fp) || 1;
+    const nPol = (c.polos || []).map(Number).filter(x => x > 0).length;
+    // detalle monofásico a 208/240 V (fase-fase) conectado en 2 polos: la carga se reparte entre los 2 polos (como un detalle de 2 fases)
+    const O = n(det.v), P = n(det.fases) === 1 && O >= 208 && O <= 240 && nPol === 2 ? 2 : n(det.fases), Q = n(det.hilos), T = n(det.fp) || 1;
     const R = tiene(c.fu) ? n(c.fu) : (n(det.fd) || 1), S = fdiv01(tiene(c.fdivC) ? c.fdivC : det.fdiv);   // [R16] factor de uso, [S16] diversidad (0 a 1, multiplica)
     const N = ctx.fases, J = n(c.kva);
     const polos = (c.polos || []).map(Number).filter(x => x > 0);
@@ -639,8 +641,20 @@
   function detalleRevit(nombre, voltaje, polos, catalog) {
     K = catalog || K;
     const v = n(voltaje), p = n(polos) || 1, nm = norm(nombre);
-    const cand = K.detallesCarga.filter(d => n(d.v) === v && n(d.fases) === p);
-    const pool = cand.length ? cand : K.detallesCarga.filter(d => n(d.fases) === p);
+    // compatibles: mismo número de fases; en 2 polos a 208/240 V también los detalles monofásicos de ese voltaje
+    const compat = d => n(d.fases) === p || (p === 2 && n(d.fases) === 1 && n(d.v) >= 208 && n(d.v) <= 240);
+    const cand = K.detallesCarga.filter(d => n(d.v) === v && compat(d));
+    const pool = cand.length ? cand : K.detallesCarga.filter(compat);
+    // 1) palabras clave del detalle: la coincidencia más larga gana ("uc-" encuentra "UC-01"; "ue" encuentra "UE2-03")
+    const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const contiene = k => new RegExp('(^|[^a-z0-9])' + esc(k) + (/[a-z0-9]$/.test(k) ? '($|[^a-z])' : '')).test(nm);
+    let bk = null, bkS = -1;
+    pool.forEach(d => String(d.claves || '').split(/[,;]/).map(x => norm(x).trim()).filter(Boolean).forEach(k => {
+      if (!contiene(k)) return;
+      const sc = k.length * 10 + (n(d.v) === v ? 5 : 0) + (n(d.fases) === p ? 2 : 0);
+      if (sc > bkS) { bkS = sc; bk = d; }
+    }));
+    if (bk) return { detalle: bk, seguro: true, por: 'clave' };
     const clave = (CLAVES.find(([re]) => re.test(nm)) || [])[1];
     let best = null, bestS = -1;
     pool.forEach(d => {
@@ -654,7 +668,7 @@
       const gen = p === 1 ? /^tomas$/ : p === 3 ? /^equipos mecanicos$/ : /^(equipos|tomas 208v 1f)$/;
       best = pool.find(d => gen.test(norm(d.descripcion).trim())) || best;
     }
-    return { detalle: best, seguro: !!cand.length && bestS >= 5 };
+    return { detalle: best, seguro: !!cand.length && bestS >= 5, por: bestS >= 5 ? 'nombre' : 'generico' };
   }
 
   g.Calc = { proyecto, tablero, circuito, balanceo, detalleRevit, fasePolo, nombreTablero, vLN, famBreaker, famTablero, agrupAuto, setCatalog: c => { K = c; } };
