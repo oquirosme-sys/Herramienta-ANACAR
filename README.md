@@ -48,6 +48,7 @@ Las funciones de selección (breakers, tableros, supresores por reglas de fabric
 2. **`Circuitos revit-excel.xlsm`** (versión nueva en esta carpeta): botón *IMPORTAR DATOS* → limpia y acomoda la tabla de *Hoja1* (mismas columnas C–J) y deja la hoja **Revision** con líneas leídas, circuitos escritos, filas omitidas con su motivo, kVA/polos por tablero, posiciones repetidas, longitudes faltantes y qué circuito alimenta a cada tablero.
    - Lee UTF-8 (acentos correctos), busca las columnas por nombre (*True Power* o *True Load*), lee números con punto o coma sin depender de la configuración regional y guarda el número de circuito como texto ("24,26").
    - Ya no descarta filas sin voltaje; las filas sin tablero (resumen de Revit: tablero principal, ATS) se listan como omitidas.
+   - **Siempre empieza en blanco**: al abrirlo se vacían la tabla y la hoja Revision. El archivo guardado conserva el último resultado para que ANACAR lo importe (ANACAR lo lee sin ejecutar esa macro).
 3. **ANACAR** (web o Excel) importa ese libro:
    - Reconoce *True Power* y el circuito como texto.
    - **Enlaza los alimentadores** a su tablero derivado: por el nombre de la carga o, si no coincide, por la misma carga (p. ej. "2PIS1" → 2MS1). La longitud del circuito pasa al alimentador del derivado.

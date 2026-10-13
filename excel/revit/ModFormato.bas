@@ -326,3 +326,20 @@ Private Sub Revision(rv As Worksheet, ruta As String, leidas As Long, n As Long,
     Next it
     rv.Columns("A").ColumnWidth = 30: rv.Columns("B").ColumnWidth = 18: rv.Columns("C:F").ColumnWidth = 14: rv.Columns("G").ColumnWidth = 70
 End Sub
+
+' El libro siempre empieza en blanco: al abrirlo se vacian la tabla de Hoja1 y la hoja Revision.
+' (ANACAR lee el archivo guardado sin ejecutar esta macro, asi que el resultado sigue disponible para importarlo.)
+Public Sub Limpiar()
+    Dim ws As Worksheet, u As Long, rv As Worksheet
+    Set ws = ThisWorkbook.Worksheets(HOJA)
+    u = Application.WorksheetFunction.Max(ws.Cells(ws.Rows.Count, COL0).End(xlUp).Row, ws.Cells(ws.Rows.Count, COL0 + 2).End(xlUp).Row, FILA_ENC + 1)
+    ws.Range(ws.Cells(FILA_ENC + 1, COL0), ws.Cells(u, COL0 + 7)).ClearContents
+    ws.ListObjects(1).Resize ws.Range(ws.Cells(FILA_ENC, COL0), ws.Cells(FILA_ENC + 1, COL0 + 7))
+    ws.Range("F3").ClearContents
+    On Error Resume Next
+    Set rv = ThisWorkbook.Worksheets("Revision")
+    On Error GoTo 0
+    If Not rv Is Nothing Then rv.Cells.Clear: rv.Range("A1").Value = "La revision aparece aqui despues de IMPORTAR DATOS."
+    ws.Activate: ws.Range("C6").Select
+    ThisWorkbook.Saved = True
+End Sub
