@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cambios web.11 a web.14 — guía por pasos</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2430; --muted:#5d6b7c; --line:#d9dee5; --brand:#0b5cab; --code:#eef2f7; --ok:#1b7f4b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14181e; --card:#1d232b; --ink:#e8edf3; --muted:#9aa7b6; --line:#2d3641; --brand:#6aa9f0; --code:#11161c; --ok:#58c58a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 system-ui,"Segoe UI",Arial,sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 6px; } h2 { font-size: 18px; margin: 0 0 4px; } h3 { font-size: 14px; margin: 14px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  p { margin: 6px 0; } .muted { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+  .tag { display:inline-block; font-size:12px; font-weight:700; padding:1px 8px; border-radius:99px; background: var(--code); color: var(--brand); margin-right: 6px; }
+  pre { margin: 8px 0 0; padding: 12px 14px; background: var(--code); border: 1px solid var(--line); border-radius: 8px; white-space: pre-wrap; word-wrap: break-word; font: 13px/1.5 ui-monospace,Consolas,monospace; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--brand); background: transparent; color: var(--brand); border-radius: 7px; padding: 4px 12px; margin-top: 8px; }
+  button.fill { background: var(--brand); color: #fff; } button.hecho { border-color: var(--ok); color: var(--ok); }
+  ul { margin: 6px 0 6px 20px; padding: 0; } li { margin: 2px 0; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font: 13px ui-monospace,Consolas,monospace; }
+  .ver { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  label.chk { display:inline-flex; gap:6px; align-items:center; font-size:13px; color:var(--muted); margin-top:8px; margin-left:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cambios web.11 a web.14 — guía por pasos</h1>
+  <p class="muted">Herramienta ANACAR (HTML + JavaScript plano, sin compilación) y su Excel con macros. Cada paso trae un <b>prompt</b> para copiar y pegar a otra persona o a otro asistente, y una <b>comprobación</b> para saber que quedó bien. Haga los pasos en orden: los últimos dependen de los primeros.</p>
+  <div class="card ver">
+    <button class="fill" id="todo">Copiar todos los prompts</button>
+    <span class="muted">Repositorio de referencia: <code>oquirosme-sys/Herramienta-ANACAR</code> (commits <code>71a8e42</code> a <code>e2a3ea7</code>).</span>
+  </div>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 0</span>Contexto para quien va a modificar</h2>
+    <p>Pegue esto primero, antes de cualquier otro paso.</p>
+    <pre>Trabajas sobre una herramienta web de análisis de cargas de tableros eléctricos (NEC 2020), en HTML y JavaScript plano, sin build, hecha para GitHub Pages. Idioma de la interfaz y de las respuestas: español.
+Archivos que importan: js/calc.js (motor de cálculo), js/store.js (datos y migraciones), js/ui.js (controles), js/ui-memoria.js (memoria de cálculo de cada tablero), js/ui-unifilar.js (diagrama unifilar: una sola función dibujar(R, D) sirve para SVG y para DXF), js/ui-resumen.js y js/hoja.js (tablas resumen), js/export-excel.js, js/data/simbolos.js (bloques de AutoCAD), js/data/seed.js (catálogo inicial), index.html (las etiquetas ?v= de los scripts).
+Reglas: al terminar cada paso sube el número de versión (js/config.js APP_VERSION) y cambia la etiqueta ?v= de TODOS los scripts de index.html para evitar caché; no edites js/data/seed.js a mano; los archivos usan saltos de línea CRLF, conservarlos; antes de dar un paso por terminado corre tests/calc-test.html (deben pasar 269 de 269) y tests/ui-test.html (10 de 10) abriéndolos con un servidor local (python -m http.server).</pre>
+    <button>Copiar</button>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 1</span>Corregir las casillas numéricas que no guardan (web.12)</h2>
+    <p><b>Síntoma:</b> al cambiar un dato se borraba o no se guardaba el valor numérico (kVA del generador, distancias…). <b>Causa:</b> en <code>js/ui.js</code>, el manejador de <code>UI.input</code>, la validación del rango 0–1 (factor de diversidad) rompió la cadena <code>if / else if</code> y a los campos numéricos les llegaba <code>v.trim</code> con un número (error en consola: <code>v.trim is not a function</code>).</p>
+    <pre>En js/ui.js, en el manejador de cambio de UI.input, deja la lógica exactamente así: si el campo es numérico (opts.type === 'num'): v = parseNum(v); si es NaN marca el campo con la clase 'invalid', muestra el aviso 'Número no válido' y haz return; si opts.rango existe y v no está vacío y (v &lt;= rango[0] o v &gt; rango[1]) muestra 'Debe estar entre X y Y' y restablece el valor anterior y haz return. Solo si NO es numérico y opts.trim !== false haces v = v.trim(). Es decir, el trim va en el else del bloque numérico, nunca después de él.
+Crea tests/ui-test.html: una página que carga la herramienta en un iframe, simula escribir en las casillas (con coma decimal) y comprueba 10 cosas: kVA del generador se guarda; longitud generador→ATS con coma; distancia normal→ATS; distancia ATS→tablero; longitud del alimentador; el kVA del generador no se borra al cambiar otro dato; kVA de un circuito; cambiar la fuente y volver conserva los datos; un factor de diversidad fuera de 0–1 se rechaza; 0,8 se guarda.</pre>
+    <button>Copiar</button>
+    <h3>Comprobación</h3>
+    <p>Escribir 100 en «Generador (kVA)», luego cambiar cualquier otra casilla: el 100 sigue ahí. <code>tests/ui-test.html</code> muestra «10 de 10 correctas».</p>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 2</span>ATS/MTS con las dos acometidas y sus distancias — motor y memoria (web.11)</h2>
+    <pre>Cuando un tablero marca «Lleva segunda acometida» con equipo ATS o MTS, al equipo deben llegar dos acometidas: la normal (del transformador, del módulo de medidores o del tablero padre) y la de emergencia (generador o bypass). Implementa:
+1) js/calc.js: agrega la función largoAlim(t) = distNormal + distAts cuando el ATS/MTS está activo y distNormal &gt; 0; si no, la longitud normal del alimentador. Úsala en M139 (longitud del alimentador) y en la longitud del circuito del padre. En el objeto 'alterna' que devuelve el cálculo agrega: distNormal (si no se escribió, longitud total − distAts), caidaNormal, caidaFuente, caidaComun, distAts, iccAtsKA (mayor Icc entre las dos fuentes en el ATS), ats (modelo elegido del catálogo), wcr, wcrOk, transicion, polosAts, equipo, tipo, origen, origenId. Declara el arreglo 'avisos' antes de usarlo (hubo un error de variable sin inicializar). Agrega el aviso NEC 700.5(E) y el de «WCR del ATS &lt; Icc en el ATS».
+2) Catálogo: arreglo 'ats' (equipo ATS/MTS, modelo, amperios, polos 3/4, transición abierta/retardada/cerrada, WCR) y la migración en Store.migrate para proyectos y catálogos ya guardados. En la sección de administración, una tabla para editarlo.
+3) js/ui-memoria.js, tarjeta «Segunda acometida»: campos Equipo (ATS/MTS/IP), Fuente (generador/bypass), Tipo de transferencia, Polos, Modelo (catálogo, filtrado por transición y polos), WCR, «Generador → ATS (m)» (campo longitud), «Fuente normal → ATS (m)» (campo distNormal, con placeholder Auto), «Distancia ATS → tablero (m)» (campo distAts). La etiqueta de la fuente normal es: Transformador si hay transformador, el nombre del tablero padre si lo hay, o el texto «Conectado a» del tablero (por ejemplo MÓDULO MEDIDORES). La tabla de resultados muestra una fila por tramo (normal→ATS, generador→ATS, ATS→tablero) con metros y caída de voltaje, y la fila «Icc en el ATS / WCR» con ✓ o ✗.</pre>
+    <button>Copiar</button>
+    <h3>Comprobación</h3>
+    <p>Con ATS, generador de 100 kVA a 25 m, normal 12 m y ATS→tablero 8 m: el largo total es 20 m, aparece el modelo del catálogo y el aviso de WCR si se baja a 1 kA.</p>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 3</span>Unifilar: espacio y cableado ATS → tablero (web.13)</h2>
+    <pre>En js/ui-unifilar.js, función bajada(), bloque de la segunda acometida:
+- Deja un tramo libre de 58 px entre la parte baja del símbolo ATS/MTS y la barra del tablero (antes eran 12): oy = y1 - 58 - ha. En ese tramo, a la izquierda de la línea y con texto alineado a la derecha, escribe en dos líneas el cableado común: «fases+neutro+tierra material aislamiento» y «ATS → tablero X m · tubería Ø mm tipo · ΔV Y %» (la caída viene de alterna.caidaComun / V).
+- Sube el texto del cable del alimentador normal (y = y1 - 176 cuando hay segunda acometida) para que no choque, y escribe «Normal → ATS X m · …» con la distancia normal.
+- Rotula NORMAL con su origen: «(transformador)», «(nombre del tablero padre)» o «(texto de Conectado a)», y EMERGENCIA en la entrada alterna. El texto del generador/bypass dice «Gen → ATS …» o «Bypass → ATS …».
+En el DXF de Excel (ModDXF.bas) haz lo mismo: sube el ATS 22 unidades sobre la barra, añade las dos líneas de cableado y el mismo rótulo NORMAL; y cuando hay ATS/MTS en un tablero principal, sube todo lo de arriba (breaker, UPS, transformador) 21 unidades (variable dg).</pre>
+    <button>Copiar</button>
+    <h3>Comprobación</h3>
+    <p>El ATS queda separado de la barra y entre ambos se lee el cableado. El texto NORMAL dice de dónde viene (módulo de medidores si el tablero es de acometida).</p>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 4</span>Datos de ATS/MTS y UPS en la tabla del diagrama y en las tablas resumen (web.13)</h2>
+    <pre>1) js/ui-unifilar.js, función tablaDatos(r, x, y): si el tablero tiene segunda acometida agrega las filas: «ATS|MTS / GENERADOR|BYPASS», modelo y amperios, transición y polos, «WCR / Icc EN EL ATS», «NORMAL → ATS», «GENERADOR → ATS», «ATS → TABLERO», generador (kVA) u origen del bypass, calibre y caída de la 2ª acometida. Si tiene UPS: nombre, capacidad (kVA) e Icc del inversor.
+2) js/ui-resumen.js: agrega Resumen.conTransf (se activa en Resumen.ordenados si algún tablero tiene alterna o ups), Resumen.transf(r) (15 valores en este orden: Equipo, Modelo de referencia, Amperios (A), Transición, # polos, WCR (kA), Icc en el ATS (kA), Fuente alterna, Normal → ATS (m), Alterna → ATS (m), ATS → tablero (m), Conductores 2ª acometida, Caída 2ª acometida (%), UPS (kVA), Icc del inversor (kA)) y Resumen.subTransf (esos mismos títulos). Agrega el grupo «DATOS TRANSFERENCIA (ATS / MTS) Y UPS» (15 columnas) a Resumen.grupos y Resumen.sub; concatena Resumen.transf(r) en Resumen.horizontal; y en Resumen.vertical y Resumen.du agrega, cuando conTransf es verdadero, las filas equivalentes.
+3) js/hoja.js: anchos para las columnas AV a BJ en ANCHOS_RES; en Hoja.resumen el título del bloque (AV–BJ) y los 15 subtítulos, y que el límite de columnas sea BJ cuando conTransf (AU si no).
+4) js/export-excel.js: si conTransf crea el nombre definido DATOS_TRANSFERENCIA sobre AV:BJ.</pre>
+    <button>Copiar</button>
+    <h3>Comprobación</h3>
+    <p>Con un ATS y una UPS configurados, la pestaña «Tablas resumen» muestra el bloque nuevo a la derecha de «DATOS INTERRUPTOR PRINCIPAL»; sin ATS ni UPS no aparece.</p>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 5</span>UPS con MTS: a qué tablero se conecta y qué tablero va aguas abajo (web.14) — interfaz</h2>
+    <pre>En js/ui-memoria.js, en la tarjeta «Fuentes de alimentación», bloque «A través de una UPS» (cuando u.activo):
+- Calcula 'propio' = la UPS cuelga de la barra de este mismo tablero: u.propio si está definido; si no, verdadero cuando el tablero no tiene padre. Calcula 'antecesores' (conjunto con todos los tableros de la cadena padreId hacia arriba).
+- Selector «Dónde se conecta la UPS»: primera opción value '__propio' («A la barra de este tablero (la UPS cuelga de él)»), luego una opción por cada tablero de Store.posiblesPadres(t) («A la barra de X (este tablero queda aguas abajo)»). Al elegir '__propio': u.propio = true. Al elegir otro tablero: u.propio = false, Store.cambiarPadre(t, v) (esto crea el circuito en ese tablero) y, si la segunda acometida es un MTS de bypass desde tablero, actualiza alterna.origenId = v.
+- Si NO es propio: casilla «La UPS lleva MTS (bypass de mantenimiento…)» que fija alterna = { activo: true, equipo: 'MTS', tipo: 'tablero', origenId: t.padreId, polosAts: 3 } (o la desactiva). El mecanismo existente Store.sincronizarBypass crea en el tablero de arriba el segundo circuito (respaldoDe) con su interruptor; ese circuito ocupa posición pero no suma carga.
+- Si es propio: casilla u.mts («La UPS lleva MTS…») y selector «Tablero conectado aguas abajo de la UPS / MTS» con todos los tableros que no estén en 'antecesores' ni sean el actual. Al elegir uno: poner deUps = true solo en ese tablero (false en los demás) y, si su padre no es este tablero, Store.cambiarPadre(d, t.id).
+- En js/calc.js agrega origenId al objeto 'alterna' del resultado (lo usa el unifilar).</pre>
+    <button>Copiar</button>
+    <h3>Comprobación</h3>
+    <p>En el tablero principal el primer selector ya ofrece «A la barra de este tablero» y el segundo lista todos los demás tableros. En un tablero hijo el primero lista al principal y a los demás posibles padres. Al elegir un tablero se crea su circuito en el tablero de arriba.</p>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 6</span>UPS con MTS en el unifilar, aguas abajo del tablero (web.14) — dibujo</h2>
+    <pre>En js/ui-unifilar.js, función dibujar(R, D). Modelo: la UPS cuelga de la barra de un tablero «de origen»; el tablero con la UPS queda debajo del MTS con su formato normal de tablero.
+1) Define: todos(r) = hijos de r; propio(r) = r.ups && (r.tab.ups.propio === undefined ? !r.padre : r.tab.ups.propio); hijoUps(r) = hijo con ups que no es propio; ramaUps(r) = hijoUps(r) || propio(r); hijoU(r) = hijoUps(r) || (propio(r) ? hijo con tab.deUps : null); hijos(r) = todos(r) sin hijoU(r) (así ese hijo no sale en la fila normal). prof() usa todos().
+2) medir(r): el ancho de un tablero con rama de UPS suma UXW = 520 px (o el ancho del tablero de abajo + 170 si es mayor). D.tamano suma una altura NIVEL extra cuando algún tablero tiene hijoU.
+3) Elimina el dibujo de la UPS en línea (el rectángulo UPS entre la acometida y el tablero) en bajada().
+4) Función ramaUpsDibujo(r, xu, yb, hu), llamada desde nodo(): en la barra del tablero de origen dibuja un interruptor (rotulado «UPS X kVA») en x1 = xu − 45 (o xu si no hay MTS), baja a un rectángulo UPS (nombre, kVA, Icc del inversor), luego el símbolo MTS (rótulo «MTS (bypass UPS)»); si hay MTS un segundo interruptor «Bypass» en xu + 45 cuyo conductor baja y entra por el puerto alterno del MTS. Devuelve [x1, yS] con yS = parte baja del MTS. Si no hay tablero abajo dibuja interruptor «Salida UPS» y el recuadro «Cargas críticas».
+5) En nodo(): xu = max(centro + W/2, x de los hijos) + (hay hijos ? 380 : 90); la barra se extiende hasta xu + 150 para que la tabla de datos quede a la derecha sin pisar las etiquetas; y si hay hijoU: yh = yS + NIVEL; bajada(x1, yS, yh, hu, hu.circuitoPadre); nodo(hu, x1 − span[hu]/2, yh) — así el tablero de abajo usa exactamente el mismo espaciado (breaker, calibre y barra) que cualquier hijo.
+Como dibujar() sirve también al DXF, no hace falta duplicar el dibujo.</pre>
+    <button>Copiar</button>
+    <h3>Comprobación</h3>
+    <p>Un tablero con UPS se ve colgando de la barra del tablero elegido, con dos interruptores, UPS, MTS y debajo el tablero. Ningún texto se monta sobre la barra ni sobre otro texto. El lienzo crece lo necesario.</p>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 7</span>Zoom y mano en el unifilar (web.14)</h2>
+    <pre>En js/ui-unifilar.js, vista App.views.unifilar:
+- Variables del módulo (se conservan al refrescar): zoomU = 1, manoU = true. Guarda el tamaño original del SVG en svg.dataset.w y svg.dataset.h y aplica width/height = original × zoom (sin volver a dibujar).
+- Barra de herramientas: botones «−», etiqueta con el porcentaje, «+» (factor 1,25; límites 10 % a 400 %), «100 %», «Ajustar» (cabe el ancho de la pantalla, máximo 100 %) y «✋ Mover». El zoom mantiene centrada la zona visible. Ctrl + rueda del ratón también acerca y aleja sobre el cursor (listener 'wheel' no pasivo con preventDefault).
+- Mano: con pointerdown/pointermove/pointerup sobre el contenedor .u-wrap arrastra scrollLeft/scrollTop; también con el botón central o con la barra espaciadora (no cuando el foco está en un campo). Un arrastre de más de 4 px no debe contar como clic (captura de 'click' que lo cancela); NO uses setPointerCapture al empezar, solo cuando ya hay movimiento, para no romper los clics sobre las barras. Evita acumular listeners de teclado al refrescar (guarda y quita los anteriores). Excluye los botones «+ tablero» (.u-add).
+- CSS: .u-wrap.mano { cursor: grab } y .arrastrando { cursor: grabbing; user-select: none }; ocultar el control de zoom al imprimir. La descarga SVG usa el tamaño original (data-w / data-h).</pre>
+    <button>Copiar</button>
+    <h3>Comprobación</h3>
+    <p>Los botones cambian el tamaño y el porcentaje; Ctrl + rueda acerca; arrastrar mueve el diagrama; un clic sin movimiento sobre una barra abre su memoria.</p>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 8</span>Lo mismo en el Excel con macros</h2>
+    <pre>El Excel se genera con scripts de Python (openpyxl + Excel por COM; requiere Windows, Excel con «Confiar en el acceso al modelo de objetos de VBA», pywin32, pillow, pymupdf, ezdxf). Copia los cambios así:
+1) excel/build.py: en la hoja de cálculo de cada tablero (MC_MACHOTE) agrega las filas de resultados BX118 a BX132 con la función rx(): equipo, modelo ATS, amperios, transición, polos, WCR, Icc en el ATS (kA), fuente alterna, normal→ATS (m) = MAX(0, BX40 − I23), alterna→ATS (m), ATS→tablero (m), conductores 2ª acometida, caída 2ª acometida (%), UPS (kVA), Icc del inversor (kA); todas vacías si el tablero no usa ATS/UPS. Para los polos usa VALUE(LEFT(RIGHT($I$22,2),1)) (con N() da 0 porque es texto). En «TABLA RESUMEN» agrega las columnas AV a BJ (títulos, anchos y la celda de título «DATOS TRANSFERENCIA (ATS / MTS) Y UPS»).
+2) excel/vba/ModTableros.bas: en ActualizarResumen amplía los rangos de AU a BJ (Clear, UnMerge, bordes, área de impresión) y agrega a los arreglos cols/refs las columnas AV–BJ apuntando a BX118…BX132; en ResumenVertical agrega 15 campos (el nombre definido RESUMEN_VERTICAL llega hasta la fila 48); en ResumenDU agrega dos columnas («ATS / MTS (WCR / Icc kA)» y «Normal / alterna / ATS-tablero (m)») y el nombre RESUMEN_DU hasta la columna Q; en NombresDefinidos crea DATOS_TRANSFERENCIA sobre AV:BJ; en SoloTablaResumen oculta Z:BJ.
+3) excel/vba/ModDXF.bas: sube el ATS/MTS 22 unidades sobre la barra, escribe en E-ALIMENTADOR el cableado y la distancia ATS→tablero, rotula NORMAL con transformador / padre / «Conectado a», y suma a la tabla de datos 5 filas de ATS y 1 de UPS (ReDim Preserve sobre la variable filas).
+4) Pruebas: excel/test_ats.py (comprueba BX118–BX132, el resumen, el vertical, el DU y exporta un DXF). Corre excel/construir.sh: deben dar 238, 125 y 35 comprobaciones sin fallos. Valida el DXF con accoreconsole.exe de AutoCAD (_.AUDIT: 0 errores). En Git Bash usa MSYS_NO_PATHCONV=1 y escribe «S» (no «Y») en el script si AutoCAD está en español.
+Trampas conocidas de VBA: no distingue mayúsculas (no uses una variable local yS si existe ys); evita Val() con celdas (usa NumV); evita TEXT() en fórmulas (usa FIXED); en el DXF R12 no escribas «66 0» en un INSERT sin atributos.</pre>
+    <button>Copiar</button>
+    <h3>Comprobación</h3>
+    <p>Las tres pruebas dan 0 fallos y <code>test_ats.py</code> imprime los 15 valores de BX118–BX132 con el ATS de ejemplo (150 A, WCR 42 kA, Icc 1,90 kA).</p>
+  </section>
+
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 9</span>Cierre: versión, pruebas y publicación</h2>
+    <pre>1) Sube APP_VERSION en js/config.js (por ejemplo 2026.1-web.14) y cambia la etiqueta ?v= en todos los scripts de index.html.
+2) Abre tests/calc-test.html (269 de 269) y tests/ui-test.html (10 de 10) con un servidor local.
+3) Añade al README.md una sección por versión con lo que cambió.
+4) Haz commit con rutas específicas (no uses git add -A: en la carpeta puede haber libros de prueba que no deben subirse), git pull --rebase y git push.
+5) Si el sitio usa GitHub Pages desde GitHub Actions y el despliegue falla con «Get Pages site failed», Pages no está habilitado para el repositorio: en Settings ▸ Pages elige «GitHub Actions» como fuente (los repositorios privados necesitan un plan que incluya Pages).</pre>
+    <button>Copiar</button>
+  </section>
+
+  <section class="card">
+    <h2>Pendientes conocidos</h2>
+    <ul>
+      <li>El cálculo trata al tablero principal con UPS como si estuviera alimentado por la UPS (limita su Icc y avisa «UPS cargada al 1546 %»); con la UPS como rama aguas abajo ese límite debería aplicarse solo al tablero de abajo.</li>
+      <li>Al conectar una UPS no se crea todavía el circuito de la UPS con su interruptor ni se suma su carga en el tablero principal cuando la UPS cuelga de su propia barra.</li>
+      <li>El interruptor, el MTS y el recuadro de salida salen con datos básicos: faltan amperios, modelo del MTS y el SPD.</li>
+      <li>La contraseña inicial del modo administrador está escrita en el código (<code>js/config.js</code>, <code>README.md</code> y scripts de Excel): cámbiela antes de publicar el repositorio.</li>
+    </ul>
+  </section>
+</main>
+<script>
+  document.querySelectorAll('section[data-p]').forEach(function (s) {
+    var pre = s.querySelector('pre'), b = s.querySelector('button');
+    var titulo = s.querySelector('h2').textContent;
+    s.dataset.texto = titulo + '\n\n' + pre.textContent;
+    b.addEventListener('click', function () {
+      copiar(pre.textContent, b);
+    });
+  });
+  function copiar(t, b) {
+    var ok = function () { var a = b.textContent; b.textContent = 'Copiado ✓'; b.classList.add('hecho'); setTimeout(function () { b.textContent = a; b.classList.remove('hecho'); }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function () { viejo(t); ok(); });
+    else { viejo(t); ok(); }
+  }
+  function viejo(t) { var a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); } catch (e) { } document.body.removeChild(a); }
+  document.getElementById('todo').addEventListener('click', function () {
+    var partes = []; document.querySelectorAll('section[data-p]').forEach(function (s) { partes.push(s.dataset.texto); });
+    copiar(partes.join('\n\n----------------------------------------\n\n'), document.getElementById('todo'));
+  });
+</script>
+</body>
+</html>
