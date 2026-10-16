@@ -68,7 +68,7 @@
           h('input', { type: 'checkbox', checked: !!(a.activo && a.equipo === 'MTS' && a.tipo === 'tablero' && a.origenId === t.padreId), onchange: e => {
             if (e.target.checked) Object.assign(a, { activo: true, equipo: 'MTS', tipo: 'tablero', origenId: t.padreId, polosAts: a.polosAts || 3 }); else if (a.equipo === 'MTS' && a.tipo === 'tablero') a.activo = false;
             Store.save(); App.refresh(); } }), ' La UPS lleva MTS (bypass de mantenimiento desde ' + (r.padre ? r.padre.nombre : 'el tablero que la alimenta') + ')') : null,
-        u.activo && !t.padreId ? h('p', { class: 'hint' }, 'Para el MTS de la UPS el tablero debe estar alimentado desde otro tablero (elija «Circuito en…» arriba).') : null,
+        u.activo && !t.padreId ? chk(u, 'mts', 'La UPS lleva MTS (bypass de mantenimiento): se dibuja aguas abajo del principal con las dos acometidas') : null,
         r.ups ? h('p', { class: 'hint' }, 'Carga ' + U.fmt(r.ups.carga * 100, 1) + ' % · Icc limitado a ' + f2(r.ups.icc / 1000) + ' kA · voltaje regulado a la salida') : null),
       h('div', null,
         h('h4', null, 'Segunda acometida'),
