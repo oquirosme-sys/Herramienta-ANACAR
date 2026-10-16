@@ -476,6 +476,9 @@
         carga, kva: n(altD.kva), xd: n(altD.xd) || 12 };
       if (iAlt && (!iccA || iAlt > iccA)) { iccA = iAlt; iccFuente = (iccFuente ? iccFuente + ' · ' : '') + 'máx. por ' + (alterna.tipo === 'generador' ? 'generador' : 'bypass'); }
     }
+    // UPS con MTS en su propia barra: equipo manual de catálogo (amperaje ≥ protección, WCR ≥ Icc)
+    let upsMts = null;
+    if (ups && !alterna && tab.ups && tab.ups.mts) { const ampU = proteccion(1.25 * ups.kva * 1000 / ((fases === 3 ? 1.732 : 1) * V)) || AF139, sel = transferencia({ polosAts: 3 }, 'MTS', ampU, iccA ? iccA / 1000 : null); upsMts = { equipo: 'MTS', ats: sel, wcr: sel ? n(sel.wcr) : 0, transicion: 'manual', polosAts: 3 }; }
     const iccKA = iccA ? iccA / 1000 : null;
 
     // --- 5) tablero de catálogo y breakers según las reglas del fabricante
@@ -549,7 +552,7 @@
       alim: { R139, S139, L139, T139, X139, AA139, AD139, AE139, AF139, mat, ais, AI139, AJ139, AL139, AN139, AP139, AP140, AR139, tuberia, AS139, AT139,
         M139, vInicio, AV139, AW139, AX139, AY139, AU140, AV140, AW140, tempF, agrF, ampReq, ampCond, agrup, val, ajustado, calBase, parBase,
         fasesTxt: pre139 + AL139, neutroTxt: AN139 ? preN + AN139 : '', tierraTxt: AP139 ? preN + AP139 : '', tuboTxt: AR139 ? preN + AR139 : '', preN, preF: pre139.trim() },
-      iccA, iccKA, iccFuente, trafo, ups, alterna, zapatas, enSerie, nec, servicio, kaSpdMin, cat, famT, marca, bkMain, spd, espaciosUsados, avisos,
+      iccA, iccKA, iccFuente, trafo, ups, alterna, upsMts, zapatas, enSerie, nec, servicio, kaSpdMin, cat, famT, marca, bkMain, spd, espaciosUsados, avisos,
     };
   }
 

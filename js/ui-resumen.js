@@ -11,13 +11,14 @@
     ordenados(R) {
       const l = R.orden.map((r, i) => ({ r, i })).filter(x => !x.r.tab.excluirResumen)
         .sort((a, b) => (num(a.r.tab.orden) - num(b.r.tab.orden)) || (a.i - b.i)).map(x => x.r);
-      Resumen.conTransf = l.some(r => r.alterna || r.ups);   // si algún tablero lleva ATS/MTS o UPS las tablas incluyen sus datos
+      Resumen.conTransf = l.some(r => r.alterna || r.ups || r.upsMts);   // si algún tablero lleva ATS/MTS o UPS las tablas incluyen sus datos
       return l;
     },
     conTransf: false,
     /** Datos de la segunda acometida (ATS / MTS, generador o bypass) y de la UPS de un tablero. */
     transf(r) {
-      const a = r.alterna, u = r.ups, A = r.alim;
+      const a = r.alterna, u = r.ups, A = r.alim, m = !a && r.upsMts;
+      if (m) return ['MTS', m.ats ? m.ats.modelo : '', m.ats ? m.ats.amperios : (A.AF139 || ''), 'manual', 3, m.wcr || '', r.iccKA ? r2(r.iccKA) : '', 'Bypass desde la barra', '', '', '', '', '', u ? r2(u.kva) : '', u ? r2(u.icc / 1000) : ''];
       return [a ? a.equipo : '', a && a.ats ? a.ats.modelo : '', a ? (a.ats ? a.ats.amperios : (A.AF139 || '')) : '', a ? (a.equipo === 'MTS' ? 'manual' : a.transicion) : '', a ? a.polosAts : '', a ? (a.wcr || '') : '', a && a.iccAtsKA ? r2(a.iccAtsKA) : '',
         a ? (a.tipo === 'generador' ? 'Generador' + (a.kva ? ' ' + a.kva + ' kVA' : '') : 'Bypass ' + (a.origen || '')) : '', a ? r2(a.distNormal) : '', a ? r2(a.longitud) : '', a ? r2(a.distAts) : '',
         a ? a.fasesTxt + ' ' + a.mat : '', a ? r2(a.cv) : '', u ? r2(u.kva) : '', u ? r2(u.icc / 1000) : ''];

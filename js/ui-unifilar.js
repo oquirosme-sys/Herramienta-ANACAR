@@ -162,6 +162,7 @@
           ['WCR / Icc EN EL ' + a.equipo, (a.wcr || '—') + ' / ' + (a.iccAtsKA ? f2(a.iccAtsKA) : '—') + ' kA'], ['NORMAL → ' + a.equipo, f1(a.distNormal) + ' m'], [(a.tipo === 'generador' ? 'GENERADOR' : 'BYPASS') + ' → ' + a.equipo, f1(a.longitud) + ' m'],
           [a.equipo + ' → TABLERO', f1(a.distAts) + ' m'], ['GENERADOR', a.tipo === 'generador' ? (a.kva ? f1(a.kva) + ' kVA' : '—') : (a.origen || '—')], ['CALIBRE 2ª ACOMETIDA', a.fasesTxt + ' ' + a.mat], ['CAÍDA 2ª ACOMETIDA', f2(a.cv) + ' %']);
       }
+      if (r.upsMts) filas.push(['MTS (BYPASS UPS)', ''], ['MODELO MTS', r.upsMts.ats ? r.upsMts.ats.modelo + ' · ' + r.upsMts.ats.amperios + ' A' : (A.AF139 || '–') + ' A'], ['WCR / Icc EN EL MTS', (r.upsMts.wcr || '—') + ' / ' + (r.iccKA ? f2(r.iccKA) : '—') + ' kA']);
       if (r.ups) filas.push(['UPS', r.ups.nombre || ''], ['CAPACIDAD UPS', f1(r.ups.kva) + ' kVA'], ['Icc DEL INVERSOR', f2(r.ups.icc / 1000) + ' kA']);
       D.rect(x, y, w1 + w2, hh * (filas.length + 1), 'u-tab', 'TABLA');
       D.texto(x + (w1 + w2) / 2, y + 11, 'TABLA RESUMEN DEL TABLERO', 'u-t b', 'TABLA', 'c');
