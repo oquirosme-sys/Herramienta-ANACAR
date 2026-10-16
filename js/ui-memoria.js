@@ -64,6 +64,11 @@
         chk(u, 'activo', 'A través de una UPS'),
         u.activo ? h('div', { class: 'grid3 mt' }, UI.field('Nombre', UI.input(u, 'nombre', { fk: k + 'un' })), UI.field('Capacidad (kVA)', UI.input(u, 'kva', { type: 'num', fk: k + 'uk' })),
           UI.field('Icc del inversor (× In)', UI.input(u, 'factorIcc', { type: 'num', fk: k + 'uf', placeholder: '2' }), 'Corriente que entrega en falla')) : null,
+        u.activo && t.padreId ? h('label', { class: 'chk mt', title: 'El tablero que alimenta esta UPS lleva dos circuitos con su interruptor: uno a la UPS y otro al bypass (MTS)' },
+          h('input', { type: 'checkbox', checked: !!(a.activo && a.equipo === 'MTS' && a.tipo === 'tablero' && a.origenId === t.padreId), onchange: e => {
+            if (e.target.checked) Object.assign(a, { activo: true, equipo: 'MTS', tipo: 'tablero', origenId: t.padreId, polosAts: a.polosAts || 3 }); else if (a.equipo === 'MTS' && a.tipo === 'tablero') a.activo = false;
+            Store.save(); App.refresh(); } }), ' La UPS lleva MTS (bypass de mantenimiento desde ' + (r.padre ? r.padre.nombre : 'el tablero que la alimenta') + ')') : null,
+        u.activo && !t.padreId ? h('p', { class: 'hint' }, 'Para el MTS de la UPS el tablero debe estar alimentado desde otro tablero (elija «Circuito en…» arriba).') : null,
         r.ups ? h('p', { class: 'hint' }, 'Carga ' + U.fmt(r.ups.carga * 100, 1) + ' % · Icc limitado a ' + f2(r.ups.icc / 1000) + ' kA · voltaje regulado a la salida') : null),
       h('div', null,
         h('h4', null, 'Segunda acometida'),
