@@ -469,7 +469,7 @@
       const equipo = altD.equipo || 'ATS', esTr = /ATS|MTS/.test(equipo);
       const atsSel = esTr ? transferencia(altD, equipo, AF139, iccAtsKA) : null;
       const wcr = n(altD.sccr) || (atsSel ? n(atsSel.wcr) : 0);
-      alterna = { equipo, tipo: altD.tipo || 'generador', origen, nombre: altD.nombre || '', cal: ac, par: an, mat: am, ais: aa, tuberia: at, longitud: AL, val: av,
+      alterna = { equipo, tipo: altD.tipo || 'generador', origen, origenId: altD.origenId || '', nombre: altD.nombre || '', cal: ac, par: an, mat: am, ais: aa, tuberia: at, longitud: AL, val: av,
         fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + tierra(AF139, am) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
         caida: avd + dropCom, caidaFuente: avd, caidaComun: dropCom, distAts: dAts, distNormal: Math.max(0, M139 - dAts), caidaNormal: M139 ? AV139 * Math.max(0, M139 - dAts) / M139 : 0, vBornes: v0 - avd - dropCom, cv: (V - (v0 - avd - dropCom)) * 100 / V, iccA: iAlt, iccAtsKA,
         ats: atsSel, wcr, wcrOk: !wcr || !iccAtsKA || wcr >= iccAtsKA, transicion: altD.transicion || (equipo === 'MTS' ? 'manual' : 'abierta'), polosAts: n(altD.polosAts) || 3,

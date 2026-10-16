@@ -132,7 +132,9 @@
         const bkTxt = cb ? (cb.AF || '–') + ' A ' + (cb.breaker ? cb.polosBreaker + 'P ' + (cb.breaker.ref || cb.breaker.modelo || '') : '') : (A.AF139 || '–') + ' A ' + (fasesPolos(r)) + 'P';
         const hg = interruptor(gx, yb2, bkTxt, cb && cb.breaker && cb.breaker.sccrBajo, () => App.go('memoria', origen ? origen.tab.id : r.tab.id),
           { polos: cb && cb.breaker ? cb.polosBreaker : fasesPolos(r), amp: cb ? cb.AF : A.AF139, unidad: 'TM', modelo: cb && cb.breaker ? (cb.breaker.ref || cb.breaker.modelo || '') : '', sccr: cb && cb.breaker ? cb.breaker.sccr : '' });
-        D.linea(gx, ya, gx, hg[1], 'u-lin', 'ALIMENTADOR'); D.linea(gx, hg[0], gx, yb2 - 52, 'u-lin', 'ALIMENTADOR');
+        const alBus = al.tipo !== 'generador' && r.padre && al.origenId === r.padre.tab.id;   // el bypass sube hasta la barra del tablero que alimenta
+        D.linea(gx, ya, gx, hg[1], 'u-lin', 'ALIMENTADOR'); D.linea(gx, hg[0], gx, alBus ? y0 : yb2 - 52, 'u-lin', 'ALIMENTADOR');
+        if (alBus) D.punto && D.punto(gx, y0);
         if (al.tipo === 'generador') {
           D.simbolo('GENERADOR', gx, yb2 - 52, { NOMBRE: al.origen || 'Generador', KVA: al.kva ? f1(al.kva) + ' kVA' : '', XD: al.xd ? f1(al.xd) + ' %' : '' }, { ir: () => App.go('memoria', r.tab.id), title: 'Generador' });
           D.texto(gx + 22, yb2 - 74, (al.origen || 'Generador') + (al.xd ? " · X''d " + f1(al.xd) + ' %' : ''), 'u-t b', 'TEXTO');
