@@ -48,13 +48,16 @@
     NIVEL = conTabla ? 480 : 330;
     const raiz = R.orden.filter(r => r.nivel === 0);
     const span = {}, ancho = {}, todos = r => (R.hijos[r.tab.id] || []).map(t => R.res[t.id]).filter(Boolean);
-    const UXW = 520, ramaUps = r => !!(r.ups && !r.padre);   // la UPS del tablero principal cuelga de su barra, aguas abajo
-    const hijoU = r => (ramaUps(r) ? todos(r).find(x => x.tab.deUps) : null) || null;   // tablero conectado aguas abajo del MTS de la UPS
+    const UXW = 520;
+    /** La UPS cuelga de la barra del tablero que la alimenta (aguas arriba) y el tablero con la UPS queda bajo su MTS; un principal con UPS y sin tablero aguas arriba la dibuja en su propia barra. */
+    const hijoUps = r => todos(r).find(x => x.ups) || null;
+    const ramaUps = r => !!(hijoUps(r) || (r.ups && !r.padre));
+    const hijoU = r => hijoUps(r) || (r.ups && !r.padre ? todos(r).find(x => x.tab.deUps) : null) || null;   // tablero conectado aguas abajo del MTS de la UPS
     const hijos = r => todos(r).filter(x => x !== hijoU(r));
     const medir = r => { const hs = hijos(r), hu = hijoU(r); span[r.tab.id] = Math.max(W, hs.reduce((a, x) => a + medir(x), 0) + GAP * Math.max(0, hs.length - 1)); const eu = hu ? Math.max(UXW, medir(hu) + 170) : UXW; ancho[r.tab.id] = span[r.tab.id] + LBL + (ramaUps(r) ? eu : 0); return ancho[r.tab.id]; };
     const totalW = raiz.reduce((a, r) => a + medir(r) + GAP, GAP) + 40;
     const prof = r => 1 + Math.max(0, ...todos(r).map(prof));
-    D.tamano(totalW, 120 + NIVEL * Math.max(1, ...raiz.map(prof)) + 120 + (raiz.some(hijoU) ? NIVEL : 0));
+    D.tamano(totalW, 120 + NIVEL * Math.max(1, ...raiz.map(prof)) + 120 + (R.orden.some(hijoU) ? NIVEL : 0));
 
     const HB = SIMB.INTERRUPTOR_3P.alto * SIMB.INTERRUPTOR_3P.k;     // alto del símbolo de interruptor
     /** Interruptor: bloque de 1, 2 o 3 polos centrado en (x, y) con atributos (polos, amperios, unidad, modelo, SCCR) y texto a la derecha. Devuelve [y superior, y inferior]. */
@@ -89,11 +92,6 @@
       } else {
         y += 50;
         D.boton(x, y, '+ trafo', () => editarTrafo(r.tab, R));
-      }
-      if (r.ups && r.padre) {
-        y += 44;
-        D.rect(x - 22, y - 13, 44, 26, 'u-ups', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, y + 4, 'UPS', 'u-t b', 'TEXTO', 'c'); huecos.push([y - 13, y + 13]);
-        D.texto(x + 30, y + 4, r.ups.nombre + ' ' + f1(r.ups.kva) + ' kVA · Icc ' + f2(r.ups.icc / 1000) + ' kA', 'u-t', 'TEXTO');
       }
       y = Math.max(y + 46, y1 - (r.alterna ? 176 : 74));
       // con segunda acometida los datos del cable van a la izquierda de la línea
@@ -176,7 +174,7 @@
 
     /** UPS del tablero principal: dos interruptores en la barra (UPS y bypass) → UPS → MTS → interruptor de salida, aguas abajo del principal. */
     function ramaUpsDibujo(r, xu, yb, hu) {
-      const u = r.ups, mts = !!r.tab.ups.mts, x1 = mts ? xu - 45 : xu, ir = () => App.go('memoria', r.tab.id);
+      const up = hu && hu.ups ? hu : r, u = up.ups, al = up.tab.alterna, mts = up === r ? !!r.tab.ups.mts : !!(al && al.activo && al.equipo === 'MTS' && al.origenId === r.tab.id), x1 = mts ? xu - 45 : xu, ir = () => App.go('memoria', up.tab.id);
       const fases = fasesPolos(r), hb1 = interruptor(x1, yb + 30, 'UPS ' + f1(u.kva) + ' kVA', false, ir, { polos: fases, unidad: 'TM' });
       const yU = yb + 120;
       D.linea(x1, yb, x1, hb1[0], 'u-lin', 'ALIMENTADOR'); D.linea(x1, hb1[1], x1, yU, 'u-lin', 'ALIMENTADOR');

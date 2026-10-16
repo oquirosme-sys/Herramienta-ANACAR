@@ -64,6 +64,8 @@
         chk(u, 'activo', 'A través de una UPS'),
         u.activo ? h('div', { class: 'grid3 mt' }, UI.field('Nombre', UI.input(u, 'nombre', { fk: k + 'un' })), UI.field('Capacidad (kVA)', UI.input(u, 'kva', { type: 'num', fk: k + 'uk' })),
           UI.field('Icc del inversor (× In)', UI.input(u, 'factorIcc', { type: 'num', fk: k + 'uf', placeholder: '2' }), 'Corriente que entrega en falla')) : null,
+        u.activo ? UI.field('Tablero al que se conecta la UPS (aguas arriba)', UI.select(UI.opts(Store.posiblesPadres(t).map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— elegir tablero —'), t.padreId || '', v => {
+          Store.cambiarPadre(t, v); if (a.activo && a.equipo === 'MTS' && a.tipo === 'tablero') a.origenId = v; Store.save(); App.refresh(); }), 'La UPS cuelga de la barra de ese tablero (con sus interruptores) y este tablero queda bajo el MTS; el circuito se crea en ese tablero') : null,
         u.activo && t.padreId ? h('label', { class: 'chk mt', title: 'El tablero que alimenta esta UPS lleva dos circuitos con su interruptor: uno a la UPS y otro al bypass (MTS)' },
           h('input', { type: 'checkbox', checked: !!(a.activo && a.equipo === 'MTS' && a.tipo === 'tablero' && a.origenId === t.padreId), onchange: e => {
             if (e.target.checked) Object.assign(a, { activo: true, equipo: 'MTS', tipo: 'tablero', origenId: t.padreId, polosAts: a.polosAts || 3 }); else if (a.equipo === 'MTS' && a.tipo === 'tablero') a.activo = false;
