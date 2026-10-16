@@ -69,6 +69,7 @@
             if (e.target.checked) Object.assign(a, { activo: true, equipo: 'MTS', tipo: 'tablero', origenId: t.padreId, polosAts: a.polosAts || 3 }); else if (a.equipo === 'MTS' && a.tipo === 'tablero') a.activo = false;
             Store.save(); App.refresh(); } }), ' La UPS lleva MTS (bypass de mantenimiento desde ' + (r.padre ? r.padre.nombre : 'el tablero que la alimenta') + ')') : null,
         u.activo && !t.padreId ? chk(u, 'mts', 'La UPS lleva MTS (bypass de mantenimiento): se dibuja aguas abajo del principal con las dos acometidas') : null,
+        u.activo && !t.padreId ? UI.field('Tablero conectado aguas abajo de la UPS / MTS', UI.select(UI.opts(Store.project.tableros.filter(o => o.padreId === t.id).map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— ninguno —'), (Store.project.tableros.find(o => o.padreId === t.id && o.deUps) || {}).id || '', v => { Store.project.tableros.forEach(o => { if (o.padreId === t.id) o.deUps = o.id === v; }); Store.save(); App.refresh(); }), 'Se dibuja bajo el MTS de la UPS, con su formato normal; su carga ya se suma en este tablero (debe ser un tablero derivado de éste)') : null,
         r.ups ? h('p', { class: 'hint' }, 'Carga ' + U.fmt(r.ups.carga * 100, 1) + ' % · Icc limitado a ' + f2(r.ups.icc / 1000) + ' kA · voltaje regulado a la salida') : null),
       h('div', null,
         h('h4', null, 'Segunda acometida'),
