@@ -283,6 +283,22 @@ rx(113, "Icc en el ATS (kA)", '=IF(NOT(BX84),"",MAX(N(BX111),N(BX112),IF(N($I$23
 rx(114, "ATS / MTS (tipo de catálogo)", '=IF(OR(NOT(BX84),$I$15="IP"),"",ATS_SEL(IF($I$15="MTS","Manual "&RIGHT($I$22,2),$I$22),N(BX24),N(BX113)))')
 rx(115, "ATS: modelo", '=IF(BX114="","",ATS_DATO(BX114,"modelo"))'); rx(116, "ATS: amperios", '=IF(BX114="","",ATS_DATO(BX114,"amperios"))')
 rx(117, "ATS: WCR efectivo (kA)", '=IF(N($I$21)>0,$I$21,IF(BX114="","",ATS_DATO(BX114,"wcr")))')
+# datos de transferencia (ATS/MTS) y UPS para las tablas resumen (vacíos si el tablero no los usa)
+rx(118, "Resumen: equipo de transferencia", '=IF(BX84,$I$15,"")')
+rx(119, "Resumen: modelo ATS", '=IF(BX84,BX115&"","")')
+rx(120, "Resumen: amperios ATS", '=IF(BX84,IF(BX116<>"",BX116,BX24),"")')
+rx(121, "Resumen: transición", '=IF(BX84,IF($I$15="MTS","manual",TRIM(LEFT($I$22,LEN($I$22)-2))),"")')
+rx(122, "Resumen: polos", '=IF(BX84,VALUE(LEFT(RIGHT($I$22,2),1)),"")')
+rx(123, "Resumen: WCR (kA)", '=IF(BX84,BX117,"")')
+rx(124, "Resumen: Icc en el ATS (kA)", '=IF(BX84,BX113,"")')
+rx(125, "Resumen: fuente alterna", '=IF(BX84,IF($I$16="Generador","Generador"&IF(N($I$18)>0," "&$I$18&" kVA",""),"Bypass "&$I$17),"")')
+rx(126, "Resumen: normal → ATS (m)", '=IF(BX84,MAX(0,BX40-N($I$23)),"")')
+rx(127, "Resumen: alterna → ATS (m)", '=IF(BX84,N($I$20),"")')
+rx(128, "Resumen: ATS → tablero (m)", '=IF(BX84,N($I$23),"")')
+rx(129, "Resumen: conductores 2ª acometida", '=IF(BX84,BX95&" "&$F$3,"")')
+rx(130, "Resumen: caída 2ª acometida (%)", '=IF(BX84,BX93,"")')
+rx(131, "Resumen: UPS (kVA)", '=IF($I$10="SI",N($I$11),"")')
+rx(132, "Resumen: Icc del inversor (kA)", '=IF($I$10="SI",N(BX59)/1000,"")')
 rx(88, "2ª acometida: Icc (A)", '=IF(OR(NOT(BX84),BX87=""),"",IF($I$16="Generador",IF(N($I$18)>0,P2P($I$18*1000/(IF($C$8=3,1.732,1)*$C$7*IF(N($I$19)>0,$I$19,12)/100),%s),""),IF($I$17<>"",IF(N(BX109)>0,P2P(BX109,%s),""),"")))' % (ALTP2P, ALTP2P))
 mc["BX88"] = '=IF(N(BX111)=0,"",IF(N($I$23)>0,P2P(BX111,BX31,%s,%s,BX30,N($I$23),$C$7,$C$8,ICC_LMAX),BX111))' % (AIS, TUB); BX[88] = mc["BX88"].value
 rx(90, "2ª acometida: FAC ajustado", '=IF(BX87="","",IFERROR(INDEX(CHOOSE(IF(%s,2,1),T_FAC_CU,T_FAC_AL),IF(BX15=1,1,IF(BX15>0.949,2,IF(BX15>0.899,3,4))),MATCH(BX87,T_FAC_H,0))*IF(AND($C$8=2,$C$7=240),1.15,1),""))' % ESAL)
@@ -582,7 +598,7 @@ for col, w in zip("ABCDEFG", [12, 14, 40, 16, 16, 14, 12]): cm.column_dimensions
 
 tr = wb.create_sheet("TABLA RESUMEN", 4)
 ar = {"A": 4, "B": 35.8, "C": 30.2, "D": 18.8, "E": 18.9, "F": 15.5, "G": 15.8, "H": 15.1, "I": 15, "J": 9, "K": 15.5, "L": 13.9, "M": 13.9, "N": 9, "O": 13.8, "P": 18.2, "Q": 16.8, "R": 10, "S": 17.8, "T": 12, "U": 14, "V": 14, "W": 14,
-      "X": 19.1, "Y": 18.2, "Z": 32.1, "AA": 23.5, "AB": 16.5, "AC": 15, "AD": 10, "AE": 10, "AF": 16, "AG": 20.2, "AH": 21.8, "AI": 34.9, "AJ": 21.8, "AK": 12, "AL": 14, "AM": 12, "AN": 21.5, "AO": 30.9, "AP": 43, "AQ": 16.2, "AR": 21.8, "AS": 14, "AT": 10, "AU": 12}
+      "X": 19.1, "Y": 18.2, "Z": 32.1, "AA": 23.5, "AB": 16.5, "AC": 15, "AD": 10, "AE": 10, "AF": 16, "AG": 20.2, "AH": 21.8, "AI": 34.9, "AJ": 21.8, "AK": 12, "AL": 14, "AM": 12, "AN": 21.5, "AO": 30.9, "AP": 43, "AQ": 16.2, "AR": 21.8, "AS": 14, "AT": 10, "AU": 12, "AV": 14, "AW": 22, "AX": 12, "AY": 16, "AZ": 10, "BA": 11, "BB": 14, "BC": 24, "BD": 14, "BE": 14, "BF": 14, "BG": 28, "BH": 12, "BI": 12, "BJ": 14}
 for k, w in ar.items(): tr.column_dimensions[k].width = w
 def T_(y, a, b, val, est, y2=None):
     y2 = y2 or y
@@ -595,11 +611,11 @@ def T_(y, a, b, val, est, y2=None):
     c.alignment = CENT
     if a != b or y2 != y: tr.merge_cells("%s%d:%s%d" % (a, y, b, y2))
 T_(1, "B", "N", "TABLA RESUMEN - TABLEROS ELÉCTRICOS", "tit", 8); T_(1, "O", "Y", None, "tit", 8)
-T_(1, "Z", "AG", "DATOS DEL TABLERO", "tit", 8); T_(1, "AH", "AN", "DATOS DEL SUPRESOR", "tit", 8); T_(1, "AO", "AU", "DATOS INTERRUPTOR PRINCIPAL", "tit", 8)
+T_(1, "Z", "AG", "DATOS DEL TABLERO", "tit", 8); T_(1, "AH", "AN", "DATOS DEL SUPRESOR", "tit", 8); T_(1, "AO", "AU", "DATOS INTERRUPTOR PRINCIPAL", "tit", 8); T_(1, "AV", "BJ", "DATOS TRANSFERENCIA (ATS / MTS) Y UPS", "tit", 8)
 for L_, t in [("B", "Tablero / Equipo"), ("C", "Alimentado desde"), ("D", "kVA Totales"), ("E", "kVA Demandados"), ("F", "Factor demanda"), ("G", "Factor diversidad"), ("H", "Factor potencia"),
               ("T", "Longitud (m)"), ("U", "Voltaje bornes (V)"), ("V", "Caída de voltaje total (V)"), ("W", "Caída de voltaje total (%)"), ("X", "Corriente cortocircuito disponible (kA)"), ("Y", "Capacidad de breaker (A)"),
               ("Z", "Tablero / Equipo"), ("AA", "Modelo de referencia"), ("AB", "Fabricante"), ("AF", "Espacios"), ("AG", "Montaje"), ("AH", "Fabricante"), ("AI", "Modelo de referencia"), ("AJ", "Montaje"),
-              ("AM", "Voltaje (V)"), ("AN", "Fases"), ("AO", "Fabricante"), ("AP", "Modelo de referencia"), ("AQ", "Marco (A)"), ("AR", "Amperios (A)"), ("AS", "Tipo de unidad"), ("AT", "# polos"), ("AU", "SCCR (kA)")]:
+              ("AM", "Voltaje (V)"), ("AN", "Fases"), ("AO", "Fabricante"), ("AP", "Modelo de referencia"), ("AQ", "Marco (A)"), ("AR", "Amperios (A)"), ("AS", "Tipo de unidad"), ("AT", "# polos"), ("AU", "SCCR (kA)"), ("AV", "Equipo"), ("AW", "Modelo de referencia"), ("AX", "Amperios (A)"), ("AY", "Transición"), ("AZ", "# polos"), ("BA", "WCR (kA)"), ("BB", "Icc en el ATS (kA)"), ("BC", "Fuente alterna"), ("BD", "Normal → ATS (m)"), ("BE", "Alterna → ATS (m)"), ("BF", "ATS → tablero (m)"), ("BG", "Conductores 2ª acometida"), ("BH", "Caída 2ª acometida (%)"), ("BI", "UPS (kVA)"), ("BJ", "Icc del inversor (kA)")]:
     T_(9, L_, L_, t, "thg", 10)
 T_(9, "I", "P", "Calibres conductores alimentador", "thg")
 for a, b, t in [("I", "J", "Fases (AWG)"), ("K", "L", "Neutro (AWG)"), ("M", "N", "Tierra (AWG)"), ("O", "O", "Material"), ("P", "P", "Aislamiento")]: T_(10, a, b, t, "thg")

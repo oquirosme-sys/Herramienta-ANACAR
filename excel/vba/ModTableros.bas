@@ -594,12 +594,12 @@ Public Sub ActualizarResumen()
     Dim tr As Worksheet, c As Collection, o As Variant, ws As Worksheet, r As Long, R0 As String, i As Long
     Dim cols As Variant, refs As Variant, fm As String
     Set tr = ThisWorkbook.Worksheets("TABLA RESUMEN")
-    tr.Range("B11:AU300").UnMerge
-    tr.Range("B11:AU300").Clear
+    tr.Range("B11:BJ300").UnMerge
+    tr.Range("B11:BJ300").Clear
     Set c = ListaResumen()
-    cols = Array("B", "C", "D", "E", "F", "G", "H", "I", "K", "M", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ", "AK", "AL", "AM", "AN", "AO", "AP", "AQ", "AR", "AS", "AT", "AU")
+    cols = Array("B", "C", "D", "E", "F", "G", "H", "I", "K", "M", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ", "AK", "AL", "AM", "AN", "AO", "AP", "AQ", "AR", "AS", "AT", "AU", "AV", "AW", "AX", "AY", "AZ", "BA", "BB", "BC", "BD", "BE", "BF", "BG", "BH", "BI", "BJ")
     refs = Array("$BX$2", "$BX$98", "$BX$10", "$BX$14", "$BX$12", "$BX$13", "$BX$15", "$BX$99", "$BX$100", "$BX$101", "$F$3", "$F$4", "$BX$30", "$BX$36", "$F$5", "$C$12", "$BX$49", "$BX$50", "$BX$51", "$BX$58", "$BX$24", _
-                 "$BX$2", "$BX$63", "$BX$60", "$BX$64", "$BX$65", "$BX$66", "$BX$67", "$C$18", "$BX$60", "$BX$79", "$BX$82", "$BX$80", "$BX$81", "$C$6", "$C$8", "$BX$60", "$BX$72", "$BX$75", "$BX$24", "$BX$73", "$BX$76", "$BX$74")
+                 "$BX$2", "$BX$63", "$BX$60", "$BX$64", "$BX$65", "$BX$66", "$BX$67", "$C$18", "$BX$60", "$BX$79", "$BX$82", "$BX$80", "$BX$81", "$C$6", "$C$8", "$BX$60", "$BX$72", "$BX$75", "$BX$24", "$BX$73", "$BX$76", "$BX$74", "$BX$118", "$BX$119", "$BX$120", "$BX$121", "$BX$122", "$BX$123", "$BX$124", "$BX$125", "$BX$126", "$BX$127", "$BX$128", "$BX$129", "$BX$130", "$BX$131", "$BX$132")
     r = 11
     For Each o In c
         Set ws = o: R0 = RefMC(IdDe(ws))
@@ -610,7 +610,7 @@ Public Sub ActualizarResumen()
         r = r + 1
     Next o
     If r > 11 Then
-        With tr.Range("B11:AU" & r - 1)
+        With tr.Range("B11:BJ" & r - 1)
             .Borders.LineStyle = xlContinuous
             .Font.Name = "Century Gothic": .Font.Size = 12: .Font.Bold = True
             .HorizontalAlignment = xlCenter: .VerticalAlignment = xlCenter: .WrapText = True
@@ -619,7 +619,7 @@ Public Sub ActualizarResumen()
         tr.Range("D11:H" & r - 1).NumberFormat = "0.00"
         tr.Range("U11:X" & r - 1).NumberFormat = "0.00"
     End If
-    tr.PageSetup.PrintArea = "$B$1:$AU$" & Application.WorksheetFunction.Max(11, r - 1)
+    tr.PageSetup.PrintArea = "$B$1:$BJ$" & Application.WorksheetFunction.Max(11, r - 1)
     ResumenVertical c
     ResumenDU c
 End Sub
@@ -630,9 +630,11 @@ Private Sub ResumenVertical(c As Collection)
     w.Range("B3:ZZ80").Clear
     campos = Array("Tablero / Equipo", "Alimentado desde", "kVA totales", "kVA demandados", "Factor demanda", "Factor diversidad", "Factor potencia", "Fases (AWG)", "Neutro (AWG)", "Tierra (AWG)", "Material", "Aislamiento", "Tuberia (mm)", _
                    "Longitud (m)", "Voltaje bornes (V)", "Caida total (V)", "Caida total (%)", "Icc disponible (kA)", "Proteccion (A)", "Tablero: modelo", "Fabricante", "Barras F/N/T (A)", "Espacios", "Montaje", _
-                   "SPD: modelo", "SPD kA L-L / L-N", "Principal: modelo", "Principal: marco (A)", "Principal: unidad", "Principal: polos", "Principal: SCCR (kA)")
+                   "SPD: modelo", "SPD kA L-L / L-N", "Principal: modelo", "Principal: marco (A)", "Principal: unidad", "Principal: polos", "Principal: SCCR (kA)", _
+                   "ATS/MTS: equipo", "ATS/MTS: modelo", "ATS/MTS: amperios", "ATS/MTS: transicion", "ATS/MTS: polos", "ATS/MTS: WCR (kA)", "ATS/MTS: Icc en el ATS (kA)", "Fuente alterna", "Normal a ATS (m)", "Alterna a ATS (m)", "ATS a tablero (m)", "Conductores 2a acometida", "Caida 2a acometida (%)", "UPS (kVA)", "UPS: Icc inversor (kA)")
     refs = Array("$BX$2", "$BX$98", "$BX$10", "$BX$14", "$BX$12", "$BX$13", "$BX$15", "$BX$99", "$BX$100", "$BX$101", "$F$3", "$F$4", "$BX$102", "$C$12", "$BX$49", "$BX$50", "$BX$51", "$BX$58", "$BX$24", "$BX$63", "$BX$60", _
-                 "#BARRAS", "$BX$67", "$C$18", "$BX$79", "#SPD", "$BX$72", "$BX$75", "$BX$73", "$BX$76", "$BX$74")
+                 "#BARRAS", "$BX$67", "$C$18", "$BX$79", "#SPD", "$BX$72", "$BX$75", "$BX$73", "$BX$76", "$BX$74", _
+                 "$BX$118", "$BX$119", "$BX$120", "$BX$121", "$BX$122", "$BX$123", "$BX$124", "$BX$125", "$BX$126", "$BX$127", "$BX$128", "$BX$129", "$BX$130", "$BX$131", "$BX$132")
     For i = 0 To UBound(campos)
         w.Cells(3 + i, 2).Value = campos(i)
     Next i
@@ -665,8 +667,8 @@ End Sub
 Private Sub ResumenDU(c As Collection)
     Dim w As Worksheet, cab As Variant, i As Long, r As Long, o As Variant, ws As Worksheet, R0 As String, f As Variant
     Set w = ThisWorkbook.Worksheets("RESUMEN DU")
-    w.Range("B3:P300").Clear
-    cab = Array("Tablero", "Alimentado desde", "kVA demandados", "Proteccion (A)", "Conductores", "Tuberia", "Long. (m)", "Caida total (%)", "Icc (kA)", "Segunda acometida", "Conductores 2a acometida", "Caida 2a acometida (%)", "Transformador / UPS", "Avisos")
+    w.Range("B3:R300").Clear
+    cab = Array("Tablero", "Alimentado desde", "kVA demandados", "Proteccion (A)", "Conductores", "Tuberia", "Long. (m)", "Caida total (%)", "Icc (kA)", "Segunda acometida", "Conductores 2a acometida", "Caida 2a acometida (%)", "Transformador / UPS", "Avisos", "ATS / MTS (WCR / Icc kA)", "Normal / alterna / ATS-tablero (m)")
     For i = 0 To UBound(cab)
         w.Cells(3, 2 + i).Value = cab(i)
     Next i
@@ -678,7 +680,9 @@ Private Sub ResumenDU(c As Collection)
                   "=IF(" & R0 & "$I$14=""SI""," & R0 & "$I$15&"" - ""&IF(" & R0 & "$I$16=""Generador"",""Generador ""&" & R0 & "$I$18&"" kVA"",""Bypass desde ""&" & R0 & "$I$17),"""")", _
                   "=" & R0 & "$BX$95&""""", "=IF(" & R0 & "$BX$93="""",""""," & R0 & "$BX$93)", _
                   "=TRIM(IF(" & R0 & "$I$3=""SI"",""Transformador ""&" & R0 & "$I$4&"" kVA Z ""&" & R0 & "$I$5&"" % "","""")&IF(" & R0 & "$I$10=""SI"",""UPS ""&" & R0 & "$I$11&"" kVA"",""""))", _
-                  "=" & R0 & "$BX$97&""""")
+                  "=" & R0 & "$BX$97&""""", _
+                  "=IF(" & R0 & "$BX$118="""",""""," & R0 & "$BX$118&"" ""&" & R0 & "$BX$119&"" (WCR ""&" & R0 & "$BX$123&"" / ""&FIXED(N(" & R0 & "$BX$124),2)&"" kA)"")", _
+                  "=IF(" & R0 & "$BX$118="""",""""," & R0 & "$BX$126&"" / ""&" & R0 & "$BX$127&"" / ""&" & R0 & "$BX$128)")
         For i = 0 To UBound(f)
             w.Cells(r, 2 + i).Formula = f(i)
         Next i
@@ -692,7 +696,7 @@ Private Sub ResumenDU(c As Collection)
         .Interior.Color = RGB(217, 217, 217): .Font.Bold = True: .HorizontalAlignment = xlCenter
     End With
     w.Range("D4:D300").NumberFormat = "0.00": w.Range("I4:J300").NumberFormat = "0.00": w.Range("M4:M300").NumberFormat = "0.00"
-    w.Columns("C:O").ColumnWidth = 18: w.Columns("P").ColumnWidth = 60
+    w.Columns("C:O").ColumnWidth = 18: w.Columns("P:Q").ColumnWidth = 34
 End Sub
 
 Private Function Limpio(s As String) As String
@@ -728,16 +732,17 @@ Public Sub NombresDefinidos()
     ThisWorkbook.Names.Add Name:="DATOS_DEL_TABLERO", RefersTo:="='TABLA RESUMEN'!$Z$1:$AG$" & u
     ThisWorkbook.Names.Add Name:="DATOS_DEL_SUPRESOR", RefersTo:="='TABLA RESUMEN'!$AH$1:$AN$" & u
     ThisWorkbook.Names.Add Name:="DATOS_INTERRUPTOR_PRINCIPAL", RefersTo:="='TABLA RESUMEN'!$AO$1:$AU$" & u
-    ThisWorkbook.Names.Add Name:="RESUMEN_VERTICAL", RefersTo:="='RESUMEN VERTICAL'!$B$1:$" & Split(ThisWorkbook.Worksheets("RESUMEN VERTICAL").Cells(1, 2 + n).Address, "$")(1) & "$33"
-    ThisWorkbook.Names.Add Name:="RESUMEN_DU", RefersTo:="='RESUMEN DU'!$B$1:$O$" & (3 + n)
+    ThisWorkbook.Names.Add Name:="DATOS_TRANSFERENCIA", RefersTo:="='TABLA RESUMEN'!$AV$1:$BJ$" & u
+    ThisWorkbook.Names.Add Name:="RESUMEN_VERTICAL", RefersTo:="='RESUMEN VERTICAL'!$B$1:$" & Split(ThisWorkbook.Worksheets("RESUMEN VERTICAL").Cells(1, 2 + n).Address, "$")(1) & "$48"
+    ThisWorkbook.Names.Add Name:="RESUMEN_DU", RefersTo:="='RESUMEN DU'!$B$1:$Q$" & (3 + n)
 End Sub
 
 Public Sub SoloTablaResumen()
     ' alterna: mostrar solo la tabla resumen (sin datos del tablero, del supresor ni del interruptor principal)
     With ThisWorkbook.Worksheets("TABLA RESUMEN")
-        .Columns("Z:AU").Hidden = Not .Columns("Z:AU").Hidden
-        If .Columns("Z:AU").Hidden Then .PageSetup.PrintArea = "$B$1:$Y$" & Application.WorksheetFunction.Max(11, 10 + ListaResumen().Count) _
-        Else .PageSetup.PrintArea = "$B$1:$AU$" & Application.WorksheetFunction.Max(11, 10 + ListaResumen().Count)
+        .Columns("Z:BJ").Hidden = Not .Columns("Z:BJ").Hidden
+        If .Columns("Z:BJ").Hidden Then .PageSetup.PrintArea = "$B$1:$Y$" & Application.WorksheetFunction.Max(11, 10 + ListaResumen().Count) _
+        Else .PageSetup.PrintArea = "$B$1:$BJ$" & Application.WorksheetFunction.Max(11, 10 + ListaResumen().Count)
     End With
 End Sub
 
