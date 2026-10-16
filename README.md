@@ -43,6 +43,13 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
+## UPS con MTS — 2026.1-web.14
+- En *Fuentes de alimentación*, al marcar *A través de una UPS* aparece **«La UPS lleva MTS (bypass de mantenimiento)»**: el tablero que alimenta la UPS recibe un segundo circuito con su interruptor (el bypass, que ocupa espacio pero no suma carga) y el unifilar muestra el MTS con las dos acometidas. Requiere que el tablero esté alimentado desde otro tablero.
+
+## Casillas y datos de ATS/UPS en las tablas — 2026.1-web.12 / web.13
+- **web.12:** las casillas numéricas (kVA del generador, distancias, etc.) ya no se borran al cambiar otro dato (prueba `tests/ui-test.html`).
+- **web.13:** en el unifilar hay espacio entre el ATS/MTS y la barra con el cableado del tramo común; al ATS llegan la acometida normal (transformador, módulo de medidores o tablero padre) y el generador/bypass. La tabla de datos del diagrama y las tablas resumen (horizontal, vertical y DU) incluyen los datos de ATS/MTS y UPS (bloque «DATOS TRANSFERENCIA», columnas AV–BJ; nombre definido `DATOS_TRANSFERENCIA`). El Excel con macros trae lo mismo, incluido el DXF.
+
 ## ATS / MTS con las dos acometidas y sus distancias — 2026.1-web.11
 - Al marcar *Lleva segunda acometida* con ATS o MTS, al equipo llegan **las dos acometidas**: la **normal** (del transformador o del tablero que alimenta) y la **de emergencia** (generador o bypass). Se indican tres distancias: *Transformador → ATS*, *Generador → ATS* y *ATS → tablero* (tramo común). Con la distancia normal indicada, el largo del alimentador pasa a ser normal + ATS → tablero.
 - La memoria muestra por tramo la longitud y la caída de voltaje, la Icc en el ATS (la mayor de las dos fuentes) y la comparación con su WCR. El unifilar rotula las entradas NORMAL y EMERGENCIA y las distancias; el Excel agrega la entrada *Distancia fuente normal → ATS* (I24).
