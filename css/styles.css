@@ -269,3 +269,6 @@ ol.guia li { margin: .35rem 0; line-height: 1.45; }
 .unifilar .u-sim .u-st { fill: var(--ink); stroke: none; font-weight: 700; }
 .unifilar .u-sim.mal line, .unifilar .u-sim.mal path, .unifilar .u-sim.mal circle { stroke: var(--bad); } .unifilar .u-sim.mal circle.rell { fill: var(--bad); }
 .unifilar .u-sim.clic:hover line, .unifilar .u-sim.clic:hover path, .unifilar .u-sim.clic:hover circle { stroke: var(--brand); } .unifilar .u-sim.clic:hover circle.rell { fill: var(--brand); }
+
+.zoom-u { display: inline-flex; align-items: center; gap: 4px; } .zoom-v { min-width: 3.2em; text-align: center; font-size: 12px; color: var(--muted); }
+@media print { .zoom-u { display: none; } }

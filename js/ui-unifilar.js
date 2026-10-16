@@ -356,18 +356,39 @@
     });
   }
 
+  let zoomU = 1;   // ampliación del diagrama (se conserva al refrescar)
+  const ZMIN = 0.1, ZMAX = 4;
   App.views.unifilar = function (view, R) {
     const P = Store.project;
+    let etqZoom = null, wrap = null;
+    /** Cambia la ampliación (el centro visible se mantiene) y ajusta el tamaño del SVG sin volver a dibujar. */
+    const poner = (z, cx, cy) => {
+      const s = wrap && wrap.querySelector('svg.unifilar'); if (!s) return;
+      const w0 = Number(s.dataset.w), h0 = Number(s.dataset.h), antes = zoomU;
+      zoomU = Math.min(ZMAX, Math.max(ZMIN, z));
+      const fx = cx === undefined ? wrap.clientWidth / 2 : cx, fy = cy === undefined ? wrap.clientHeight / 2 : cy;
+      const px = (wrap.scrollLeft + fx) / antes, py = (wrap.scrollTop + fy) / antes;
+      s.setAttribute('width', Math.round(w0 * zoomU)); s.setAttribute('height', Math.round(h0 * zoomU));
+      wrap.scrollLeft = px * zoomU - fx; wrap.scrollTop = py * zoomU - fy;
+      if (etqZoom) etqZoom.textContent = Math.round(zoomU * 100) + ' %';
+    };
+    const ajustar = () => { const s = wrap && wrap.querySelector('svg.unifilar'); if (s) poner(Math.min(1, (wrap.clientWidth - 4) / Number(s.dataset.w))); };
     view.appendChild(h('div', { class: 'page-h row no-print' }, h('div', null, h('h2', null, 'Diagrama unifilar'), h('p', { class: 'muted' }, 'Clic en una barra para abrir su memoria, en un transformador para editarlo; "+ trafo" agrega un transformador aguas arriba del tablero.')),
       h('div', { class: 'toolbar' },
         UI.field('Icc de la red en el primario (kA)', UI.input(P, 'iccRed', { type: 'num', fk: 'u:icc', placeholder: 'infinita', class: 'w-num' }), null, 'inline'),
         h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: conTabla, onchange: e => { conTabla = e.target.checked; App.refresh(); } }), ' Tabla de datos junto a cada tablero'),
         UI.btn('+ Tablero principal', async () => { const n = await UI.prompt('Nuevo tablero principal', 'Nombre', '', v => (v ? '' : 'Escriba un nombre')); if (n) { Store.nuevoTablero({ nombre: n }); App.refresh(); } }, 'small'),
         UI.btn('Descargar DXF (AutoCAD)', () => { U.download(App.fileBase() + ' - unifilar.dxf', dxf(R), 'application/dxf'); UI.toast('DXF generado: ábralo en AutoCAD y use Guardar como… DWG', 'ok'); }, 'primary small', 'AutoCAD abre el DXF directamente; con "Guardar como" queda en DWG'),
-        UI.btn('Descargar SVG', () => { const s = document.querySelector('svg.unifilar'); if (s) U.download(App.fileBase() + ' - unifilar.svg', '<?xml version="1.0" encoding="UTF-8"?>' + s.outerHTML.replace('<svg', '<svg style="font-family:Arial;background:#fff"'), 'image/svg+xml'); }, 'small'),
+        UI.btn('Descargar SVG', () => { const s = document.querySelector('svg.unifilar'); if (s) U.download(App.fileBase() + ' - unifilar.svg', '<?xml version="1.0" encoding="UTF-8"?>' + s.outerHTML.replace(/ width="\d+"/, ' width="' + s.dataset.w + '"').replace(/ height="\d+"/, ' height="' + s.dataset.h + '"').replace('<svg', '<svg style="font-family:Arial;background:#fff"'), 'image/svg+xml'); }, 'small'),
+        h('span', { class: 'zoom-u', title: 'Ctrl + rueda del ratón también acerca y aleja' },
+          UI.btn('−', () => poner(zoomU / 1.25), 'small', 'Alejar'), etqZoom = h('span', { class: 'zoom-v' }, Math.round(zoomU * 100) + ' %'), UI.btn('+', () => poner(zoomU * 1.25), 'small', 'Acercar'),
+          UI.btn('100 %', () => poner(1), 'small', 'Tamaño real'), UI.btn('Ajustar', ajustar, 'small', 'Cabe todo el ancho en pantalla')),
         UI.btn('Imprimir', () => window.print(), 'small'))));
     if (!R.orden.length) { view.appendChild(h('div', { class: 'empty' }, 'No hay tableros. Créelos en Proyecto o impórtelos de Revit.')); return; }
-    view.appendChild(h('div', { class: 'u-wrap', 'data-scroll': 'unifilar' }, svgDibujo(R)));
+    wrap = h('div', { class: 'u-wrap', 'data-scroll': 'unifilar' }, svgDibujo(R));
+    view.appendChild(wrap);
+    { const sv = wrap.querySelector('svg.unifilar'); if (sv) { sv.dataset.w = sv.getAttribute('width'); sv.dataset.h = sv.getAttribute('height'); if (zoomU !== 1) { sv.setAttribute('width', Math.round(sv.dataset.w * zoomU)); sv.setAttribute('height', Math.round(sv.dataset.h * zoomU)); } } }
+    wrap.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); const b = wrap.getBoundingClientRect(); poner(zoomU * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX - b.left, e.clientY - b.top); }, { passive: false });
     view.appendChild(h('div', { class: 'u-ley' }, h('span', null, h('i', { style: { background: '#c0392b' } }), '480 V'), h('span', null, h('i', { style: { background: '#1b7f4b' } }), '240 V'), h('span', null, h('i', { style: { background: '#0b5cab' } }), '208 V y menos'),
       h('span', null, '□ interruptor · ◎ transformador · G generador · ATS/MTS transferencia · Icc punto a punto (Bussmann) · ΔV acumulada desde la acometida · DXF con capas E-TABLERO, E-ALIMENTADOR, E-PROTECCION, E-TRAFO, E-EQUIPOS, E-TEXTO, E-TABLA')));
   };
