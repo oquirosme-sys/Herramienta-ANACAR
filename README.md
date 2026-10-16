@@ -43,6 +43,10 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
+## ATS / MTS con las dos acometidas y sus distancias — 2026.1-web.11
+- Al marcar *Lleva segunda acometida* con ATS o MTS, al equipo llegan **las dos acometidas**: la **normal** (del transformador o del tablero que alimenta) y la **de emergencia** (generador o bypass). Se indican tres distancias: *Transformador → ATS*, *Generador → ATS* y *ATS → tablero* (tramo común). Con la distancia normal indicada, el largo del alimentador pasa a ser normal + ATS → tablero.
+- La memoria muestra por tramo la longitud y la caída de voltaje, la Icc en el ATS (la mayor de las dos fuentes) y la comparación con su WCR. El unifilar rotula las entradas NORMAL y EMERGENCIA y las distancias; el Excel agrega la entrada *Distancia fuente normal → ATS* (I24).
+
 ## Unifilar con bloques de los DU — 2026.1-web.10
 - El DXF (web y Excel) ahora lleva **bloques de AutoCAD** con la geometría de tus DU (`DU prueba.dwg`, `DU ELÉCTRICO 3.dwg`): `INTERRUPTOR_1P/2P/3P` (contactos con arco y un trazo por polo), `TRAFO_SECO`, `ATS` y `MTS` (normal arriba, alterna a la derecha, carga abajo), `GENERADOR` y `TIERRA`. Se ven igual en la pantalla de la herramienta.
 - Cada bloque trae **atributos** (doble clic en AutoCAD o extracción de atributos): interruptor (polos, amperios, unidad, modelo, SCCR), trafo (kVA, Z, voltajes), ATS/MTS (modelo, amperios, WCR, transición), generador (nombre, kVA, X''d). Quedan invisibles para no recargar el dibujo; el texto visible sigue siendo el de antes.

@@ -267,6 +267,8 @@ Private Sub Dibujar(id As String)
             xa = x + spx(sym & "|alterna") * ESC: ya2 = yA + spy(sym & "|alterna") * ESC
             Tx "E-EQUIPOS", x - 14, yA - 8, 2.4, ws.Range("I15").Value & IIf(CStr(ws.Range("BX115").Value) <> "", " " & ws.Range("BX115").Value & "  WCR " & ws.Range("BX117").Value & " kA", ""), 2
             If NumV(ws.Range("I23").Value) > 0 Then Tx "E-EQUIPOS", x - 14, yA - 12, 2, Format$(NumV(ws.Range("I23").Value), "0.0") & " m al tablero", 2
+            Tx "E-EQUIPOS", x + 3, yA + 2, 2.2, "NORMAL" & IIf(ws.Range("I3").Value = "SI", " (transformador)", "") & IIf(NumV(ws.Range("I24").Value) > 0, "  " & Format$(NumV(ws.Range("I24").Value), "0.0") & " m", "")
+            Tx "E-EQUIPOS", x + spx(sym & "|alterna") * ESC + 3, yA + spy(sym & "|alterna") * ESC - 4, 2.2, "EMERGENCIA"
         End If
         gx = x + 48
         Ln "E-ALIMENTADOR", xa, ya2, gx, ya2

@@ -96,7 +96,8 @@
       // con segunda acometida los datos del cable van a la izquierda de la línea
       const cx = r.alterna ? x - 10 : x + 10, al = r.alterna ? 'e' : null;
       D.texto(cx, y, A.fasesTxt + (A.neutroTxt ? '+' + A.neutroTxt + 'N' : '') + (A.tierraTxt ? '+' + A.tierraTxt + 'T' : '') + ' ' + A.mat + ' ' + A.ais, 'u-t b', 'TEXTO', al);
-      D.texto(cx, y + 15, f1(A.M139) + ' m · ' + (A.preN || '') + A.AR139 + ' mm ' + A.tuberia + ' · ΔV ' + f2(A.AV139 / r.V * 100) + ' %' + (A.ajustado ? ' · ajustado' : ''), 'u-t', 'TEXTO', al);
+      const dN = r.alterna && r.alterna.distNormal ? r.alterna.distNormal : A.M139;
+      D.texto(cx, y + 15, (r.alterna ? 'Normal → ' + r.alterna.equipo + ' ' : '') + f1(dN) + ' m · ' + (A.preN || '') + A.AR139 + ' mm ' + A.tuberia + ' · ΔV ' + f2(A.AV139 / r.V * 100) + ' %' + (A.ajustado ? ' · ajustado' : ''), 'u-t', 'TEXTO', al);
       if (A.val && !A.val.ok) D.texto(cx, y + 30, '⚠ no cumple ampacidad corregida', 'u-t mal', 'TEXTO', al);
       const fin = () => lineaV(x, y0, y1, huecos, 'ALIMENTADOR');
       // segunda acometida: generador o bypass → ATS / MTS / IP sobre la barra
@@ -111,8 +112,10 @@
           ya = oy - pa[1] * S0.k;
           D.simbolo(sym, x, oy, { MODELO: al.ats ? al.ats.modelo : '', AMPERIOS: al.ats ? String(al.ats.amperios) : String(A.AF139 || ''), WCR: al.wcr ? String(al.wcr) : '', TRANSICION: al.transicion || '' }, { ir: () => App.go('memoria', r.tab.id), title: al.equipo });
           huecos.push([oy, oy + ha]);
-          D.texto(x - S0.alto * 0 - 6 - (S0.k * 10), oy + 12, al.equipo, 'u-t b', 'TEXTO', 'e');
+          D.texto(x - 6 - (S0.k * 10), oy + 12, al.equipo, 'u-t b', 'TEXTO', 'e');
           if (al.ats || al.distAts) D.texto(x - S0.k * 10 - 6, oy + 27, (al.ats ? al.ats.modelo + ' · WCR ' + al.wcr + ' kA' : '') + (al.distAts ? ' · ' + f1(al.distAts) + ' m al tablero' : ''), 'u-t', 'TEXTO', 'e');
+          D.texto(x + 6, oy - 6, 'NORMAL' + (r.trafo ? ' (transformador)' : ''), 'u-t s b', 'TEXTO');
+          D.texto(x + pa[0] * S0.k + 6, ya + 12, 'EMERGENCIA', 'u-t s b', 'TEXTO');
           D.linea(x + pa[0] * S0.k, ya, gx, ya, 'u-lin', 'ALIMENTADOR');
         } else {
           ya = y1 - 15;
@@ -134,7 +137,7 @@
           D.texto(gx + 10, yb2 - 60, 'BYPASS desde ' + (al.origen || '?'), 'u-t b', 'TEXTO');
           if (cb) D.texto(gx + 10, yb2 - 45, 'circuito [' + cb.polos.join(',') + '] en ' + origen.nombre, 'u-t', 'TEXTO');
         }
-        D.texto(gx + 8, ya - 26, al.fasesTxt + ' ' + al.mat + ' · ' + f1(al.longitud) + ' m · ΔV ' + f2(al.cv) + ' %', 'u-t', 'TEXTO');
+        D.texto(gx + 8, ya - 26, (al.tipo === 'generador' ? 'Gen → ' : 'Bypass → ') + al.equipo + ' ' + al.fasesTxt + ' ' + al.mat + ' · ' + f1(al.longitud) + ' m · ΔV ' + f2(al.cv) + ' %', 'u-t', 'TEXTO');
         D.texto(gx + 8, ya - 11, 'Icc ' + (al.iccA ? f2(al.iccA / 1000) + ' kA' : '—') + (al.carga !== null ? ' · carga ' + f1(al.carga * 100) + ' %' : '') + (al.iccAtsKA ? ' · en ' + al.equipo + ' ' + f2(al.iccAtsKA) + ' kA' : ''), 'u-t', 'TEXTO');
       }
       fin();

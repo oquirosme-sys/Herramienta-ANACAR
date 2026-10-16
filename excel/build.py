@@ -188,7 +188,8 @@ entradas = [  # (columna etiqueta, columna valor, fila, etiqueta, valor inicial,
     ("H", "I", 14, "Segunda acometida", "NO", "L_SINO"), ("H", "I", 15, "Equipo de transferencia", "ATS", "L_TRANSF"), ("H", "I", 16, "Fuente alterna", "Generador", "L_FUENTE"),
     ("H", "I", 17, "Tablero de origen (bypass)", None, "LISTA_TABLEROS"), ("H", "I", 18, "Generador kVA", None, None), ("H", "I", 19, "X''d del generador (%)", 12, None),
     ("H", "I", 20, "Longitud fuente → ATS (m)", None, None), ("H", "I", 21, "WCR / SCCR del ATS (kA) (vacío = modelo)", None, None),
-    ("H", "I", 22, "Transferencia: transición y polos", "Abierta 3P", "L_TRANSICION"), ("H", "I", 23, "Distancia ATS → tablero (m)", None, None)]
+    ("H", "I", 22, "Transferencia: transición y polos", "Abierta 3P", "L_TRANSICION"), ("H", "I", 23, "Distancia ATS → tablero (m)", None, None),
+    ("H", "I", 24, "Distancia fuente normal → ATS (m)", None, None)]
 dvs = {}
 for le, ve, fila, et, val, lista in entradas:
     f(mc, "%s%d" % (le, fila), et, size=9, al=IZQ)
@@ -239,7 +240,7 @@ rx(35, "Electrodo 250.66", '=IF(BX31="","",IFERROR(IF(%s,INDEX(T_ELEC_AL,MATCH(B
 rx(36, "Tubería (mm)", '=IF(BX31="","",IF(OR($F$3="CU-MC",$F$3="AL-MC"),"MC",IFERROR(VLOOKUP(BX31,T_CONDUIT,IF($F$4="RHW",3,IF($F$4="XHHW",4,2)),FALSE),"")))')
 rx(37, "FAC tabla", '=IF(BX31="","",IFERROR(INDEX(CHOOSE(IF(%s,2,1),T_FAC_CU,T_FAC_AL),IF(BX15=1,1,IF(BX15>0.949,2,IF(BX15>0.899,3,IF(BX15>0.799,4,99)))),MATCH(BX31,T_FAC_H,0)),""))' % ESAL)
 rx(38, "FAC ajustado", '=IF(BX37="","",BX37*IF(AND($C$8=1,OR($C$7=120,$C$7=230,$C$7=277)),1.1547,IF(OR(AND($C$8=1,OR($C$7=208,$C$7=240)),AND($C$8=2,$C$7=240)),1.15,1)))')
-rx(39, "Corriente para caída (A)", '=IF(BX4>0,BX19,IF(BX5>0,BX20,BX21))'); rx(40, "Longitud (m)", '=N($C$12)')
+rx(39, "Corriente para caída (A)", '=IF(BX4>0,BX19,IF(BX5>0,BX20,BX21))'); rx(40, "Longitud (m)", '=IF(AND($I$14="SI",N($I$24)>0),N($I$24)+N($I$23),N($C$12))')
 rx(41, "Carga del transformador", '=IF($I$3="SI",IFERROR(BX14/$I$4,0),"")')
 rx(42, "Caída en el transformador (%)", '=IF($I$3="SI",IFERROR(BX41*($I$5/SQRT(1+IF(N($I$6)>0,$I$6,4)^2))*(BX15+IF(N($I$6)>0,$I$6,4)*SQRT(1-BX15^2)),0),0)')
 rx(43, "Tablero que lo alimenta", '=$C$10')
@@ -321,7 +322,7 @@ for cel, et, ref in panel:
     if cel == "K15": v = '=BX72&" "&BX73&" · "&BX74&" kA"'
     if cel == "K16": v = '=BX79&" · "&BX80&"/"&BX81&" kA"'
     if cel == "K18": v = '=IF(BX29="","",IF(PARTE(BX29,3)="1","Cumple","NO CUMPLE")&" · disponible "&FIXED(PARTEN(BX29,4),1)&" A vs "&FIXED(N(BX23),1)&" A")'
-    if cel == "K19": v = '=IF(BX84,$I$15&IF(BX115<>""," "&BX115&" (WCR "&BX117&" kA, Icc "&FIXED(N(BX113),2)&" kA)","")&" · "&BX95&" · ΔV "&FIXED(N(BX93),2)&" % · Icc bornes "&FIXED(N(BX88)/1000,2)&" kA","")'
+    if cel == "K19": v = '=IF(BX84,$I$15&IF(BX115<>""," "&BX115&" (WCR "&BX117&" kA, Icc "&FIXED(N(BX113),2)&" kA)","")&" · "&BX95&" · ΔV "&FIXED(N(BX93),2)&" % · normal→"&$I$15&" "&FIXED(BX40-N($I$23),1)&" m · "&$I$15&"→tablero "&FIXED(N($I$23),1)&" m · Icc bornes "&FIXED(N(BX88)/1000,2)&" kA","")'
     c = mc.cell(int(r), CI("L")); c.value = v; c.font = Font(name=FN, size=10, bold=True); c.border = BORDE
     mc.merge_cells("L%s:R%s" % (r, r))
 mc.column_dimensions["K"].width = 30

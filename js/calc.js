@@ -9,6 +9,8 @@
 
   const n = v => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? 0 : Number(v));
   const r2 = v => Math.round(v * 100) / 100;
+  /** Largo total del alimentador normal: con ATS/MTS, distancia fuente normal → ATS + ATS → tablero (si se indicó la primera); si no, la longitud del alimentador. */
+  const largoAlim = t => (t.alterna && t.alterna.activo && Number(t.alterna.distNormal) > 0 ? Number(t.alterna.distNormal) + Math.max(0, Number(t.alterna.distAts) || 0) : Number(t.longitud) || 0);
   /** Factor de diversidad entre 0 y 1 (multiplica la carga); vacío, 0 o fuera de rango = 1. */
   const fdiv01 = v => { const x = n(v); return x > 0 && x <= 1 ? x : 1; };
 
@@ -370,7 +372,7 @@
     const AR139 = AL139 ? conduit(AL139, mat, ais) : '', tuberia = al.tuberia || 'EMT';
     const AS139 = AL139 ? fac(AL139, mat, T139) : null, AT139 = facAjustado(AS139, V, fases, true);
     const Iv = U116[0] > 0 ? AA139[0] : U116[1] > 0 ? AA139[1] : AA139[2];
-    const M139 = n(tab.longitud);
+    const M139 = largoAlim(tab);
 
     // --- transformador (opcional) aguas arriba del alimentador: regulación y cortocircuito
     const tr = tab.trafo && tab.trafo.activo && n(tab.trafo.kva) && n(tab.trafo.z) ? tab.trafo : null;
@@ -469,7 +471,7 @@
       const wcr = n(altD.sccr) || (atsSel ? n(atsSel.wcr) : 0);
       alterna = { equipo, tipo: altD.tipo || 'generador', origen, nombre: altD.nombre || '', cal: ac, par: an, mat: am, ais: aa, tuberia: at, longitud: AL, val: av,
         fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + tierra(AF139, am) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
-        caida: avd + dropCom, caidaFuente: avd, caidaComun: dropCom, distAts: dAts, vBornes: v0 - avd - dropCom, cv: (V - (v0 - avd - dropCom)) * 100 / V, iccA: iAlt, iccAtsKA,
+        caida: avd + dropCom, caidaFuente: avd, caidaComun: dropCom, distAts: dAts, distNormal: Math.max(0, M139 - dAts), caidaNormal: M139 ? AV139 * Math.max(0, M139 - dAts) / M139 : 0, vBornes: v0 - avd - dropCom, cv: (V - (v0 - avd - dropCom)) * 100 / V, iccA: iAlt, iccAtsKA,
         ats: atsSel, wcr, wcrOk: !wcr || !iccAtsKA || wcr >= iccAtsKA, transicion: altD.transicion || (equipo === 'MTS' ? 'manual' : 'abierta'), polosAts: n(altD.polosAts) || 3,
         carga, kva: n(altD.kva), xd: n(altD.xd) || 12 };
       if (iAlt && (!iccA || iAlt > iccA)) { iccA = iAlt; iccFuente = (iccFuente ? iccFuente + ' · ' : '') + 'máx. por ' + (alterna.tipo === 'generador' ? 'generador' : 'bypass'); }
@@ -570,7 +572,7 @@
       (hijos[t.id] || []).forEach(cargar);
       (t.circuitos || []).forEach(c => {
         const hj = c.tableroHijoId && byId[c.tableroHijoId];
-        if (hj && !ciclo.has(hj.id)) { c.kva = r4(total[hj.id] || 0); c.longitud = hj.longitud; c.descripcion = nombreTablero(hj); }
+        if (hj && !ciclo.has(hj.id)) { c.kva = r4(total[hj.id] || 0); c.longitud = largoAlim(hj); c.descripcion = nombreTablero(hj); }
         const rb = c.respaldoDe && byId[c.respaldoDe];
         if (rb) { if (!visit.has(rb.id)) cargar(rb); c.kva = r4(total[rb.id] || 0); c.longitud = (rb.alterna || {}).longitud; c.descripcion = 'BYPASS ' + nombreTablero(rb); }
       });
