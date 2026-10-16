@@ -272,3 +272,4 @@ ol.guia li { margin: .35rem 0; line-height: 1.45; }
 
 .zoom-u { display: inline-flex; align-items: center; gap: 4px; } .zoom-v { min-width: 3.2em; text-align: center; font-size: 12px; color: var(--muted); }
 @media print { .zoom-u { display: none; } }
+.u-wrap.mano { cursor: grab; } .u-wrap.mano.arrastrando, .u-wrap.arrastrando { cursor: grabbing; user-select: none; } .u-wrap.mano .unifilar * { cursor: inherit; }

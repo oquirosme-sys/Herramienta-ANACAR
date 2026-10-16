@@ -356,11 +356,11 @@
     });
   }
 
-  let zoomU = 1;   // ampliación del diagrama (se conserva al refrescar)
+  let zoomU = 1, manoU = true, quitarTeclas = null;   // ampliación del diagrama y herramienta mano (arrastrar para moverse); se conservan al refrescar
   const ZMIN = 0.1, ZMAX = 4;
   App.views.unifilar = function (view, R) {
     const P = Store.project;
-    let etqZoom = null, wrap = null;
+    let etqZoom = null, wrap = null, btnMano = null;
     /** Cambia la ampliación (el centro visible se mantiene) y ajusta el tamaño del SVG sin volver a dibujar. */
     const poner = (z, cx, cy) => {
       const s = wrap && wrap.querySelector('svg.unifilar'); if (!s) return;
@@ -382,11 +382,24 @@
         UI.btn('Descargar SVG', () => { const s = document.querySelector('svg.unifilar'); if (s) U.download(App.fileBase() + ' - unifilar.svg', '<?xml version="1.0" encoding="UTF-8"?>' + s.outerHTML.replace(/ width="\d+"/, ' width="' + s.dataset.w + '"').replace(/ height="\d+"/, ' height="' + s.dataset.h + '"').replace('<svg', '<svg style="font-family:Arial;background:#fff"'), 'image/svg+xml'); }, 'small'),
         h('span', { class: 'zoom-u', title: 'Ctrl + rueda del ratón también acerca y aleja' },
           UI.btn('−', () => poner(zoomU / 1.25), 'small', 'Alejar'), etqZoom = h('span', { class: 'zoom-v' }, Math.round(zoomU * 100) + ' %'), UI.btn('+', () => poner(zoomU * 1.25), 'small', 'Acercar'),
-          UI.btn('100 %', () => poner(1), 'small', 'Tamaño real'), UI.btn('Ajustar', ajustar, 'small', 'Cabe todo el ancho en pantalla')),
+          UI.btn('100 %', () => poner(1), 'small', 'Tamaño real'), UI.btn('Ajustar', ajustar, 'small', 'Cabe todo el ancho en pantalla'),
+          btnMano = UI.btn('✋ Mover', () => { manoU = !manoU; if (wrap) wrap.classList.toggle('mano', manoU); btnMano.classList.toggle('primary', manoU); }, 'small' + (manoU ? ' primary' : ''), 'Arrastre el diagrama para moverse (también con el botón central del ratón o con la barra espaciadora pulsada)')),
         UI.btn('Imprimir', () => window.print(), 'small'))));
     if (!R.orden.length) { view.appendChild(h('div', { class: 'empty' }, 'No hay tableros. Créelos en Proyecto o impórtelos de Revit.')); return; }
     wrap = h('div', { class: 'u-wrap', 'data-scroll': 'unifilar' }, svgDibujo(R));
     view.appendChild(wrap);
+    wrap.classList.toggle('mano', manoU);
+    {   // mano: arrastrar para desplazar el diagrama; un arrastre no cuenta como clic sobre una barra o un tablero
+      let ini = null, movio = false, espacio = false;
+      const activo = e => manoU || e.button === 1 || espacio;
+      wrap.addEventListener('pointerdown', e => { if (!activo(e) || (e.button !== 0 && e.button !== 1) || e.target.closest('.u-add')) return; ini = { x: e.clientX, y: e.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop }; movio = false; if (e.button === 1) e.preventDefault(); });
+      wrap.addEventListener('pointermove', e => { if (!ini) return; const dx = e.clientX - ini.x, dy = e.clientY - ini.y; if (!movio && Math.hypot(dx, dy) < 4) return; movio = true; try { wrap.setPointerCapture(e.pointerId); } catch (x) { /* sin captura */ } wrap.classList.add('arrastrando'); wrap.scrollLeft = ini.sl - dx; wrap.scrollTop = ini.st - dy; });
+      const fin = e => { if (!ini) return; ini = null; wrap.classList.remove('arrastrando'); try { wrap.releasePointerCapture(e.pointerId); } catch (x) { /* ya liberado */ } };
+      wrap.addEventListener('pointerup', fin); wrap.addEventListener('pointercancel', fin);
+      wrap.addEventListener('click', e => { if (movio) { e.stopPropagation(); e.preventDefault(); movio = false; } }, true);
+      const tecla = (v, e) => { if (e.code === 'Space' && !/INPUT|TEXTAREA|SELECT/.test((e.target.tagName || ''))) { espacio = v; wrap.classList.toggle('mano', manoU || espacio); if (v && document.querySelector('.u-wrap') === wrap) e.preventDefault(); } };
+      if (quitarTeclas) quitarTeclas(); const kd = e => tecla(true, e), ku = e => tecla(false, e); document.addEventListener('keydown', kd); document.addEventListener('keyup', ku); quitarTeclas = () => { document.removeEventListener('keydown', kd); document.removeEventListener('keyup', ku); };
+    }
     { const sv = wrap.querySelector('svg.unifilar'); if (sv) { sv.dataset.w = sv.getAttribute('width'); sv.dataset.h = sv.getAttribute('height'); if (zoomU !== 1) { sv.setAttribute('width', Math.round(sv.dataset.w * zoomU)); sv.setAttribute('height', Math.round(sv.dataset.h * zoomU)); } } }
     wrap.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); const b = wrap.getBoundingClientRect(); poner(zoomU * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX - b.left, e.clientY - b.top); }, { passive: false });
     view.appendChild(h('div', { class: 'u-ley' }, h('span', null, h('i', { style: { background: '#c0392b' } }), '480 V'), h('span', null, h('i', { style: { background: '#1b7f4b' } }), '240 V'), h('span', null, h('i', { style: { background: '#0b5cab' } }), '208 V y menos'),
