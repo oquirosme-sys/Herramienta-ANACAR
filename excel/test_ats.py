@@ -19,6 +19,17 @@ try:
     du = wb.Worksheets("RESUMEN DU"); print("du Q,R:", du.Range("Q4").Value, "|", du.Range("R4").Value)
     xl.Run("ModDXF.ExportarDXF", os.path.abspath("ats.dxf"))
     ws.Range("I10").Value = "NO"
+    xl.Run("ModTableros.CrearTablero", "UPS-T", "3F", "120/208", True)
+    w2 = wb.Worksheets("MC UPS-T"); xl.EnableEvents = False
+    for k, v in {"I10": "SI", "I11": 8, "I13": "SI", "E25": 55, "G25": 40, "H25": 10, "C25": 3, "D25": 5}.items(): w2.Range(k).Value = v
+    xl.EnableEvents = True; xl.CalculateFull()
+    g2 = lambda a: w2.Range(a).Value
+    print("UPS+MTS sin padre -> BX133/134:", g2("BX133"), g2("BX134"), "| 118..125:", [g2("BX%d" % i) for i in range(118, 126)], "| UPS:", g2("BX131"), g2("BX132"))
+    w2.Range("C10").Value = "GEN-T"; xl.CalculateFull()
+    w2.Range("I13").Value = "NO"; w2.Range("I13").Value = "SI"; xl.CalculateFull()
+    print("UPS+MTS con padre -> I14..I17:", [g2("I%d" % i) for i in (14, 15, 16, 17)], "| 118..125:", [g2("BX%d" % i) for i in range(118, 126)])
+    print("circuito de bypass en GEN-T:", [ws.Cells(r, 20).Value for r in range(25, 40) if ws.Cells(r, 20).Value])
+    xl.Run("ModDXF.ExportarDXF", os.path.abspath("ats2.dxf"))
     ws.Range("I21").Value = 1; xl.Calculate(); print("con WCR 1 kA:", g("BX97"))
     wb.Close(False)
 finally:

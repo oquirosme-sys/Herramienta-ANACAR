@@ -44,6 +44,7 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
 ## UPS con MTS — 2026.1-web.14
+- **Excel:** nueva entrada «La UPS lleva MTS» (I13) que activa el MTS de bypass desde el tablero de arriba (con su circuito) o, sin tablero de arriba, elige el MTS por la corriente de la UPS y lo muestra en las tablas resumen y en el DXF. En el Excel la UPS sigue dibujada en línea (no colgando de la barra).
 - En *Fuentes de alimentación*, al marcar *A través de una UPS* aparece **«La UPS lleva MTS (bypass de mantenimiento)»**: el tablero que alimenta la UPS recibe un segundo circuito con su interruptor (el bypass, que ocupa espacio pero no suma carga) y el unifilar muestra el MTS con las dos acometidas. Requiere que el tablero esté alimentado desde otro tablero.
 
 ## Casillas y datos de ATS/UPS en las tablas — 2026.1-web.12 / web.13

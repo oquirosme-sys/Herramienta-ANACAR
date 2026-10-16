@@ -185,6 +185,7 @@ entradas = [  # (columna etiqueta, columna valor, fila, etiqueta, valor inicial,
     ("H", "I", 3, "Transformador aguas arriba", "NO", "L_SINO"), ("H", "I", 4, "Transformador kVA", None, None), ("H", "I", 5, "Impedancia Z (%)", None, None),
     ("H", "I", 6, "Relación X/R (vacío = 4)", None, None), ("H", "I", 7, "Voltaje primario (V)", None, None), ("H", "I", 8, "Nombre transformador", "", None),
     ("H", "I", 10, "Alimentado por UPS", "NO", "L_SINO"), ("H", "I", 11, "UPS kVA", None, None), ("H", "I", 12, "Icc del inversor (× In)", 2, None),
+    ("H", "I", 13, "La UPS lleva MTS (bypass de mantenimiento)", "NO", "L_SINO"),
     ("H", "I", 14, "Segunda acometida", "NO", "L_SINO"), ("H", "I", 15, "Equipo de transferencia", "ATS", "L_TRANSF"), ("H", "I", 16, "Fuente alterna", "Generador", "L_FUENTE"),
     ("H", "I", 17, "Tablero de origen (bypass)", None, "LISTA_TABLEROS"), ("H", "I", 18, "Generador kVA", None, None), ("H", "I", 19, "X''d del generador (%)", 12, None),
     ("H", "I", 20, "Longitud fuente → ATS (m)", None, None), ("H", "I", 21, "WCR / SCCR del ATS (kA) (vacío = modelo)", None, None),
@@ -284,14 +285,16 @@ rx(114, "ATS / MTS (tipo de catálogo)", '=IF(OR(NOT(BX84),$I$15="IP"),"",ATS_SE
 rx(115, "ATS: modelo", '=IF(BX114="","",ATS_DATO(BX114,"modelo"))'); rx(116, "ATS: amperios", '=IF(BX114="","",ATS_DATO(BX114,"amperios"))')
 rx(117, "ATS: WCR efectivo (kA)", '=IF(N($I$21)>0,$I$21,IF(BX114="","",ATS_DATO(BX114,"wcr")))')
 # datos de transferencia (ATS/MTS) y UPS para las tablas resumen (vacíos si el tablero no los usa)
-rx(118, "Resumen: equipo de transferencia", '=IF(BX84,$I$15,"")')
-rx(119, "Resumen: modelo ATS", '=IF(BX84,BX115&"","")')
-rx(120, "Resumen: amperios ATS", '=IF(BX84,IF(BX116<>"",BX116,BX24),"")')
-rx(121, "Resumen: transición", '=IF(BX84,IF($I$15="MTS","manual",TRIM(LEFT($I$22,LEN($I$22)-2))),"")')
-rx(122, "Resumen: polos", '=IF(BX84,VALUE(LEFT(RIGHT($I$22,2),1)),"")')
-rx(123, "Resumen: WCR (kA)", '=IF(BX84,BX117,"")')
-rx(124, "Resumen: Icc en el ATS (kA)", '=IF(BX84,BX113,"")')
-rx(125, "Resumen: fuente alterna", '=IF(BX84,IF($I$16="Generador","Generador"&IF(N($I$18)>0," "&$I$18&" kVA",""),"Bypass "&$I$17),"")')
+rx(133, "UPS con MTS: protección por corriente de la UPS (A)", '=IF(AND(NOT(BX84),$I$10="SI",$I$13="SI",N($I$11)>0),VLOOKUP(1.25*$I$11*1000/(IF($C$8=3,1.732,1)*$C$7),T_PROT,2,TRUE),"")')
+rx(134, "UPS con MTS: tipo de catálogo", '=IF(BX133="","",ATS_SEL("Manual 3P",BX133,N(BX58)))')
+rx(118, "Resumen: equipo de transferencia", '=IF(BX84,$I$15,IF(BX134<>"","MTS",""))')
+rx(119, "Resumen: modelo ATS", '=IF(BX84,BX115&"",IF(BX134<>"",ATS_DATO(BX134,"modelo"),""))')
+rx(120, "Resumen: amperios ATS", '=IF(BX84,IF(BX116<>"",BX116,BX24),IF(BX134<>"",ATS_DATO(BX134,"amperios"),""))')
+rx(121, "Resumen: transición", '=IF(BX84,IF($I$15="MTS","manual",TRIM(LEFT($I$22,LEN($I$22)-2))),IF(BX134<>"","manual",""))')
+rx(122, "Resumen: polos", '=IF(BX84,VALUE(LEFT(RIGHT($I$22,2),1)),IF(BX134<>"",3,""))')
+rx(123, "Resumen: WCR (kA)", '=IF(BX84,BX117,IF(BX134<>"",ATS_DATO(BX134,"wcr"),""))')
+rx(124, "Resumen: Icc en el ATS (kA)", '=IF(BX84,BX113,IF(BX134<>"",BX58,""))')
+rx(125, "Resumen: fuente alterna", '=IF(BX84,IF($I$16="Generador","Generador"&IF(N($I$18)>0," "&$I$18&" kVA",""),"Bypass "&$I$17),IF(BX134<>"","Bypass desde la barra",""))')
 rx(126, "Resumen: normal → ATS (m)", '=IF(BX84,MAX(0,BX40-N($I$23)),"")')
 rx(127, "Resumen: alterna → ATS (m)", '=IF(BX84,N($I$20),"")')
 rx(128, "Resumen: ATS → tablero (m)", '=IF(BX84,N($I$23),"")')

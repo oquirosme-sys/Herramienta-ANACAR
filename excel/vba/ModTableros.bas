@@ -398,6 +398,21 @@ Public Sub FormulasEnlace(ws As Worksheet)
 End Sub
 
 ' bypass / segunda acometida desde otro tablero: circuito de respaldo en el tablero de origen (no suma carga)
+' La UPS lleva MTS: con tablero aguas arriba se activa la segunda acometida (MTS, bypass desde ese tablero) y el tablero de arriba recibe su circuito
+Public Sub UpsMts(Sh As Worksheet)
+    Dim pa As String
+    pa = Trim$(CStr(Sh.Range("C10").Value))
+    Application.EnableEvents = False
+    If Sh.Range("I13").Value = "SI" And Sh.Range("I10").Value = "SI" And pa <> "" Then
+        Sh.Range("I14").Value = "SI": Sh.Range("I15").Value = "MTS": Sh.Range("I16").Value = "Tablero": Sh.Range("I17").Value = pa: Sh.Range("I22").Value = "Manual 3P"
+    ElseIf Sh.Range("I13").Value <> "SI" Then
+        If Sh.Range("I15").Value = "MTS" And Sh.Range("I16").Value = "Tablero" Then Sh.Range("I14").Value = "NO"
+    End If
+    Application.EnableEvents = True
+    SincronizarBypass Sh
+    FormulasEnlace Sh
+End Sub
+
 Public Sub SincronizarBypass(hijo As Worksheet)
     Dim id As String, origenId As String, origen As Worksheet, o As Variant, ws As Worksheet, r As Long, fila As Long, p As Long, det As Variant, np As Long
     id = IdDe(hijo)

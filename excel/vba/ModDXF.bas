@@ -286,6 +286,8 @@ Private Sub Dibujar(id As String)
             Tx "E-EQUIPOS", gx + 9, yG + 5, 2.5, "Generador " & ws.Range("I18").Value & " kVA  X''d " & ws.Range("I19").Value & " %"
         Else
             Tx "E-EQUIPOS", gx + 4, yG, 2.5, "BYPASS desde " & ws.Range("I17").Value
+            ' el bypass sube hasta la barra del tablero que lo alimenta
+            If padre <> "" And hoja.Exists(padre) And Trim$(CStr(ws.Range("I17").Value)) = padre Then Ln "E-ALIMENTADOR", gx, yG, gx, ys(padre) - 20
         End If
         Tx "E-ALIMENTADOR", gx + 4, ya2 + 3, 2, ws.Range("BX95").Value & "  " & Format$(NumV(ws.Range("I20").Value), "0.0") & " m"
         If NumV(ws.Range("BX113").Value) > 0 Then Tx "E-ALIMENTADOR", gx + 4, ya2 - 1, 2, "Icc en el " & ws.Range("I15").Value & " " & Format$(NumV(ws.Range("BX113").Value), "0.00") & " kA"
@@ -309,11 +311,13 @@ Private Sub Dibujar(id As String)
                   "V bornes: " & Format$(NumV(ws.Range("BX49").Value), "0.00") & " V   " & ChrW(916) & "V acum.: " & Format$(NumV(ws.Range("BX51").Value), "0.00") & " %", _
                   "Icc: " & Format$(NumV(ws.Range("BX58").Value), "0.00") & " kA   SPD: " & ws.Range("BX79").Value)
     If CStr(ws.Range("BX118").Value) <> "" Then
-        ReDim Preserve filas(UBound(filas) + 4)
-        filas(UBound(filas) - 3) = ws.Range("BX118").Value & ": " & ws.Range("BX119").Value & " " & ws.Range("BX120").Value & " A  " & ws.Range("BX121").Value & " " & ws.Range("BX122").Value & "P  WCR " & ws.Range("BX123").Value & " / Icc " & Format$(NumV(ws.Range("BX124").Value), "0.00") & " kA"
+        ReDim Preserve filas(UBound(filas) + IIf(ws.Range("BX84").Value = True, 4, 1))
+        filas(UBound(filas) - IIf(ws.Range("BX84").Value = True, 3, 0)) = ws.Range("BX118").Value & ": " & ws.Range("BX119").Value & " " & ws.Range("BX120").Value & " A  " & ws.Range("BX121").Value & " " & ws.Range("BX122").Value & "P  WCR " & ws.Range("BX123").Value & " / Icc " & Format$(NumV(ws.Range("BX124").Value), "0.00") & " kA"
+        If ws.Range("BX84").Value = True Then
         filas(UBound(filas) - 2) = "Normal-" & ws.Range("BX118").Value & ": " & Format$(NumV(ws.Range("BX126").Value), "0.0") & " m   " & ws.Range("BX125").Value & "-" & ws.Range("BX118").Value & ": " & Format$(NumV(ws.Range("BX127").Value), "0.0") & " m"
         filas(UBound(filas) - 1) = ws.Range("BX118").Value & "-tablero: " & Format$(NumV(ws.Range("BX128").Value), "0.0") & " m   2a acom.: " & ws.Range("BX129").Value
         filas(UBound(filas)) = "Caida 2a acometida: " & Format$(NumV(ws.Range("BX130").Value), "0.00") & " %"
+        End If
     End If
     If CStr(ws.Range("BX131").Value) <> "" Then
         ReDim Preserve filas(UBound(filas) + 1)

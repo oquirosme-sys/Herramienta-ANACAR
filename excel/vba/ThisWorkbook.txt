@@ -31,6 +31,7 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
     ModTableros.enProceso = True
     If Not Intersect(Target, Sh.Range("C3,C5")) Is Nothing Then ModTableros.RenombrarTablero Sh
     If Not Intersect(Target, Sh.Range("C10")) Is Nothing Then ModTableros.ConectarTablero Sh
+    If Not Intersect(Target, Sh.Range("I13")) Is Nothing Then ModTableros.UpsMts Sh
     If Not Intersect(Target, Sh.Range("I14,I16,I17")) Is Nothing Then ModTableros.SincronizarBypass Sh: ModTableros.FormulasEnlace Sh
     Dim c As Range
     If Not Intersect(Target, Sh.Range("E25:E124")) Is Nothing And Target.Cells.Count <= 200 Then
