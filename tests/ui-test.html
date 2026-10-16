@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>Prueba de la interfaz</title>
+<body style="font-family:sans-serif"><h3>Prueba de la interfaz (casillas numéricas, segunda acometida)</h3><pre id="out">Ejecutando…</pre>
+<script src="../js/data/seed.js"></script><script src="machote.js"></script>
+<script>
+/* Abre la herramienta en un iframe con un proyecto de ejemplo, escribe en las casillas y verifica que el valor se guarde y no se borre al cambiar otros datos. */
+const t = JSON.parse(JSON.stringify(MACHOTE.tablero)); t.id = 'tm'; t.nombre = '2PIS1'; t.tipo = '3F'; t.sistema = '120/208'; t.iccManual = ''; t.catalogoId = '';
+const p = { id: 'pu', nombre: 'Prueba UI', numero: '1', tableros: [t], cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, ocupacion: 'comercial', cargaDerivados: 'conectada', previstas: [], iccRed: 25 };
+const antes = [localStorage.getItem('anacar.proyectos.v1'), sessionStorage.getItem('anacar.actual.v1')];
+localStorage.setItem('anacar.proyectos.v1', JSON.stringify({ pu: p })); sessionStorage.setItem('anacar.actual.v1', 'pu');
+const f = document.createElement('iframe'); f.src = '../index.html#memoria'; f.style.cssText = 'width:1300px;height:700px;border:1px solid #ccc'; document.body.appendChild(f);
+const w = ms => new Promise(r => setTimeout(r, ms)), res = [];
+const chk = (n, v, e) => { const ok = JSON.stringify(v) === JSON.stringify(e); res.push((ok ? '✓ ' : '✗ ') + n + (ok ? '' : ' → ' + JSON.stringify(v) + ' (esperado ' + JSON.stringify(e) + ')')); };
+f.onload = async () => { try {
+  await w(1500); const W = f.contentWindow, D = f.contentDocument, T = () => W.Store.project.tableros[0];
+  const q = k => D.querySelector('[data-fk$=":' + k + '"]'), set = async (el, v) => { el.value = v; el.dispatchEvent(new W.Event('change', { bubbles: true })); await w(250); };
+  Array.from(D.querySelectorAll('label.chk input')).find(i => /segunda/i.test(i.parentElement.textContent)).click(); await w(300);
+  await set(q('gk'), '175'); chk('kVA del generador se guarda', T().alterna.kva, 175);
+  await set(q('al'), '25,5'); chk('longitud generador → ATS (con coma)', T().alterna.longitud, 25.5);
+  await set(q('dn'), '12'); chk('distancia normal → ATS', T().alterna.distNormal, 12);
+  await set(q('da'), '6'); chk('distancia ATS → tablero', T().alterna.distAts, 6);
+  await set(D.querySelector('[data-fk$=":lon"]'), '18'); chk('longitud del alimentador', T().longitud, 18);
+  chk('el kVA del generador no se borra al cambiar otro dato', [T().alterna.kva, q('gk').value], [175, '175']);
+  await set(D.querySelector('[data-fk$=":kva"]'), '2'); chk('kVA de un circuito', [T().circuitos[0].kva, q('gk').value], [2, '175']);
+  await set(q('ti'), 'tablero'); await set(q('ti'), 'generador'); chk('cambiar la fuente y volver conserva los datos', [T().alterna.kva, T().alterna.longitud], [175, 25.5]);
+  const fd = D.querySelector('[data-fk$=":fdv"]'); await set(fd, '1,5'); chk('diversidad fuera de 0–1 se rechaza', T().fdivTablero === 1.5, false);
+  await set(fd, '0,8'); chk('diversidad 0,8 se guarda', T().fdivTablero, 0.8);
+} catch (e) { res.push('✗ error: ' + e.message); }
+  document.getElementById('out').textContent = res.join('\n') + '\n\n' + res.filter(x => x[0] === '✓').length + ' de ' + res.length + ' correctas';
+  if (antes[0] === null) localStorage.removeItem('anacar.proyectos.v1'); else localStorage.setItem('anacar.proyectos.v1', antes[0]);
+};
+</script>
