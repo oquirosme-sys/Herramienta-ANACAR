@@ -54,7 +54,7 @@
     const medir = r => { const hs = hijos(r), hu = hijoU(r); span[r.tab.id] = Math.max(W, hs.reduce((a, x) => a + medir(x), 0) + GAP * Math.max(0, hs.length - 1)); const eu = hu ? Math.max(UXW, medir(hu) + 170) : UXW; ancho[r.tab.id] = span[r.tab.id] + LBL + (ramaUps(r) ? eu : 0); return ancho[r.tab.id]; };
     const totalW = raiz.reduce((a, r) => a + medir(r) + GAP, GAP) + 40;
     const prof = r => 1 + Math.max(0, ...todos(r).map(prof));
-    D.tamano(totalW, 120 + NIVEL * Math.max(1, ...raiz.map(prof)) + 120 + (raiz.some(hijoU) ? 260 : 0));
+    D.tamano(totalW, 120 + NIVEL * Math.max(1, ...raiz.map(prof)) + 120 + (raiz.some(hijoU) ? NIVEL : 0));
 
     const HB = SIMB.INTERRUPTOR_3P.alto * SIMB.INTERRUPTOR_3P.k;     // alto del símbolo de interruptor
     /** Interruptor: bloque de 1, 2 o 3 polos centrado en (x, y) con atributos (polos, amperios, unidad, modelo, SCCR) y texto a la derecha. Devuelve [y superior, y inferior]. */
@@ -227,7 +227,7 @@
       }
       if (ramaUps(r)) {
         const hu = hijoU(r), [x1, yS] = ramaUpsDibujo(r, xu, yb, hu);
-        if (hu) { const yh = yS + (conTabla ? 330 : 190); bajada(x1, yS, yh, hu, hu.circuitoPadre); nodo(hu, x1 - span[hu.tab.id] / 2, yh); }
+        if (hu) { const yh = yS + NIVEL; bajada(x1, yS, yh, hu, hu.circuitoPadre); nodo(hu, x1 - span[hu.tab.id] / 2, yh); }
       }
       hs.forEach((hj, i) => {
         const yh = yb + NIVEL;
