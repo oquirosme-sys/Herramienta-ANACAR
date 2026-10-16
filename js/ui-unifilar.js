@@ -50,9 +50,10 @@
     const span = {}, ancho = {}, todos = r => (R.hijos[r.tab.id] || []).map(t => R.res[t.id]).filter(Boolean);
     const UXW = 520;
     /** La UPS cuelga de la barra del tablero que la alimenta (aguas arriba) y el tablero con la UPS queda bajo su MTS; un principal con UPS y sin tablero aguas arriba la dibuja en su propia barra. */
-    const hijoUps = r => todos(r).find(x => x.ups) || null;
-    const ramaUps = r => !!(hijoUps(r) || (r.ups && !r.padre));
-    const hijoU = r => hijoUps(r) || (r.ups && !r.padre ? todos(r).find(x => x.tab.deUps) : null) || null;   // tablero conectado aguas abajo del MTS de la UPS
+    const propio = r => !!(r.ups && (r.tab.ups.propio === undefined ? !r.padre : r.tab.ups.propio));   // la UPS cuelga de su propia barra
+    const hijoUps = r => todos(r).find(x => x.ups && !propio(x)) || null;
+    const ramaUps = r => !!(hijoUps(r) || propio(r));
+    const hijoU = r => hijoUps(r) || (propio(r) ? todos(r).find(x => x.tab.deUps) : null) || null;   // tablero conectado aguas abajo del MTS de la UPS
     const hijos = r => todos(r).filter(x => x !== hijoU(r));
     const medir = r => { const hs = hijos(r), hu = hijoU(r); span[r.tab.id] = Math.max(W, hs.reduce((a, x) => a + medir(x), 0) + GAP * Math.max(0, hs.length - 1)); const eu = hu ? Math.max(UXW, medir(hu) + 170) : UXW; ancho[r.tab.id] = span[r.tab.id] + LBL + (ramaUps(r) ? eu : 0); return ancho[r.tab.id]; };
     const totalW = raiz.reduce((a, r) => a + medir(r) + GAP, GAP) + 40;

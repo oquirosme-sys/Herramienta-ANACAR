@@ -57,6 +57,8 @@
     const chk = (obj, key, txt) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!obj[key], onchange: e => { obj[key] = e.target.checked; Store.save(); App.refresh(); } }), ' ' + txt);
     const fila = (l, v, cls) => h('tr', null, h('th', null, l), h('td', { class: cls || '' }, v));
     const otros = Store.project.tableros.filter(o => o.id !== t.id);
+    const propio = !!(t.ups.activo && (t.ups.propio === undefined ? !t.padreId : t.ups.propio));
+    const antecesores = new Set(); for (let o = Store.tablero(t.padreId); o && !antecesores.has(o.id); o = Store.tablero(o.padreId)) antecesores.add(o.id);
     return UI.card('Fuentes de alimentación', h('div', { class: 'cols' },
       h('div', null,
         h('h4', null, 'Alimentación normal'),
@@ -64,14 +66,15 @@
         chk(u, 'activo', 'A través de una UPS'),
         u.activo ? h('div', { class: 'grid3 mt' }, UI.field('Nombre', UI.input(u, 'nombre', { fk: k + 'un' })), UI.field('Capacidad (kVA)', UI.input(u, 'kva', { type: 'num', fk: k + 'uk' })),
           UI.field('Icc del inversor (× In)', UI.input(u, 'factorIcc', { type: 'num', fk: k + 'uf', placeholder: '2' }), 'Corriente que entrega en falla')) : null,
-        u.activo ? UI.field('Tablero al que se conecta la UPS (aguas arriba)', UI.select(UI.opts(Store.posiblesPadres(t).map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— elegir tablero —'), t.padreId || '', v => {
-          Store.cambiarPadre(t, v); if (a.activo && a.equipo === 'MTS' && a.tipo === 'tablero') a.origenId = v; Store.save(); App.refresh(); }), 'La UPS cuelga de la barra de ese tablero (con sus interruptores) y este tablero queda bajo el MTS; el circuito se crea en ese tablero') : null,
-        u.activo && t.padreId ? h('label', { class: 'chk mt', title: 'El tablero que alimenta esta UPS lleva dos circuitos con su interruptor: uno a la UPS y otro al bypass (MTS)' },
+        u.activo ? UI.field('Dónde se conecta la UPS', UI.select(UI.opts([{ value: '__propio', label: 'A la barra de este tablero (la UPS cuelga de él)' }].concat(Store.posiblesPadres(t).map(o => ({ value: o.id, label: 'A la barra de ' + Calc.nombreTablero(o) + ' (este tablero queda aguas abajo)' }))), '— elegir —'), propio ? '__propio' : (t.padreId || ''), v => {
+          if (v === '__propio') u.propio = true; else if (v) { u.propio = false; Store.cambiarPadre(t, v); if (a.activo && a.equipo === 'MTS' && a.tipo === 'tablero') a.origenId = v; }
+          Store.save(); App.refresh(); }), 'La UPS cuelga de la barra del tablero elegido, con sus interruptores; el circuito se crea en ese tablero') : null,
+        u.activo && !propio ? h('label', { class: 'chk mt', title: 'El tablero que alimenta esta UPS lleva dos circuitos con su interruptor: uno a la UPS y otro al bypass (MTS)' },
           h('input', { type: 'checkbox', checked: !!(a.activo && a.equipo === 'MTS' && a.tipo === 'tablero' && a.origenId === t.padreId), onchange: e => {
             if (e.target.checked) Object.assign(a, { activo: true, equipo: 'MTS', tipo: 'tablero', origenId: t.padreId, polosAts: a.polosAts || 3 }); else if (a.equipo === 'MTS' && a.tipo === 'tablero') a.activo = false;
             Store.save(); App.refresh(); } }), ' La UPS lleva MTS (bypass de mantenimiento desde ' + (r.padre ? r.padre.nombre : 'el tablero que la alimenta') + ')') : null,
-        u.activo && !t.padreId ? chk(u, 'mts', 'La UPS lleva MTS (bypass de mantenimiento): se dibuja aguas abajo del principal con las dos acometidas') : null,
-        u.activo && !t.padreId ? UI.field('Tablero conectado aguas abajo de la UPS / MTS', UI.select(UI.opts(Store.project.tableros.filter(o => o.padreId === t.id).map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— ninguno —'), (Store.project.tableros.find(o => o.padreId === t.id && o.deUps) || {}).id || '', v => { Store.project.tableros.forEach(o => { if (o.padreId === t.id) o.deUps = o.id === v; }); Store.save(); App.refresh(); }), 'Se dibuja bajo el MTS de la UPS, con su formato normal; su carga ya se suma en este tablero (debe ser un tablero derivado de éste)') : null,
+        u.activo && propio ? chk(u, 'mts', 'La UPS lleva MTS (bypass de mantenimiento): dos acometidas en la barra de este tablero') : null,
+        u.activo && propio ? UI.field('Tablero conectado aguas abajo de la UPS / MTS', UI.select(UI.opts(Store.project.tableros.filter(o => o.id !== t.id && !antecesores.has(o.id)).map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— ninguno —'), (Store.project.tableros.find(o => o.padreId === t.id && o.deUps) || {}).id || '', v => { Store.project.tableros.forEach(o => { o.deUps = o.id === v; }); if (v) { const d = Store.tablero(v); if (d.padreId !== t.id) Store.cambiarPadre(d, t.id); } Store.save(); App.refresh(); }), 'Se dibuja bajo el MTS de la UPS con su formato normal; se conecta a este tablero (su circuito y su carga se suman aquí)') : null,
         r.ups ? h('p', { class: 'hint' }, 'Carga ' + U.fmt(r.ups.carga * 100, 1) + ' % · Icc limitado a ' + f2(r.ups.icc / 1000) + ' kA · voltaje regulado a la salida') : null),
       h('div', null,
         h('h4', null, 'Segunda acometida'),
