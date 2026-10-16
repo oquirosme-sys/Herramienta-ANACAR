@@ -92,7 +92,7 @@
         D.rect(x - 22, y - 13, 44, 26, 'u-ups', 'EQUIPOS', () => App.go('memoria', r.tab.id)); D.texto(x, y + 4, 'UPS', 'u-t b', 'TEXTO', 'c'); huecos.push([y - 13, y + 13]);
         D.texto(x + 30, y + 4, r.ups.nombre + ' ' + f1(r.ups.kva) + ' kVA · Icc ' + f2(r.ups.icc / 1000) + ' kA', 'u-t', 'TEXTO');
       }
-      y = Math.max(y + 46, y1 - (r.alterna ? 120 : 74));
+      y = Math.max(y + 46, y1 - (r.alterna ? 176 : 74));
       // con segunda acometida los datos del cable van a la izquierda de la línea
       const cx = r.alterna ? x - 10 : x + 10, al = r.alterna ? 'e' : null;
       D.texto(cx, y, A.fasesTxt + (A.neutroTxt ? '+' + A.neutroTxt + 'N' : '') + (A.tierraTxt ? '+' + A.tierraTxt + 'T' : '') + ' ' + A.mat + ' ' + A.ais, 'u-t b', 'TEXTO', al);
@@ -108,13 +108,16 @@
         const gx = x + 140;
         if (sym) {
           // transferencia sobre la barra: normal por arriba, alterna por la derecha, carga hacia la barra
-          const S0 = SIMB[sym], ha = S0.alto * S0.k, oy = y1 - 12 - ha, pa = S0.puertos.alterna;
+          const S0 = SIMB[sym], ha = S0.alto * S0.k, oy = y1 - 58 - ha, pa = S0.puertos.alterna;
           ya = oy - pa[1] * S0.k;
           D.simbolo(sym, x, oy, { MODELO: al.ats ? al.ats.modelo : '', AMPERIOS: al.ats ? String(al.ats.amperios) : String(A.AF139 || ''), WCR: al.wcr ? String(al.wcr) : '', TRANSICION: al.transicion || '' }, { ir: () => App.go('memoria', r.tab.id), title: al.equipo });
           huecos.push([oy, oy + ha]);
           D.texto(x - 6 - (S0.k * 10), oy + 12, al.equipo, 'u-t b', 'TEXTO', 'e');
           if (al.ats || al.distAts) D.texto(x - S0.k * 10 - 6, oy + 27, (al.ats ? al.ats.modelo + ' · WCR ' + al.wcr + ' kA' : '') + (al.distAts ? ' · ' + f1(al.distAts) + ' m al tablero' : ''), 'u-t', 'TEXTO', 'e');
-          D.texto(x + 6, oy - 6, 'NORMAL' + (r.trafo ? ' (transformador)' : ''), 'u-t s b', 'TEXTO');
+          D.texto(x + 6, oy - 6, 'NORMAL' + (r.trafo ? ' (transformador)' : r.padre ? ' (' + r.padre.nombre + ')' : r.tab.conectadoA ? ' (' + r.tab.conectadoA + ')' : ''), 'u-t s b', 'TEXTO');
+          // tramo común ATS → tablero: espacio para el calibre, canalización, distancia y caída
+          D.texto(x - 10, y1 - 38, A.fasesTxt + (A.neutroTxt ? '+' + A.neutroTxt + 'N' : '') + (A.tierraTxt ? '+' + A.tierraTxt + 'T' : '') + ' ' + A.mat + ' ' + A.ais, 'u-t b', 'TEXTO', 'e');
+          D.texto(x - 10, y1 - 23, al.equipo + ' → tablero ' + f1(al.distAts) + ' m · ' + (A.preN || '') + A.AR139 + ' mm ' + A.tuberia + ' · ΔV ' + f2(al.caidaComun / r.V * 100) + ' %', 'u-t', 'TEXTO', 'e');
           D.texto(x + pa[0] * S0.k + 6, ya + 12, 'EMERGENCIA', 'u-t s b', 'TEXTO');
           D.linea(x + pa[0] * S0.k, ya, gx, ya, 'u-lin', 'ALIMENTADOR');
         } else {
@@ -149,6 +152,13 @@
       const filas = [['EQUIPO', r.nombre], ['CORRIENTE CORTOCIRCUITO', r.iccKA ? f2(r.iccKA) + ' kA' : '—'], ['kVA TOTALES', f2(r.W130)], ['FACTOR DE DEMANDA', f2(A.R139)], ['kVA DEMANDADOS', f2(A.L139)],
         ['FACTOR DE POTENCIA', f2(A.T139)], ['ACOMETIDA', ''], ['FASES', A.fasesTxt], ['NEUTRO', A.neutroTxt || '—'], ['TIERRA', A.tierraTxt || '—'], ['AISLAMIENTO / COND.', A.ais + ' / ' + A.mat],
         ['CANALIZACIÓN', (A.preN || '') + A.AR139 + ' mm ' + A.tuberia], ['LONGITUD', f1(A.M139) + ' m'], ['VOLTAJE NOMINAL', r.tab.sistema + ' V'], ['VOLTAJE CALCULADO', f2(A.AW139) + ' V'], ['% CAÍDA DE VOLTAJE', f2(A.AY139) + ' %']];
+      if (r.alterna) {
+        const a = r.alterna;
+        filas.push([a.equipo + ' / ' + (a.tipo === 'generador' ? 'GENERADOR' : 'BYPASS'), ''], ['MODELO ' + a.equipo, a.ats ? a.ats.modelo + ' · ' + a.ats.amperios + ' A' : (A.AF139 || '–') + ' A'], ['TRANSICIÓN / POLOS', (a.equipo === 'MTS' ? 'manual' : a.transicion || '—') + ' · ' + (a.polosAts || '—') + 'P'],
+          ['WCR / Icc EN EL ' + a.equipo, (a.wcr || '—') + ' / ' + (a.iccAtsKA ? f2(a.iccAtsKA) : '—') + ' kA'], ['NORMAL → ' + a.equipo, f1(a.distNormal) + ' m'], [(a.tipo === 'generador' ? 'GENERADOR' : 'BYPASS') + ' → ' + a.equipo, f1(a.longitud) + ' m'],
+          [a.equipo + ' → TABLERO', f1(a.distAts) + ' m'], ['GENERADOR', a.tipo === 'generador' ? (a.kva ? f1(a.kva) + ' kVA' : '—') : (a.origen || '—')], ['CALIBRE 2ª ACOMETIDA', a.fasesTxt + ' ' + a.mat], ['CAÍDA 2ª ACOMETIDA', f2(a.cv) + ' %']);
+      }
+      if (r.ups) filas.push(['UPS', r.ups.nombre || ''], ['CAPACIDAD UPS', f1(r.ups.kva) + ' kVA'], ['Icc DEL INVERSOR', f2(r.ups.icc / 1000) + ' kA']);
       D.rect(x, y, w1 + w2, hh * (filas.length + 1), 'u-tab', 'TABLA');
       D.texto(x + (w1 + w2) / 2, y + 11, 'TABLA RESUMEN DEL TABLERO', 'u-t b', 'TABLA', 'c');
       filas.forEach((f, i) => {

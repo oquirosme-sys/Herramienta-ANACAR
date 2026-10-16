@@ -149,7 +149,7 @@
     } else if (!opts.soloTipo) {
       const sr = mk('TABLA RESUMEN'), gr = Hoja.resumen(lista, Store.project.resumenSimple); volcar(sr, gr);
       nombre('TABLA_RESUMEN__TABLEROS_ELÉCTRICOS', sr, gr, Hoja.col('B'), Hoja.col('Y'));
-      if (!Store.project.resumenSimple) { nombre('DATOS_DEL_TABLERO', sr, gr, Hoja.col('Z'), Hoja.col('AG')); nombre('DATOS_DEL_SUPRESOR', sr, gr, Hoja.col('AH'), Hoja.col('AN')); nombre('DATOS_INTERRUPTOR_PRINCIPAL', sr, gr, Hoja.col('AO'), Hoja.col('AU')); }
+      if (!Store.project.resumenSimple) { nombre('DATOS_DEL_TABLERO', sr, gr, Hoja.col('Z'), Hoja.col('AG')); nombre('DATOS_DEL_SUPRESOR', sr, gr, Hoja.col('AH'), Hoja.col('AN')); if (Resumen.conTransf) nombre('DATOS_TRANSFERENCIA', sr, gr, Hoja.col('AV'), Hoja.col('BJ')); nombre('DATOS_INTERRUPTOR_PRINCIPAL', sr, gr, Hoja.col('AO'), Hoja.col('AU')); }
       volcar(mk('TABLA RESUMEN (VERTICAL)'), Hoja.vertical(lista, Resumen.vertical, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS'));
       volcar(mk('TABLA RESUMEN DU(VERTICAL)'), Hoja.vertical(lista, Resumen.du, 'TABLA RESUMEN DU - TABLEROS ELÉCTRICOS'));
       volcar(mk('TABLA RESUMEN ORIGINAL'), Hoja.vertical(lista, Resumen.original, 'TABLA RESUMEN - TABLEROS ELÉCTRICOS'));

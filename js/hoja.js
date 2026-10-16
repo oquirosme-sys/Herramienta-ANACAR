@@ -133,20 +133,23 @@
   /* ---------- TABLA RESUMEN (horizontal, B:AU) ---------- */
   const ANCHOS_RES = (() => {
     const w = { A: 4, B: 35.8, C: 30.2, D: 18.8, E: 18.9, F: 15.5, G: 15.8, H: 15.1, I: 15, J: 9, K: 15.5, L: 13.9, M: 13.9, N: 9, O: 13.8, P: 18.2, Q: 16.8, R: 10, S: 17.8, T: 12, U: 14, V: 14, W: 14,
-      X: 19.1, Y: 18.2, Z: 32.1, AA: 23.5, AB: 16.5, AC: 15, AD: 10, AE: 10, AF: 16, AG: 20.2, AH: 21.8, AI: 34.9, AJ: 21.8, AK: 12, AL: 14, AM: 12, AN: 21.5, AO: 30.9, AP: 43, AQ: 16.2, AR: 21.8, AS: 14, AT: 10, AU: 12 };
+      X: 19.1, Y: 18.2, Z: 32.1, AA: 23.5, AB: 16.5, AC: 15, AD: 10, AE: 10, AF: 16, AG: 20.2, AH: 21.8, AI: 34.9, AJ: 21.8, AK: 12, AL: 14, AM: 12, AN: 21.5, AO: 30.9, AP: 43, AQ: 16.2, AR: 21.8, AS: 14, AT: 10, AU: 12,
+      AV: 14, AW: 22, AX: 12, AY: 16, AZ: 10, BA: 11, BB: 14, BC: 24, BD: 14, BE: 14, BF: 14, BG: 28, BH: 12, BI: 12, BJ: 14 };
     return Object.keys(w).map(k => w[k]);
   })();
   /** simple = solo la tabla del alimentador (sin datos del tablero, del supresor ni del interruptor principal). */
+  const col_ = i => (i < 26 ? String.fromCharCode(65 + i) : String.fromCharCode(64 + Math.floor(i / 26)) + String.fromCharCode(65 + (i % 26)));
   function resumen(lista, simple) {
-    const G = Grid(simple ? ANCHOS_RES.slice(0, col('Y') + 1) : ANCHOS_RES), lim = simple ? col('Y') : 999;
+    const lim = simple ? col('Y') : Resumen.conTransf ? col('BJ') : col('AU'), G = Grid(ANCHOS_RES.slice(0, lim + 1));
     const P = (y, a, b, v, s, f, y2) => { const xa = typeof a === 'string' ? col(a) : a; if (xa <= lim) G.put(y, a, y2 === undefined ? y : y2, b, v, s, f); };
     P(0, 'B', 'N', 'TABLA RESUMEN - TABLEROS ELÉCTRICOS', 'titR', null, 7); P(0, 'O', 'Y', '', 'logo', null, 7);
-    P(0, 'Z', 'AG', 'DATOS DEL TABLERO', 'tit2', null, 7); P(0, 'AH', 'AN', 'DATOS DEL SUPRESOR', 'tit2', null, 7); P(0, 'AO', 'AU', 'DATOS INTERRUPTOR PRINCIPAL', 'tit2', null, 7);
+    P(0, 'Z', 'AG', 'DATOS DEL TABLERO', 'tit2', null, 7); P(0, 'AH', 'AN', 'DATOS DEL SUPRESOR', 'tit2', null, 7); P(0, 'AO', 'AU', 'DATOS INTERRUPTOR PRINCIPAL', 'tit2', null, 7); P(0, 'AV', 'BJ', 'DATOS TRANSFERENCIA (ATS / MTS) Y UPS', 'tit2', null, 7);
     for (let i = 0; i < 8; i++) G.alto(i, 22.35);
     const dos = [['B', 'Tablero / Equipo'], ['C', 'Alimentado desde'], ['D', 'kVA Totales'], ['E', 'kVA Demandados'], ['F', 'Factor demanda'], ['G', 'Factor diversidad'], ['H', 'Factor potencia'],
       ['T', 'Longitud (m)'], ['U', 'Voltaje bornes (V)'], ['V', 'Caída de voltaje total (V)'], ['W', 'Caída de voltaje total (%)'], ['X', 'Corriente cortocircuito disponible (kA)'], ['Y', 'Capacidad de breaker (A)'],
       ['Z', 'Tablero / Equipo'], ['AA', 'Modelo de referencia'], ['AB', 'Fabricante'], ['AF', 'Espacios'], ['AG', 'Montaje'], ['AH', 'Fabricante'], ['AI', 'Modelo de referencia'], ['AJ', 'Montaje'],
-      ['AM', 'Voltaje (V)'], ['AN', 'Fases'], ['AO', 'Fabricante'], ['AP', 'Modelo de referencia'], ['AQ', 'Marco (A)'], ['AR', 'Amperios (A)'], ['AS', 'Tipo de unidad'], ['AT', '# polos'], ['AU', 'SCCR (kA)']];
+      ['AM', 'Voltaje (V)'], ['AN', 'Fases'], ['AO', 'Fabricante'], ['AP', 'Modelo de referencia'], ['AQ', 'Marco (A)'], ['AR', 'Amperios (A)'], ['AS', 'Tipo de unidad'], ['AT', '# polos'], ['AU', 'SCCR (kA)']]
+      .concat(Resumen.subTransf.map((t, i) => [col_(47 + i), t]));
     dos.forEach(([L, v]) => P(8, L, L, v, 'thg', null, 9));
     P(8, 'I', 'P', 'Calibres conductores alimentador', 'thg'); [['I', 'J', 'Fases (AWG)'], ['K', 'L', 'Neutro (AWG)'], ['M', 'N', 'Tierra (AWG)'], ['O', 'O', 'Material'], ['P', 'P', 'Aislamiento']].forEach(([a, b, v]) => P(9, a, b, v, 'thg'));
     P(8, 'Q', 'S', 'Tubería', 'thg'); [['Q', 'Cantidad'], ['R', '(Ø mm)'], ['S', 'Tipo']].forEach(([L, v]) => P(9, L, L, v, 'thg'));
@@ -155,7 +158,7 @@
     G.alto(8, 23.45); G.alto(9, 44.45);
     lista.forEach((r, i) => {
       const v = Resumen.horizontal(r), y = 10 + i;
-      (r.zapatas ? v.map((x, k) => (k === 40 ? 'ZAPATAS' : k > 40 ? '' : x)) : v).forEach((x, k) => P(y, 1 + k, 1 + k, x, k === 0 || k === 24 ? 'td' : 'tdn', typeof x === 'number' && !Number.isInteger(x) ? 2 : null));
+      (r.zapatas ? v.map((x, k) => (k === 40 ? 'ZAPATAS' : k > 40 && k < 46 ? '' : x)) : v).forEach((x, k) => P(y, 1 + k, 1 + k, x, k === 0 || k === 24 ? 'td' : 'tdn', typeof x === 'number' && !Number.isInteger(x) ? 2 : null));
       G.alto(y, 32.45);
     });
     return G;
