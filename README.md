@@ -43,6 +43,17 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
+## Cambios de la versión SNG v2 — 2026.1-web.15
+Se aplicaron sin cambiar colores, estilos ni la integración con la Suite (base de datos, accesos y roles no se tocaron):
+- **Fuentes del proyecto** (Proyecto ▸ Fuentes): transformadores y generadores compartidos por varios tableros y ATS; los tableros que cuelgan de una fuente toman su voltaje secundario y la carga de la fuente suma la demanda de todos. «Alimentado desde» ofrece también esas fuentes.
+- **Calibres mínimos** de un alimentador: 8 AWG en fases y neutro y 10 AWG en tierra (nunca 12 AWG), y **acometida manual** (calibre de fases, neutro y tierra) con avisos si no cumple.
+- **ATS / MTS:** el tramo ATS → tablero es la longitud del tablero; la acometida normal → ATS (`distNormal`) se suma a ella. El campo separado «Distancia ATS → tablero» desapareció.
+- **Zoom y mano** en las tablas resumen y en los cuadros 3F/1F (`Hoja.zoomUI`), y barra de desplazamiento superior en la tabla de circuitos.
+- **Formato del cuadro de cargas** (Proyecto): «Formato original (Costa Rica)» (por defecto) o «Panamá (formato TL4)» con 9 dispositivos por circuito.
+- La unidad del interruptor pedida en el circuito se respeta en las tablas y avisa si no hay interruptor de esa unidad en la familia del tablero.
+- Tablas verticales y DU: bloque «UPS / Segunda acometida» con las distancias de cada tramo.
+- Pendiente: el Excel con macros (`ANACAR Web 2026.xlsm`) todavía usa el modelo anterior de ATS (distancia ATS → tablero aparte), sin calibres mínimos ni fuentes compartidas.
+
 ## UPS con MTS — 2026.1-web.14
 - **Excel:** nueva entrada «La UPS lleva MTS» (I13) que activa el MTS de bypass desde el tablero de arriba (con su circuito) o, sin tablero de arriba, elige el MTS por la corriente de la UPS y lo muestra en las tablas resumen y en el DXF. En el Excel la UPS sigue dibujada en línea (no colgando de la barra).
 - En *Fuentes de alimentación*, al marcar *A través de una UPS* aparece **«La UPS lleva MTS (bypass de mantenimiento)»**: el tablero que alimenta la UPS recibe un segundo circuito con su interruptor (el bypass, que ocupa espacio pero no suma carga) y el unifilar muestra el MTS con las dos acometidas. Requiere que el tablero esté alimentado desde otro tablero.
