@@ -52,7 +52,7 @@ Se aplicaron sin cambiar colores, estilos ni la integración con la Suite (base 
 - **Formato del cuadro de cargas** (Proyecto): «Formato original (Costa Rica)» (por defecto) o «Panamá (formato TL4)» con 9 dispositivos por circuito.
 - La unidad del interruptor pedida en el circuito se respeta en las tablas y avisa si no hay interruptor de esa unidad en la familia del tablero.
 - Tablas verticales y DU: bloque «UPS / Segunda acometida» con las distancias de cada tramo.
-- Pendiente: el Excel con macros (`ANACAR Web 2026.xlsm`) todavía usa el modelo anterior de ATS (distancia ATS → tablero aparte), sin calibres mínimos ni fuentes compartidas.
+- **Excel:** `I23` es ahora la longitud del tablero (ATS → tablero), alimentador con 8 AWG mínimo y tierra 10 AWG, acometida manual (`F20`–`F22`). Fuentes compartidas, unidad pedida y formato Panamá no se portaron al Excel.
 
 ## UPS con MTS — 2026.1-web.14
 - **Excel:** nueva entrada «La UPS lleva MTS» (I13) que activa el MTS de bypass desde el tablero de arriba (con su circuito) o, sin tablero de arriba, elige el MTS por la corriente de la UPS y lo muestra en las tablas resumen y en el DXF. En el Excel la UPS sigue dibujada en línea (no colgando de la barra).
