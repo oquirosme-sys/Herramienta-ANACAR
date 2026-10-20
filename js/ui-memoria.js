@@ -30,16 +30,16 @@
     return UI.card('Datos del tablero', h('div', { class: 'grid4' },
       UI.field('Prefijo', UI.input(t, 'prefijo', { fk: k + 'pre' })), UI.field('Nombre / ID', UI.input(t, 'nombre', { fk: k + 'nom' })),
       UI.field('Tipo', UI.select(['3F', '1F'], t.tipo, v => { t.tipo = v; Object.assign(t, Store.voltajeDe(t.sistema, v)); Store.save(); App.refresh(); }, { fk: k + 'tipo' })),
-      UI.field('Sistema (V)', UI.select(L.sistemas, t.sistema, v => { t.sistema = v; Object.assign(t, Store.voltajeDe(v, t.tipo)); Store.save(); App.refresh(); }, { fk: k + 'sis' }), 'Voltaje nominal ' + t.voltaje + ' V · ' + t.fases + ' fases · ' + t.hilos + ' hilos'),
+      UI.field('Sistema (V)', UI.select(L.sistemas, t.sistema, v => { t.sistema = v; Object.assign(t, Store.voltajeDe(v, t.tipo)); Store.save(); App.refresh(); }, { fk: k + 'sis', disabled: !!t.fuenteId }), (t.fuenteId ? 'Heredado del secundario de la fuente · ' : '') + 'Voltaje nominal ' + t.voltaje + ' V · ' + t.fases + ' fases · ' + t.hilos + ' hilos'),
       UI.field('Fases', UI.bind(t, 'fases', [3, 2, 1], { num: true, fk: k + 'fas' })), UI.field('Hilos', UI.bind(t, 'hilos', [4, 3, 2], { num: true, fk: k + 'hil' })),
       UI.field('% Reserva', UI.input(t, 'reserva', { type: 'num', fk: k + 'res' }), 'Fracción: 0,1 = 10 %'),
       UI.field('Factor diversidad del tablero', UI.input(t, 'fdivTablero', { type: 'num', fk: k + 'fdv', placeholder: '1', rango: [0, 1] }), 'Entre 0 y 1 (multiplica la demanda)'),
-      UI.field('Alimentado desde', UI.select(UI.opts(padres.map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— Acometida / externo —'), t.padreId, v => { Store.cambiarPadre(t, v); App.refresh(); }, { fk: k + 'pad' })),
+      UI.field('Alimentado desde', UI.select(UI.opts(Store.opcionesAlimentacion(t), '— Acometida / externo —'), Store.valorAlimentacion(t), v => { Store.alimentarDesde(t, v); App.refresh(); }, { fk: k + 'pad' }), (Store.project.fuentes || []).length ? null : 'Los transformadores y generadores compartidos se crean en Proyecto → Fuentes'),
       !t.padreId ? UI.field('Conectado a', UI.input(t, 'conectadoA', { fk: k + 'con', placeholder: 'MÓDULO MEDIDORES' })) : UI.field('Circuito en ' + (r.padre ? r.padre.nombre : ''), h('div', { class: 'ro' }, r.circuitoPadre ? 'Posición ' + pos(r.circuitoPadre.c) : 'Sin circuito')),
-      UI.field('Longitud alimentador (m)', UI.input(t, 'longitud', { type: 'num', fk: k + 'lon' })),
+      UI.field(t.alterna.activo && /ATS|MTS/.test(t.alterna.equipo || 'ATS') ? 'Longitud ' + (t.alterna.equipo || 'ATS') + ' → tablero (m)' : 'Longitud alimentador (m)', UI.input(t, 'longitud', { type: 'num', fk: k + 'lon' })),
       UI.field('Icc disponible (kA)', UI.input(t, 'iccManual', { type: 'num', fk: k + 'icc', placeholder: r.iccKA ? f2(r.iccKA) + ' (' + r.iccFuente + ')' : 'Ingrese o elija transformador' }), t.padreId ? 'Vacío = cascada desde ' + (r.padre ? r.padre.nombre : 'el padre') : 'En bornes del tablero'),
-      UI.field('Transformador aguas arriba', h('div', { class: 'row' }, h('span', { class: 'ro grow' }, r.trafo ? (r.trafo.nombre ? r.trafo.nombre + ' · ' : '') + U.fmt(r.trafo.kva, 1) + ' kVA · Z ' + f2(r.trafo.z) + ' %' : 'Ninguno'), UI.btn(r.trafo ? 'Editar' : '+ Agregar', () => Unifilar.editarTrafo(t, App.R), 'small')),
-        r.trafo ? 'Carga ' + f1(r.trafo.carga * 100) + ' % · Icc secundario ' + f2(r.trafo.iccSec / 1000) + ' kA · ΔV ' + f2(r.trafo.reg) + ' %' : 'Cambio de voltaje o acometida en media tensión'),
+      UI.field('Transformador aguas arriba', h('div', { class: 'row' }, h('span', { class: 'ro grow' }, r.trafo ? (r.trafo.nombre ? r.trafo.nombre + ' · ' : '') + U.fmt(r.trafo.kva, 1) + ' kVA · Z ' + f2(r.trafo.z) + ' %' : 'Ninguno'), r.trafo && r.trafo.compartido ? null : UI.btn(r.trafo ? 'Editar' : '+ Agregar', () => Unifilar.editarTrafo(t, App.R), 'small')),
+        r.trafo ? (r.trafo.compartido ? 'Fuente compartida (' + r.trafo.salidas + ' salida(s), ' + f1(r.trafo.kvaServidos) + ' kVA servidos) · ' : '') + 'Carga ' + f1(r.trafo.carga * 100) + ' % · Icc secundario ' + f2(r.trafo.iccSec / 1000) + ' kA · ΔV ' + f2(r.trafo.reg) + ' %' : 'Cambio de voltaje o acometida en media tensión'),
       UI.field('Tipo de equipo', UI.bind(t, 'clase', [{ value: 'tablero', label: 'Tablero (panelboard)' }, { value: 'subestacion', label: 'Subestación / switchboard (QED-2, I-Line, PRL4, Pow-R-Line Xpert)' }], { fk: k + 'cla' })),
       UI.field('Principal', UI.bind(t, 'principal', [{ value: 'interruptor', label: 'Interruptor principal' }, { value: 'zapatas', label: 'Zapatas (main lugs)' }], { fk: k + 'pri' }), t.principal === 'zapatas' ? 'Protegido por el interruptor del tablero que lo alimenta' : null),
       UI.field('Espacios (polos)', UI.bind(t, 'espacios', [{ value: '', label: 'Auto (' + r.espaciosUsados + ' usados + ' + (Store.project.reservaEspacios || 0) + ' %)' }].concat(Array.from(new Set(C.tablerosCat.filter(x => x.fabricante === r.marca && n(x.espacios) < 999).map(x => n(x.espacios)))).sort((a, b) => a - b).map(v => ({ value: v, label: v + ' espacios' }))), { num: true, fk: k + 'esp' })),
@@ -57,6 +57,7 @@
     const chk = (obj, key, txt) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!obj[key], onchange: e => { obj[key] = e.target.checked; Store.save(); App.refresh(); } }), ' ' + txt);
     const fila = (l, v, cls) => h('tr', null, h('th', null, l), h('td', { class: cls || '' }, v));
     const otros = Store.project.tableros.filter(o => o.id !== t.id);
+    const gens = (Store.project.fuentes || []).filter(x => x.tipo === 'generador').map(x => ({ value: x.id, label: (x.nombre || '') + (Number(x.kva) ? ' · ' + x.kva + ' kVA' : '') + (x.sistema ? ' · ' + x.sistema + ' V' : '') }));
     const propio = !!(t.ups.activo && (t.ups.propio === undefined ? !t.padreId : t.ups.propio));
     const antecesores = new Set(); for (let o = Store.tablero(t.padreId); o && !antecesores.has(o.id); o = Store.tablero(o.padreId)) antecesores.add(o.id);
     return UI.card('Fuentes de alimentación', h('div', { class: 'cols' },
@@ -82,20 +83,22 @@
         a.activo ? h('div', { class: 'grid3 mt' },
           UI.field('Equipo', UI.bind(a, 'equipo', [{ value: 'ATS', label: 'Transferencia automática (ATS)' }, { value: 'MTS', label: 'Transferencia manual (MTS)' }, { value: 'IP', label: 'Interruptor principal (enclavado)' }], { fk: k + 'eq' })),
           UI.field('Fuente', UI.bind(a, 'tipo', [{ value: 'generador', label: 'Generador' }, { value: 'tablero', label: 'Bypass directo desde otro tablero' }], { fk: k + 'ti' })),
-          a.tipo === 'generador' ? UI.field('Nombre', UI.input(a, 'nombre', { fk: k + 'gn' })) : UI.field('Tablero de origen', UI.bind(a, 'origenId', UI.opts(otros.map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— elegir —'), { fk: k + 'or' })),
-          a.tipo === 'generador' ? UI.field('Generador (kVA)', UI.input(a, 'kva', { type: 'num', fk: k + 'gk' })) : null,
-          a.tipo === 'generador' ? UI.field("Reactancia X''d (%)", UI.input(a, 'xd', { type: 'num', fk: k + 'gx', placeholder: '12' })) : null,
+          a.tipo === 'generador' ? UI.field('Generador del proyecto', UI.bind(a, 'fuenteId', UI.opts(gens, '— Manual (solo este tablero) —'), { fk: k + 'gf' }), gens.length ? 'Un mismo generador puede alimentar varios ATS y tableros' : 'Cree generadores compartidos en Proyecto → Fuentes') : UI.field('Tablero de origen', UI.bind(a, 'origenId', UI.opts(otros.map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— elegir —'), { fk: k + 'or' })),
+          a.tipo === 'generador' && !a.fuenteId ? UI.field('Nombre', UI.input(a, 'nombre', { fk: k + 'gn' })) : null,
+          a.tipo === 'generador' && !a.fuenteId ? UI.field('Generador (kVA)', UI.input(a, 'kva', { type: 'num', fk: k + 'gk' })) : null,
+          a.tipo === 'generador' && !a.fuenteId ? UI.field("Reactancia X''d (%)", UI.input(a, 'xd', { type: 'num', fk: k + 'gx', placeholder: '12' })) : null,
           a.equipo === 'ATS' || !a.equipo ? UI.field('Tipo de transferencia', UI.bind(a, 'transicion', [{ value: 'abierta', label: 'Transición abierta (estándar)' }, { value: 'retardada', label: 'Transición retardada (motores)' }, { value: 'cerrada', label: 'Transición cerrada' }, { value: 'bypass', label: 'Con bypass-aislamiento' }], { fk: k + 'tr' })) : null,
           /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field('Polos', UI.bind(a, 'polosAts', [{ value: 3, label: '3 polos (neutro sólido)' }, { value: 4, label: '4 polos (neutro conmutado)' }], { num: true, fk: k + 'po' }), 'Con 4 polos el generador es fuente derivada separadamente (250.30)') : null,
           /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field('Modelo (catálogo)', UI.bind(a, 'atsId', [{ value: '', label: A && A.ats ? 'Auto: ' + A.ats.modelo + ' · ' + A.ats.amperios + ' A · ' + A.ats.wcr + ' kA' : 'Automático' }].concat((Store.catalog.ats || []).filter(x => x.equipo === (a.equipo === 'MTS' ? 'MTS' : 'ATS') && x.transicion === (a.equipo === 'MTS' ? 'manual' : (a.transicion || 'abierta')) && Number(x.polos) === (Number(a.polosAts) || 3)).map(x => ({ value: x.id, label: x.marca + ' · ' + x.modelo + ' · ' + x.amperios + ' A · WCR ' + x.wcr + ' kA', group: x.transicion + ' · ' + x.polos + ' polos' }))), { num: true, fk: k + 'mo' })) : null,
           /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field('WCR / SCCR del ' + (a.equipo || 'ATS') + ' (kA)', UI.input(a, 'sccr', { type: 'num', fk: k + 'sc', placeholder: A && A.ats ? 'Auto ' + A.ats.wcr : '' }), 'Vacío = el del modelo') : null,
           UI.field(/ATS|MTS/.test(a.equipo || 'ATS') ? (a.tipo === 'generador' ? 'Generador' : 'Tablero de origen') + ' → ' + (a.equipo || 'ATS') + ' (m)' : 'Longitud (m)', UI.input(a, 'longitud', { type: 'num', fk: k + 'al' })),
-          /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field((r.trafo ? 'Transformador' : r.padre ? r.padre.nombre : t.conectadoA || 'Fuente normal') + ' → ' + (a.equipo || 'ATS') + ' (m)', UI.input(a, 'distNormal', { type: 'num', fk: k + 'dn', placeholder: 'Auto ' + f1(Math.max(0, n(t.longitud) - n(a.distAts))) }), 'Acometida normal; con valor, el largo del alimentador = esta distancia + la del ' + (a.equipo || 'ATS') + ' al tablero') : null,
-          /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field('Distancia ' + (a.equipo || 'ATS') + ' → tablero (m)', UI.input(a, 'distAts', { type: 'num', fk: k + 'da', placeholder: '0 (junto al tablero)' }), 'Tramo común a las dos acometidas') : null,
+          /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field((r.trafo ? 'Transformador' : r.padre ? r.padre.nombre : t.conectadoA || 'Fuente normal') + ' → ' + (a.equipo || 'ATS') + ' (m)', UI.input(a, 'distNormal', { type: 'num', fk: k + 'dn', placeholder: '0' }), 'Acometida normal hasta el ' + (a.equipo || 'ATS')) : null,
+          /ATS|MTS/.test(a.equipo || 'ATS') ? UI.field((a.equipo || 'ATS') + ' → tablero (m)', UI.input(t, 'longitud', { type: 'num', fk: k + 'lon2' }), 'Se toma de la longitud de este tablero, el que se alimenta desde el ' + (a.equipo || 'ATS')) : null,
           UI.field('Material', UI.bind(a, 'material', L.materiales, { fk: k + 'am' })), UI.field('Aislamiento', UI.bind(a, 'aislamiento', Store.catalog.aislamientos, { fk: k + 'aa' })),
           UI.field('Tubería', UI.bind(a, 'tuberia', L.tuberias, { fk: k + 'at' })), UI.field('# en paralelo', UI.input(a, 'paralelos', { type: 'num', fk: k + 'ap', placeholder: A ? 'Auto ' + A.par : 'Auto' }))) : null,
         A ? h('table', { class: 'kv mt' }, h('tbody', null,
           fila('Origen', A.origen || '—'),
+          A.compartido ? fila('Generador compartido', A.salidas + ' salida(s) · el % de carga suma todos los tableros que cuelgan de él') : null,
           fila('Conductores', h('b', null, A.fasesTxt + (A.neutroTxt ? ' + ' + A.neutroTxt + ' N' : '') + (A.tierraTxt ? ' + ' + A.tierraTxt + ' T' : '') + ' ' + A.mat + ' ' + A.ais)),
           fila('Tubería', A.tubo + ' mm ' + A.tuberia),
           fila('Ampacidad corregida', A.val ? f1(A.val.cap) + ' A ' + (A.val.ok ? '✓' : '✗') : '—', A.val && !A.val.ok ? 'bad' : ''),
@@ -136,6 +139,9 @@
         UI.field('Temp. ambiente (°C)', UI.bind(a, 'tempAmb', L.temperaturas, { fk: k + 'ta' })),
         UI.field('Temp. bornes (°C)', UI.bind(a, 'tempBorne', [60, 75, 90], { num: true, fk: k + 'tb' }), 'Columna 310.16 que limita'),
         UI.field('Cond. portadores (agrup.)', UI.bind(a, 'agrupamiento', [{ value: '', label: 'Auto (' + A.agrup + ')' }].concat(L.agrupamientos.map(x => ({ value: x, label: x }))), { fk: k + 'ag' })),
+        UI.field('Calibre de fases (manual)', UI.bind(a, 'calFases', [{ value: '', label: 'Auto (' + (A.auto ? A.auto.fases : '') + ')' }].concat(Calc.CALIBRES.map(x => ({ value: x, label: x }))), { fk: k + 'cf' }), 'Si elige uno, se respeta y solo se avisa si no cumple'),
+        UI.field('Calibre de neutro (manual)', UI.bind(a, 'calNeutro', [{ value: '', label: 'Auto (' + (A.auto ? A.auto.neutro || '—' : '') + ')' }].concat(Calc.CALIBRES.map(x => ({ value: x, label: x }))), { fk: k + 'cn' })),
+        UI.field('Calibre de tierra (manual)', UI.bind(a, 'calTierra', [{ value: '', label: 'Auto (' + (A.auto ? A.auto.tierra : '') + ')' }].concat(Calc.CALIBRES.map(x => ({ value: x, label: x }))), { fk: k + 'ct' }), 'Mínimo 10 AWG en alimentadores'),
         UI.field('Calibre', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!a.calibreFijo, onchange: e => { a.calibreFijo = e.target.checked; Store.save(); App.refresh(); } }), ' No aumentar automáticamente'), null, 'span3'),
       ),
       h('table', { class: 'kv' }, h('tbody', null,
@@ -174,13 +180,25 @@
         fila('Protección (240.4(B) permite el siguiente tamaño estándar)', (A.AF139 || '—') + ' A', v.okP ? 'okc' : 'bad'))));
   }
 
+  /** Barra de desplazamiento horizontal también arriba de la tabla, sincronizada con la de abajo. */
+  function conBarraSuperior(wrap) {
+    const inner = h('div', { style: { height: '1px' } }), top = h('div', { class: 'scroll-top', 'aria-hidden': 'true' }, inner);
+    const sync = () => { inner.style.width = wrap.scrollWidth + 'px'; top.style.display = wrap.scrollWidth > wrap.clientWidth + 1 ? 'block' : 'none'; if (top.scrollLeft !== wrap.scrollLeft) top.scrollLeft = wrap.scrollLeft; };
+    top.addEventListener('scroll', () => { if (wrap.scrollLeft !== top.scrollLeft) wrap.scrollLeft = top.scrollLeft; });
+    wrap.addEventListener('scroll', () => { if (top.scrollLeft !== wrap.scrollLeft) top.scrollLeft = wrap.scrollLeft; });
+    requestAnimationFrame(sync); setTimeout(sync, 150); setTimeout(sync, 600);
+    if (window.ResizeObserver) { const ro = new ResizeObserver(sync); ro.observe(wrap); if (wrap.firstElementChild) ro.observe(wrap.firstElementChild); }
+    return h('div', null, top, wrap);
+  }
+
   function circuitos(t, r, R) {
     const k = c => 'c:' + c.id + ':', L = Store.catalog.listas, dOpts = detOpts();
+    const cr = Store.project.pais === 'PA', DEV = Simbolos.disp.map((d, i) => [d.campo, d.nombre, 'dv' + i, d.clave]);
     const head = h('thead', null,
-      h('tr', { class: 'grp' }, h('th', { colspan: 12 }, 'Datos de circuitos ramales / alimentadores'), h('th', { colspan: r.fases === 3 ? 3 : 2 }, 'Balance (kVA)'),
+      h('tr', { class: 'grp' }, h('th', { colspan: 12 }, 'Datos de circuitos ramales / alimentadores'), cr ? h('th', { colspan: DEV.length, class: 'dev' }, 'Cantidad de dispositivos') : null, h('th', { colspan: r.fases === 3 ? 3 : 2 }, 'Balance (kVA)'),
         h('th', { colspan: 8 }, 'Cálculo de conductores'), h('th', { colspan: 3 }, 'Caída de voltaje'), h('th', { colspan: 5 }, 'Interruptor ramal'), h('th', null, '')),
-      h('tr', null, ['Fijo', 'Posición', 'Detalle de carga', 'Descripción', 'kVA', 'Long. (m)', 'V', 'F', 'Prot. %', 'F. uso', 'F. div.', 'I (A)'].concat(r.fases === 3 ? ['A', 'B', 'C'] : ['A', 'B'],
-        ['Amp. req.', 'Prot. (A)', 'Material', 'Aislam.', '# par.', 'Aum. %', 'Calibres F / N / T', 'Tubo (mm)', 'V real', 'ΔV (V)', 'ΔV total %', 'Unidad', 'Tipo (catálogo)', 'Modelo de referencia', 'Polos', 'SCCR', '']).map(x => h('th', null, x))));
+      h('tr', null, ['Fijo', 'Posición', 'Detalle de carga', 'Descripción', 'kVA', 'Long. (m)', 'V', 'F', 'Prot. %', 'F. uso', 'F. div.', 'I (A)'].concat(cr ? DEV.map(d => ({ sim: d })) : [], r.fases === 3 ? ['A', 'B', 'C'] : ['A', 'B'],
+        ['Amp. req.', 'Prot. (A)', 'Material', 'Aislam.', '# par.', 'Aum. %', 'Calibres F / N / T', 'Tubo (mm)', 'V real', 'ΔV (V)', 'ΔV total %', 'Unidad', 'Tipo (catálogo)', 'Modelo de referencia', 'Polos', 'SCCR', '']).map(x => x && x.sim ? h('th', { class: 'dev sim', title: x.sim[1] }, Object.assign(h('span', { class: 'simb' }), { innerHTML: Simbolos.svg(x.sim[3], 22, 33) })) : h('th', null, x))));
     const body = h('tbody');
     r.rows.forEach(x => {
       const c = x.c, kk = k(c), resp = c.respaldoDe && Store.tablero(c.respaldoDe), hijo = (c.tableroHijoId && Store.tablero(c.tableroHijoId)) || resp;
@@ -200,6 +218,7 @@
         h('td', null, UI.input(c, 'fu', { type: 'num', fk: kk + 'fu', class: 'w-xxs', placeholder: f2(x.det.fd || 1), title: 'Factor de uso (demanda) del circuito' })),
         h('td', null, UI.input(c, 'fdivC', { type: 'num', fk: kk + 'fdv', class: 'w-xxs', placeholder: f2(x.det.fdiv || 1), title: 'Factor de diversidad del circuito (0 a 1)', rango: [0, 1] })),
         h('td', { class: 'r' }, x.J ? f1(Math.max(...x.I)) : ''),
+        cr ? DEV.map(d => h('td', { class: 'dev' }, hijo ? null : UI.input(c, d[0], { type: 'num', fk: kk + d[2], class: 'w-xxs', label: d[1] }))) : null,
         x.fase.slice(0, r.fases === 3 ? 3 : 2).map((v, i) => h('td', { class: 'r ph ph' + i }, v ? f2(v) : '')),
         h('td', { class: 'r' }, x.AE ? f1(x.AE) : ''),
         h('td', null, UI.input(c, 'prot', { type: 'num', fk: kk + 'pro', class: 'w-xs', placeholder: x.AF && !c.prot ? String(x.AF) : '' })),
@@ -221,10 +240,11 @@
           }, 'danger'))));
     });
     const tot = h('tfoot', null, h('tr', null, h('th', { colspan: 4, class: 'r' }, 'Totales'), h('th', { class: 'r' }, f2(r.J116)), h('th', { colspan: 7 }),
+      cr ? DEV.map(d => h('th', { class: 'r dev' }, r.rows.reduce((a, z) => a + (Number(z.c[d[0]]) || 0), 0) || '')) : null,
       r.U116.slice(0, r.fases === 3 ? 3 : 2).map(v => h('th', { class: 'r' }, f2(v))), h('th', { colspan: 17, class: 'l' }, 'Desbalance máximo: ' + f2(r.desbalance) + ' %')));
     const hijosSinCircuito = Store.project.tableros.filter(o => o.padreId === t.id && !t.circuitos.some(c => c.tableroHijoId === o.id));
     return UI.card('Circuitos ramales (' + r.rows.length + ')', h('div', null,
-      r.rows.length ? h('div', { class: 'tbl-wrap', 'data-scroll': 'circ-' + t.id }, h('table', { class: 'tbl calc' }, head, body, tot)) : h('div', { class: 'empty' }, 'Sin circuitos. Agréguelos o impórtelos de Revit.'),
+      r.rows.length ? conBarraSuperior(h('div', { class: 'tbl-wrap tall circ', 'data-scroll': 'circ-' + t.id }, h('table', { class: 'tbl calc' }, head, body, tot))) : h('div', { class: 'empty' }, 'Sin circuitos. Agréguelos o impórtelos de Revit.'),
       h('div', { class: 'toolbar' },
         UI.btn('+ Circuito', () => { const c = Store.nuevoCircuito(t); App.refresh(); setTimeout(() => { const e = document.querySelector('[data-fk="c:' + c.id + ':kva"]'); if (e) e.focus(); }, 0); }, 'primary small'),
         UI.btn('+ Tablero derivado…', () => nuevoDerivado(t), 'small', 'Crea un tablero alimentado desde este y su circuito'),

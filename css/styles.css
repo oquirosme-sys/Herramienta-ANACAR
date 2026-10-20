@@ -273,3 +273,7 @@ ol.guia li { margin: .35rem 0; line-height: 1.45; }
 .zoom-u { display: inline-flex; align-items: center; gap: 4px; } .zoom-v { min-width: 3.2em; text-align: center; font-size: 12px; color: var(--muted); }
 @media print { .zoom-u { display: none; } }
 .u-wrap.mano { cursor: grab; } .u-wrap.mano.arrastrando, .u-wrap.arrastrando { cursor: grabbing; user-select: none; } .u-wrap.mano .unifilar * { cursor: inherit; }
+/* zoom y mano en las hojas, barra superior de la tabla de circuitos, columnas de dispositivos (formato Panamá) */
+.hx-wrap.pan { max-height: 78vh; } @media print { .hx-wrap.pan { max-height: none; } } .hx-wrap.mano { cursor: grab; } .hx-wrap.mano.arrastrando { cursor: grabbing; user-select: none; }
+.tbl-wrap.circ { max-height: 70vh; } .scroll-top { overflow-x: auto; overflow-y: hidden; height: 15px; margin-bottom: 2px; display: none; }
+th.dev, td.dev { background: var(--brand-soft); }

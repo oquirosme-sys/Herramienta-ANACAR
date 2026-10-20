@@ -25,6 +25,36 @@
   }
 
   /** Árbol de alimentación (unifilar simplificado). */
+  /** Transformadores y generadores del proyecto: un mismo equipo puede alimentar varios tableros y ATS; el voltaje de esos tableros es el secundario nominal. */
+  function tarjetaFuentes(R) {
+    const p = Store.project, L = Store.catalog.listas;
+    const info = id => (R.fuentes || []).find(x => x.fuente.id === id) || { salidas: 0, carga: 0, cargaPct: null, tableros: [] };
+    const filas = p.fuentes.map(fu => {
+      const k = 'fu:' + fu.id + ':', gen = fu.tipo === 'generador', i = info(fu.id);
+      const sis = UI.select(L.sistemas, fu.sistema, v => { fu.sistema = v; Store.sincronizarFuentes(); Store.save(); App.refresh(); }, { fk: k + 'sis', label: 'Secundario' });
+      const lista = gen ? null : UI.select(UI.opts(Store.catalog.transformadores.map(x => ({ value: x.id, label: x.nombre + ' · Z ' + x.z + ' %', group: x.tipo })), '— elegir —'), '', v => {
+        const x = Store.catalog.transformadores.find(o => String(o.id) === v); if (!x) return;
+        const m = /(\d+(?:[.,]\d+)?)\s*KVA/i.exec(x.nombre); if (m) fu.kva = Number(m[1].replace(',', '.'));
+        fu.z = x.z; fu.fases = /MONO/i.test(x.tipo) ? 1 : 3; Store.save(); App.refresh();
+      }, { fk: k + 'lis', label: 'De la lista del Excel' });
+      const nombres = i.tableros.map(id => Store.tablero(id)).filter(Boolean).map(Calc.nombreTablero).join(', ');
+      return h('tr', null,
+        h('td', null, UI.input(fu, 'nombre', { fk: k + 'nom', class: 'w-nm', label: 'Nombre' })), h('td', null, gen ? 'Generador' : 'Transformador'),
+        h('td', null, UI.input(fu, 'kva', { type: 'num', fk: k + 'kva', class: 'w-num', label: 'kVA' })), h('td', null, sis),
+        h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.input(fu, 'z', { type: 'num', fk: k + 'z', class: 'w-num', label: 'Z %' })),
+        h('td', null, gen ? UI.input(fu, 'xd', { type: 'num', fk: k + 'xd', class: 'w-num', label: "X''d %", placeholder: '12' }) : UI.input(fu, 'xr', { type: 'num', fk: k + 'xr', class: 'w-num', label: 'X/R', placeholder: '4' })),
+        h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.input(fu, 'primario', { type: 'num', fk: k + 'pri', class: 'w-num', label: 'Primario (V)' })),
+        h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.bind(fu, 'fases', [{ value: 3, label: '3F' }, { value: 1, label: '1F' }], { num: true, fk: k + 'fas', label: 'Fases' })),
+        h('td', null, lista || h('span', { class: 'muted' }, '—')),
+        h('td', null, i.salidas ? h('span', { title: nombres }, i.salidas + ' · ' + f2(i.carga) + ' kVA' + (i.cargaPct !== null ? ' (' + f2(i.cargaPct * 100) + ' %)' : '')) : h('span', { class: 'muted' }, 'Sin tableros')),
+        h('td', { class: 'acc' }, UI.iconBtn('🗑', 'Eliminar', async () => { if (await UI.confirm('¿Eliminar ' + (fu.nombre || 'la fuente') + '? Los tableros que cuelgan de ella quedan sin fuente.', 'Eliminar')) { Store.eliminarFuente(fu.id); App.refresh(); } }, 'danger')));
+    });
+    return UI.card('Fuentes: transformadores y generadores (' + p.fuentes.length + ')',
+      p.fuentes.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Nombre', 'Tipo', 'kVA', 'Secundario (V)', 'Z (%)', "X/R · X''d (%)", 'Primario (V)', 'Fases', 'De la lista del Excel', 'Tableros · carga', ''].map(x => h('th', null, x)))), h('tbody', null, filas)))
+        : h('p', { class: 'muted' }, 'Opcional. Cree aquí el transformador de pedestal o el generador y luego, en "Alimentado desde" de cada tablero (o en la segunda acometida de un ATS), elija esa fuente: varios tableros comparten el mismo equipo y toman su voltaje secundario.'),
+      h('div', { class: 'toolbar' }, UI.btn('+ Transformador', () => { Store.nuevaFuente('transformador'); App.refresh(); }, 'small'), UI.btn('+ Generador', () => { Store.nuevaFuente('generador'); App.refresh(); }, 'small')));
+  }
+
   function arbol(R) {
     const raiz = R.orden.filter(r => r.nivel === 0);
     const nodo = r => h('li', null,
@@ -49,7 +79,8 @@
       UI.card('Datos del proyecto', h('div', { class: 'grid3' },
         UI.field('Nombre', UI.input(p, 'nombre', { fk: 'p:nombre' }), null, 'span2'), UI.field('Proyecto N.º', UI.input(p, 'numero', { fk: 'p:numero' })),
         UI.field('Ubicación', UI.input(p, 'ubicacion', { fk: 'p:ubic' }), null, 'span2'), UI.field('Fecha', UI.input(p, 'fecha', { type: 'date', fk: 'p:fecha' })),
-        UI.field('Elaboró', UI.input(p, 'elaboro', { fk: 'p:elab' }), null, 'span2'), UI.field('Revisión', UI.input(p, 'revision', { fk: 'p:rev' })))),
+        UI.field('Elaboró', UI.input(p, 'elaboro', { fk: 'p:elab' }), null, 'span2'), UI.field('Revisión', UI.input(p, 'revision', { fk: 'p:rev' })),
+        UI.field('Formato del cuadro de cargas', UI.bind(p, 'pais', [{ value: 'CR', label: 'Formato original (Costa Rica)' }, { value: 'PA', label: 'Panamá (formato TL4)' }], { fk: 'p:pais' }), 'Panamá dibuja el cuadro 3F/1F con dispositivos por circuito (apagadores, dimmers, tomas, extractores); el formato original no cambia', 'span3'))),
       UI.card('Criterios de diseño', h('div', { class: 'grid3' },
         UI.field('ΔV máx. alimentador (%)', UI.input(p, 'cvMaxAlim', { type: 'num', fk: 'p:cva' }), 'Acumulada hasta los bornes del tablero'),
         UI.field('ΔV máx. total (%)', UI.input(p, 'cvMaxTotal', { type: 'num', fk: 'p:cvt' }), 'Alimentadores + circuito ramal'),
@@ -63,16 +94,18 @@
         UI.field('Alimentadores', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: p.autoAmpacidad !== false, onchange: e => { p.autoAmpacidad = e.target.checked; Store.save(); App.refresh(); } }), ' Aumentar calibre si no cumple 310.15'), 'Temperatura y agrupamiento'),
       ))));
 
+    view.appendChild(tarjetaFuentes(R));
+
     // ---- tableros
     const cuerpo = h('tbody');
     R.orden.concat(p.tableros.filter(t => !R.res[t.id]).map(t => ({ tab: t, nivel: 0, avisos: ['No calculado'], alim: {} }))).forEach(r => {
       const t = r.tab, k = 't:' + t.id + ':';
       const padres = Store.posiblesPadres(t);
-      const selPadre = UI.select(UI.opts(padres.map(o => ({ value: o.id, label: Calc.nombreTablero(o) })), '— Acometida / externo —'), t.padreId, v => { Store.cambiarPadre(t, v); App.refresh(); }, { fk: k + 'padre', label: 'Alimentado desde', class: 'w-padre' });
+      const selPadre = UI.select(UI.opts(Store.opcionesAlimentacion(t), '— Acometida / externo —'), Store.valorAlimentacion(t), v => { Store.alimentarDesde(t, v); App.refresh(); }, { fk: k + 'padre', label: 'Alimentado desde', class: 'w-padre' });
       cuerpo.appendChild(h('tr', null,
         h('td', { class: 'nm', style: { paddingLeft: (0.4 + r.nivel * 1.1) + 'rem' } }, r.nivel ? h('span', { class: 'muted' }, '└ ') : null, UI.input(t, 'nombre', { fk: k + 'nombre', class: 'w-nm', label: 'Nombre del tablero' })),
         h('td', null, UI.select(['3F', '1F'], t.tipo, v => { t.tipo = v; Object.assign(t, Store.voltajeDe(t.sistema, v)); Store.save(); App.refresh(); }, { fk: k + 'tipo', label: 'Tipo' })),
-        h('td', null, UI.select(L.sistemas, t.sistema, v => { t.sistema = v; Object.assign(t, Store.voltajeDe(v, t.tipo)); Store.save(); App.refresh(); }, { fk: k + 'sis', label: 'Sistema' })),
+        h('td', null, UI.select(L.sistemas, t.sistema, v => { t.sistema = v; Object.assign(t, Store.voltajeDe(v, t.tipo)); Store.save(); App.refresh(); }, { fk: k + 'sis', label: 'Sistema', disabled: !!t.fuenteId, title: t.fuenteId ? 'Heredado del secundario de la fuente' : null })),
         h('td', null, selPadre, !t.padreId ? UI.input(t, 'conectadoA', { fk: k + 'con', placeholder: 'Conectado a (p. ej. MÓDULO MEDIDORES)', class: 'mt' }) : null),
         h('td', null, UI.input(t, 'longitud', { type: 'num', fk: k + 'long', class: 'w-num', label: 'Longitud del alimentador (m)' })),
         h('td', { class: 'r' }, f2(r.W130)), h('td', { class: 'r' }, r.alim.AF139 || ''),

@@ -17,7 +17,7 @@ f.onload = async () => { try {
   await set(q('gk'), '175'); chk('kVA del generador se guarda', T().alterna.kva, 175);
   await set(q('al'), '25,5'); chk('longitud generador → ATS (con coma)', T().alterna.longitud, 25.5);
   await set(q('dn'), '12'); chk('distancia normal → ATS', T().alterna.distNormal, 12);
-  await set(q('da'), '6'); chk('distancia ATS → tablero', T().alterna.distAts, 6);
+  await set(q('lon2'), '6'); chk('distancia ATS → tablero (longitud del tablero)', T().longitud, 6);
   await set(D.querySelector('[data-fk$=":lon"]'), '18'); chk('longitud del alimentador', T().longitud, 18);
   chk('el kVA del generador no se borra al cambiar otro dato', [T().alterna.kva, q('gk').value], [175, '175']);
   await set(D.querySelector('[data-fk$=":kva"]'), '2'); chk('kVA de un circuito', [T().circuitos[0].kva, q('gk').value], [2, '175']);

@@ -59,7 +59,7 @@
     emptyProject() {
       return {
         id: U.uid(), nombre: '', numero: '', ubicacion: '', fecha: U.today(), elaboro: '', revision: '',
-        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', resumenSimple: false, ocupacion: 'comercial', cargaDerivados: 'conectada', previstas: [], tableros: [],
+        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', resumenSimple: false, ocupacion: 'comercial', cargaDerivados: 'conectada', pais: 'CR', previstas: [], fuentes: [], tableros: [],
       };
     },
     migrate() {
@@ -92,8 +92,9 @@
       }
       if (!c.fdiv01) { (c.detallesCarga || []).forEach(d => { d.fdiv = inv(d.fdiv); }); (c.tiposCarga || []).forEach(t => { t.fdiv = inv(t.fdiv); }); c.fdiv01 = true; }
       const p = Store.project;
-      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed', 'resumenSimple', 'ocupacion', 'cargaDerivados', 'previstas'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
+      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed', 'resumenSimple', 'ocupacion', 'cargaDerivados', 'pais', 'previstas', 'fuentes'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
       p.tableros.forEach(t => Store.completarTablero(t));
+      Store.sincronizarFuentes();
       if (!p.fdiv01) {
         p.tableros.forEach(t => { t.fdivTablero = inv(t.fdivTablero); (t.circuitos || []).forEach(x => { x.fdivC = inv(x.fdivC); }); Object.keys(t.fdiv || {}).forEach(k => { t.fdiv[k] = inv(t.fdiv[k]); }); });
         p.fdiv01 = true;
@@ -113,6 +114,7 @@
       if (!t.sistema) t.sistema = t.tipo === '1F' ? '120/240' : '120/208';
       if (t.voltaje === undefined || t.fases === undefined) Object.assign(t, Store.voltajeDe(t.sistema, t.tipo));
       if (t.prefijo === undefined) t.prefijo = 'TABLERO';
+      if (t.fuenteId === undefined) t.fuenteId = '';   // transformador o generador del proyecto del que cuelga directamente
       if (t.reserva === undefined) t.reserva = 0.1;
       if (t.longitud === undefined) t.longitud = 10;
       t.alim = Object.assign({ material: 'CU', aislamiento: 'XHHW-2', fp: 0.9, mult: 1.25, tuberia: 'EMT', paralelos: '', aumento: 1, tempAmb: '26-30', tempBorne: 75, agrupamiento: '', breakerId: '', prot: '' }, t.alim || {});
@@ -132,7 +134,7 @@
       if (!t.clase) t.clase = 'tablero';
       if (t.espacios === undefined) t.espacios = '';
       t.ups = Object.assign({ activo: false, kva: '', factorIcc: 2, nombre: 'UPS' }, t.ups || {});
-      t.alterna = Object.assign({ activo: false, equipo: 'ATS', tipo: 'generador', nombre: 'GEN-1', kva: '', xd: 12, origenId: '', longitud: '', material: 'CU', aislamiento: 'XHHW-2', tuberia: 'EMT', paralelos: '' }, t.alterna || {});
+      t.alterna = Object.assign({ activo: false, equipo: 'ATS', tipo: 'generador', nombre: 'GEN-1', kva: '', xd: 12, origenId: '', fuenteId: '', longitud: '', material: 'CU', aislamiento: 'XHHW-2', tuberia: 'EMT', paralelos: '' }, t.alterna || {});
       return t;
     },
     nuevoTablero(datos) {
@@ -217,7 +219,7 @@
     cambiarPadre(t, padreId) {
       const p = Store.project;
       p.tableros.forEach(o => { o.circuitos = o.circuitos.filter(c => !(c.tableroHijoId === t.id && c.auto)); o.circuitos.forEach(c => { if (c.tableroHijoId === t.id) c.tableroHijoId = ''; }); });
-      t.padreId = padreId || '';
+      t.padreId = padreId || ''; if (padreId) t.fuenteId = '';
       const padre = Store.tablero(padreId);
       if (padre) {
         const det = Store.detalleTablero(t, padre), dd = Store.catalog.detallesCarga.find(x => x.id === det) || {};
@@ -226,6 +228,47 @@
       }
       Store.save();
     },
+    /* ---------- fuentes del proyecto: transformadores y generadores compartidos por varios tableros / ATS ---------- */
+    fuente(id) { return id ? (Store.project.fuentes || []).find(x => x.id === id) || null : null; },
+    nuevaFuente(tipo) {
+      const gen = tipo === 'generador', p = Store.project, n = p.fuentes.filter(x => x.tipo === (gen ? 'generador' : 'transformador')).length + 1;
+      const x = gen ? { id: U.uid(), tipo, nombre: 'GEN-' + n, kva: '', sistema: '120/208', xd: 12 }
+        : { id: U.uid(), tipo: 'transformador', nombre: 'T-' + n, kva: '', z: '', xr: '', primario: '', fases: 3, sistema: '120/208' };
+      p.fuentes.push(x); Store.save(); return x;
+    },
+    eliminarFuente(id) {
+      const p = Store.project; p.fuentes = p.fuentes.filter(x => x.id !== id);
+      p.tableros.forEach(t => { if (t.fuenteId === id) t.fuenteId = ''; if (t.alterna && t.alterna.fuenteId === id) t.alterna.fuenteId = ''; });
+      Store.save();
+    },
+    /** Los tableros que cuelgan de una fuente toman el sistema (voltaje del secundario) de ella. */
+    sincronizarFuentes() {
+      const p = Store.project;
+      p.tableros.forEach(t => {
+        if (t.alterna && t.alterna.fuenteId && !Store.fuente(t.alterna.fuenteId)) t.alterna.fuenteId = '';
+        if (!t.fuenteId) return;
+        const f = Store.fuente(t.fuenteId);
+        if (!f) { t.fuenteId = ''; return; }
+        if (f.sistema && t.sistema !== f.sistema) { t.sistema = f.sistema; Object.assign(t, Store.voltajeDe(t.sistema, t.tipo)); }
+      });
+    },
+    /** Cuelga el tablero directamente de una fuente (transformador o generador) o lo suelta. */
+    asignarFuente(t, id) {
+      if (id) { Store.cambiarPadre(t, ''); t.fuenteId = id; } else t.fuenteId = '';
+      Store.sincronizarFuentes(); Store.save();
+    },
+    /** Opciones de "Alimentado desde": tableros y fuentes del proyecto (valor 'F:' + id para las fuentes). */
+    opcionesAlimentacion(t) {
+      const tabs = Store.posiblesPadres(t).map(o => ({ value: o.id, label: Calc.nombreTablero(o), group: 'Tableros' }));
+      const fts = (Store.project.fuentes || []).map(f => ({ value: 'F:' + f.id, label: (f.tipo === 'generador' ? 'Generador ' : 'Transformador ') + (f.nombre || '') + (Number(f.kva) ? ' · ' + f.kva + ' kVA' : '') + (f.sistema ? ' · ' + f.sistema + ' V' : ''), group: 'Fuentes del proyecto' }));
+      return fts.concat(tabs);
+    },
+    valorAlimentacion(t) { return t.fuenteId ? 'F:' + t.fuenteId : (t.padreId || ''); },
+    alimentarDesde(t, v) {
+      if (String(v).startsWith('F:')) Store.asignarFuente(t, String(v).slice(2));
+      else { t.fuenteId = ''; Store.cambiarPadre(t, v); }
+    },
+
     /** Tableros que pueden alimentar a t (no él mismo ni sus derivados). */
     posiblesPadres(t) {
       const p = Store.project, desc = new Set([t.id]);

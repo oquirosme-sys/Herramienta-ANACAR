@@ -100,9 +100,9 @@
       const base = Hoja.ESTILOS[c.s] || {};
       const st = Object.assign({}, base, typeof c.v === 'number' && c.f !== null && c.f !== undefined ? { nf: c.f } : {});
       for (let y = c.y; y <= c.y2; y++) for (let x = c.x; x <= c.x2; x++) if (y !== c.y || x !== c.x) s.set(y, x, '', st);
-      s.set(c.y, c.x, c.s === 'logo' ? '' : c.v, st);
+      s.set(c.y, c.x, c.s === 'logo' || c.img ? '' : c.v, st);
       if (c.y2 > c.y || c.x2 > c.x) s.merge(c.y, c.x, c.y2, c.x2);
-      if (c.s === 'logo') s.pictures.push(c);
+      if (c.s === 'logo' || c.img) s.pictures.push(c);
     });
   }
 
@@ -134,8 +134,9 @@
   }
 
   /* ---------- libro ---------- */
-  function build(R, opts, logo) {
+  function build(R, opts, logo, simb) {
     opts = opts || {};
+    const imgs = Object.assign({}, simb || {}); if (logo) imgs.logo = logo;
     const st = Styles(), sheets = [], used = {};
     const mk = n => { let b = n.replace(/[:\\/?*\[\]]/g, '-').slice(0, 28), nn = b, i = 2; while (used[nn.toLowerCase()]) nn = b.slice(0, 26) + '_' + i++; used[nn.toLowerCase()] = 1; const s = Sheet(nn, st); sheets.push(s); return s; };
     const lista = Resumen.ordenados(R);
@@ -156,28 +157,33 @@
     }
     if (!opts.memoria) R.orden.filter(r => !opts.soloTipo || r.tab.tipo === opts.soloTipo).forEach(r => {
       const s = mk(r.tab.tipo + ' ' + (r.tab.nombre || r.nombre)), G = Hoja.tablero(r); volcar(s, G);
-      nombre('TABLERO_' + limpio(r.tab.nombre || r.nombre), s, G, Hoja.col('B'), Hoja.col('AJ'));
+      nombre('TABLERO_' + limpio(r.tab.nombre || r.nombre), s, G, Hoja.col('B'), G.anchos.length - 1);
     });
 
     const files = [], ct = [], wbRels = [];
     let nDraw = 0;
     const EMU = 9525, pxW = w => Math.round((w || 8.43) * 7 + 5), pxH = pt => Math.round((pt || 15) * 96 / 72);
+    const medios = {};
     sheets.forEach((s, i) => {
       let rid = '';
-      if (logo && s.pictures.length) {
+      const pics = s.pictures.filter(c => imgs[c.img || 'logo']);
+      if (pics.length) {
         nDraw++; rid = 'rId1';
-        const anchors = s.pictures.map((c, k) => {
+        const claves = Array.from(new Set(pics.map(c => c.img || 'logo')));
+        claves.forEach(k => { medios[k] = true; });
+        const anchors = pics.map((c, k) => {
+          const im = imgs[c.img || 'logo'];
           let w = 0, hh = 0; for (let x = c.x; x <= c.x2; x++) w += pxW(s.widths[x]); for (let y = c.y; y <= c.y2; y++) hh += pxH(s.heights[y]);
-          const ar = logo.w / logo.h; let iw = w * 0.85, ih = iw / ar; if (ih > hh * 0.85) { ih = hh * 0.85; iw = ih * ar; }
+          const ar = im.w / im.h; let iw = w * 0.85, ih = iw / ar; if (ih > hh * 0.85) { ih = hh * 0.85; iw = ih * ar; }
           let ox = (w - iw) / 2, oy = (hh - ih) / 2, cx = c.x, cy = c.y;
           while (cx < c.x2 && ox > pxW(s.widths[cx])) { ox -= pxW(s.widths[cx]); cx++; }
           while (cy < c.y2 && oy > pxH(s.heights[cy])) { oy -= pxH(s.heights[cy]); cy++; }
           return '<xdr:oneCellAnchor><xdr:from><xdr:col>' + cx + '</xdr:col><xdr:colOff>' + Math.round(ox * EMU) + '</xdr:colOff><xdr:row>' + cy + '</xdr:row><xdr:rowOff>' + Math.round(oy * EMU) + '</xdr:rowOff></xdr:from><xdr:ext cx="' + Math.round(iw * EMU) + '" cy="' + Math.round(ih * EMU) + '"/>'
-            + '<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="' + (k + 2) + '" name="Logo ' + (k + 1) + '"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
+            + '<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="' + (k + 2) + '" name="Imagen ' + (k + 1) + '"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId' + (claves.indexOf(c.img || 'logo') + 1) + '"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
             + '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + Math.round(iw * EMU) + '" cy="' + Math.round(ih * EMU) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>';
         }).join('');
         files.push({ name: 'xl/drawings/drawing' + nDraw + '.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' + anchors + '</xdr:wsDr>' });
-        files.push({ name: 'xl/drawings/_rels/drawing' + nDraw + '.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>' });
+        files.push({ name: 'xl/drawings/_rels/drawing' + nDraw + '.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + claves.map((k, n) => '<Relationship Id="rId' + (n + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/img_' + k + '.png"/>').join('') + '</Relationships>' });
         files.push({ name: 'xl/worksheets/_rels/sheet' + (i + 1) + '.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing' + nDraw + '.xml"/></Relationships>' });
         ct.push('<Override PartName="/xl/drawings/drawing' + nDraw + '.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>');
       }
@@ -185,7 +191,7 @@
       ct.push('<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>');
       wbRels.push('<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>');
     });
-    if (nDraw) files.push({ name: 'xl/media/image1.png', data: logo.bytes });
+    Object.keys(medios).forEach(k => files.push({ name: 'xl/media/img_' + k + '.png', data: imgs[k].bytes }));
     files.unshift(
       { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + ct.join('') + '</Types>' },
       { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
@@ -209,7 +215,7 @@
 
   async function download(R, opts) {
     if (!R || !R.orden.length) { UI.alert('No hay tableros para exportar.'); return; }
-    const blob = build(R, opts, await cargarLogo());
+    const blob = build(R, opts, await cargarLogo(), Store.project.pais === 'PA' ? await Simbolos.png(Simbolos.claves) : null);
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = App.fileBase() + (opts && opts.memoria ? ' - memoria de cálculo' : opts && opts.soloTipo ? ' - tableros ' + opts.soloTipo : ' - tablas resumen y tableros') + '.xlsx';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);

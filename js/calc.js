@@ -10,7 +10,7 @@
   const n = v => (v === null || v === undefined || v === '' || isNaN(Number(v)) ? 0 : Number(v));
   const r2 = v => Math.round(v * 100) / 100;
   /** Largo total del alimentador normal: con ATS/MTS, distancia fuente normal → ATS + ATS → tablero (si se indicó la primera); si no, la longitud del alimentador. */
-  const largoAlim = t => (t.alterna && t.alterna.activo && Number(t.alterna.distNormal) > 0 ? Number(t.alterna.distNormal) + Math.max(0, Number(t.alterna.distAts) || 0) : Number(t.longitud) || 0);
+  const largoAlim = t => (t.alterna && t.alterna.activo && /ATS|MTS/.test(t.alterna.equipo || 'ATS') ? Math.max(0, Number(t.alterna.distNormal) || 0) + (Number(t.longitud) || 0) : Number(t.longitud) || 0);   // con ATS / MTS: transformador → ATS + ATS → tablero (la longitud del tablero)
   /** Factor de diversidad entre 0 y 1 (multiplica la carga); vacío, 0 o fuera de rango = 1. */
   const fdiv01 = v => { const x = n(v); return x > 0 && x <= 1 ? x : 1; };
 
@@ -203,6 +203,12 @@
 
   /* ---------- validación de ampacidad (310.16 con factores de temperatura y agrupamiento) ---------- */
   const CALIBRES = ['14', '12', '10', '8', '6', '4', '3', '2', '1', '1/0', '2/0', '3/0', '4/0', '250', '300', '350', '400', '500', '600', '700', '750', '800', '900', '1000'];
+  /* Calibres mínimos de un alimentador (acometida de un tablero): 8 AWG en fases y neutro y 10 AWG en tierra; nunca No. 12 AWG. */
+  const CAL_MIN_FASE = '8', CAL_MIN_TIERRA = '10';
+  const ci = c => CALIBRES.indexOf(calStr(c));
+  const maxCal = (a, b) => (!a ? a : ci(a) < ci(b) ? b : a);
+  let FUENTES = {}, SRC_LOAD = {}, SRC_N = {};   // fuentes del proyecto (transformadores y generadores compartidos), su carga demandada (kVA) y # de tableros que sirven
+  let MAN = {};   // circuito que alimenta a un tablero derivado → acometida de ese tablero (para respetar lo fijado a mano)
   /** Temperatura del aislamiento: RHW, THW, TW son de 75 °C; THHN, XHHW-2, RHW-2 y MC de 90 °C. */
   const tempAis = ais => (/^(RHW|THW|TW|USE)$/i.test(String(ais || '').trim()) ? 75 : 90);
   function agrupAuto(fases, hilos) {
@@ -272,11 +278,17 @@
     const mat = c.material || 'CU', ais = c.aislamiento || 'THHN';
     const AI = n(c.paralelos) || (AE !== null ? paralelosAuto(AE) : 1);
     const AJ = c.aumento !== undefined && c.aumento !== '' ? n(c.aumento) : 1;
-    const AL = AF ? calibre(AF * AJ / AI, mat) : '';
+    const hijoMan = c.tableroHijoId ? MAN[c.id] : null;        // acometida del tablero derivado, si el ingeniero la fijó a mano
+    let AL = AF ? calibre(AF * AJ / AI, mat) : '';
+    if (c.tableroHijoId) AL = maxCal(AL, CAL_MIN_FASE);       // alimentador de un tablero derivado: mínimo 8 AWG
+    if (hijoMan && calStr(hijoMan.calFases)) AL = calStr(hijoMan.calFases);
     const pre = AI === 1 ? (P === 3 ? '3#' : (O >= 208 && O <= 240 ? '2#' : ' ')) : AI + 'x' + (P === 3 ? '3#' : (O >= 208 && O <= 240 ? '2#' : ' '));
     const pre2 = AI === 1 ? ' ' : AI + 'x';
-    const AN = Q === 0 ? ' ' : (O >= 208 && P === 3 && Q === 4) ? AL : (P === 3 && Q === 3) ? ' ' : (O >= 208 && P === 1 && Q === 3) ? ' ' : AL;
-    const AP = AF ? tierra(AF, mat) : '';
+    let AN = Q === 0 ? ' ' : (O >= 208 && P === 3 && Q === 4) ? AL : (P === 3 && Q === 3) ? ' ' : (O >= 208 && P === 1 && Q === 3) ? ' ' : AL;
+    if (hijoMan && calStr(hijoMan.calNeutro) && AN !== ' ') AN = calStr(hijoMan.calNeutro);
+    let AP = AF ? tierra(AF, mat) : '';
+    if (c.tableroHijoId && AP) AP = maxCal(AP, CAL_MIN_TIERRA);   // tierra de un alimentador: mínimo 10 AWG
+    if (hijoMan && calStr(hijoMan.calTierra)) AP = calStr(hijoMan.calTierra);
     const AR = AL ? conduit(AL, mat, ais) : '';
     const AS = AL ? fac(AL, mat, T) : null, AT = facAjustado(AS, O, P, false);
     const AU = !J ? null : (O === ctx.V ? ctx.vBus : ctx.vBusLN);             // voltaje real de partida
@@ -293,6 +305,7 @@
     if (J && P && polos.length > P) err.push('El detalle es de ' + P + ' fase(s) y el circuito ocupa ' + polos.length + ' polos: la carga se suma en cada fase. Use un detalle de ' + polos.length + ' fases o deje un solo polo.');
     if (AY !== null && AY > ctx.cvMaxTotal) err.push('Caída total ' + r2(AY) + ' % > ' + ctx.cvMaxTotal + ' %');
     if (bk && bk.sccrBajo) err.push('SCCR ' + bk.sccr + ' kA < Icc ' + r2(ctx.iccKA) + ' kA (no hay breaker de la familia con mayor capacidad)');
+    { const pedida = c.unidad || (nec ? nec.unidad : ''); if (bk && pedida && pedida !== 'STD' && (bk.unidad || 'STD') !== pedida) err.push('No hay interruptor ' + pedida + ' de la familia del tablero para ' + (AF || '') + ' A: el cuadro muestra ' + pedida + ' pero el modelo de catálogo es ' + (bk.ref || bk.modelo || '') + ' (' + (bk.unidad || 'STD') + ')'); }
     if (J && !bk) err.push('Sin breaker de catálogo para ' + BE + 'P ' + (AF || '') + ' A');
     if (J && AF && !AL) err.push('Sin calibre para ' + AF + ' A');
     return {
@@ -352,7 +365,7 @@
     const mat = al.material || 'CU', ais = al.aislamiento || 'XHHW-2', hilos = n(tab.hilos) || 4;
     const AJ139 = al.aumento !== undefined && al.aumento !== '' ? n(al.aumento) : 1;
     let AI139 = n(al.paralelos) || (AE139 ? paralelosAuto(AE139) : 1);
-    let AL139 = AF139 ? calibre(AF139 * AJ139 / AI139, mat) : '';
+    let AL139 = AF139 ? maxCal(calibre(AF139 * AJ139 / AI139, mat), CAL_MIN_FASE) : '';
     // validación por temperatura y agrupamiento (310.15) y aumento automático de calibre o de paralelos si no cumple
     const agrup = al.agrupamiento || agrupAuto(fases, hilos);
     const calBase = AL139, parBase = AI139;
@@ -362,28 +375,38 @@
       const i = CALIBRES.indexOf(calStr(AL139));
       const sig = CALIBRES.slice(i + 1).find(c => (K.conduit || []).some(x => x.cal === c) && (K.ampacidad31016 || []).some(x => x.cal === c));
       if (sig && CALIBRES.indexOf(sig) <= CALIBRES.indexOf('500')) AL139 = sig;
-      else { AI139++; AL139 = calibre(AF139 * AJ139 / AI139, mat); }
+      else { AI139++; AL139 = maxCal(calibre(AF139 * AJ139 / AI139, mat), CAL_MIN_FASE); }
       val = ampacidad(AL139, mat, AI139, ais, al.tempAmb, al.tempBorne, agrup, AE139 || 0, AF139); ajustado = true;
     }
+    // acometida modificada a mano por el ingeniero: se respeta y solo se avisa si algo no cumple
+    const calAuto = AL139, manF = calStr(al.calFases), manN = calStr(al.calNeutro), manT = calStr(al.calTierra);
+    if (manF && AL139) { AL139 = manF; val = ampacidad(AL139, mat, AI139, ais, al.tempAmb, al.tempBorne, agrup, AE139 || 0, AF139); ajustado = false; }
     const pre139 = AI139 === 1 ? (fases === 3 ? '3#' : (V >= 208 && V <= 240 ? '2#' : ' ')) : AI139 + 'x' + (fases === 3 ? '3#' : (V >= 208 && V <= 240 ? '2#' : ' '));
     const preN = AI139 === 1 ? '' : AI139 + 'x';
-    const AN139 = hilos === 0 ? '' : (V >= 208 && fases === 3 && hilos === 4) ? AL139 : (fases === 3 && hilos === 3) ? '' : (V >= 208 && fases === 1 && hilos === 3) ? '' : AL139;
-    const AP139 = AF139 ? tierra(AF139, mat) : '', AP140 = AL139 ? electrodo(AL139, mat) : '';
+    const neutroDe = cal => hilos === 0 ? '' : (V >= 208 && fases === 3 && hilos === 4) ? cal : (fases === 3 && hilos === 3) ? '' : (V >= 208 && fases === 1 && hilos === 3) ? '' : cal;
+    let AN139 = neutroDe(AL139);
+    const AN139a = neutroDe(calAuto);
+    if (manN && AN139) AN139 = manN;
+    const reqTierra = AF139 ? tierra(AF139, mat) : '', tierraAuto = maxCal(reqTierra, CAL_MIN_TIERRA);
+    const AP139 = AF139 ? (manT || tierraAuto) : '', AP140 = AL139 ? electrodo(AL139, mat) : '';
     const AR139 = AL139 ? conduit(AL139, mat, ais) : '', tuberia = al.tuberia || 'EMT';
     const AS139 = AL139 ? fac(AL139, mat, T139) : null, AT139 = facAjustado(AS139, V, fases, true);
     const Iv = U116[0] > 0 ? AA139[0] : U116[1] > 0 ? AA139[1] : AA139[2];
     const M139 = largoAlim(tab);
 
     // --- transformador (opcional) aguas arriba del alimentador: regulación y cortocircuito
-    const tr = tab.trafo && tab.trafo.activo && n(tab.trafo.kva) && n(tab.trafo.z) ? tab.trafo : null;
+    const fte = tab.fuenteId && FUENTES[tab.fuenteId] ? FUENTES[tab.fuenteId] : null;
+    const fTr = fte && fte.tipo !== 'generador' ? fte : null, fGen = fte && fte.tipo === 'generador' ? fte : null;
+    const tr = fTr ? (n(fTr.kva) && n(fTr.z) ? { activo: true, kva: fTr.kva, z: fTr.z, xr: fTr.xr, primario: fTr.primario, fases: fTr.fases, nombre: fTr.nombre } : null)
+      : tab.trafo && tab.trafo.activo && n(tab.trafo.kva) && n(tab.trafo.z) ? tab.trafo : null;
     const Vpadre = ctxIn && ctxIn.Vpadre;
     let vInicio = V, trafo = null;
     if (tr) {
       const kva = n(tr.kva), z = n(tr.z), xr = n(tr.xr) || 4, pR = z / Math.sqrt(1 + xr * xr), pX = pR * xr;
-      const sin = Math.sqrt(Math.max(0, 1 - T139 * T139)), carga = kva ? L139 / kva : 0;
+      const sin = Math.sqrt(Math.max(0, 1 - T139 * T139)), carga = kva ? (fTr ? (SRC_LOAD[fTr.id] || L139) : L139) / kva : 0;
       const reg = carga * (pR * T139 + pX * sin);                                  // caída de tensión en el transformador (%)
       vInicio = V * (1 - reg / 100);
-      trafo = { kva, z, xr, carga, reg, Vp: n(tr.primario) || Vpadre || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '' };
+      trafo = { kva, z, xr, carga, reg, Vp: n(tr.primario) || Vpadre || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139 };
     } else if (ctxIn && ctxIn.vInicio && (!Vpadre || Vpadre === V)) vInicio = ctxIn.vInicio;   // cascada [AU139]
     const upsD = tab.ups && tab.ups.activo && n(tab.ups.kva) ? tab.ups : null;
     let ups = null;
@@ -428,6 +451,9 @@
       if (Ip) { const f = (k3 ? Ip * Vp * 1.732 : Ip * Vp) * trafo.z / (100000 * trafo.kva); Is = (Vp / V) * Ip / (1 + f); }
       else Is = trafo.kva * 1000 / ((k3 ? 1.732 : 1) * V * trafo.z / 100);          // red de capacidad infinita
       trafo.iccPrim = Ip; trafo.iccSec = Is; iccAntes = Is; iccA = p2p(Is); iccFuente = 'transformador';
+    } else if (fGen && n(fGen.kva) && !trafo) {
+      const Ig = n(fGen.kva) * 1000 / ((fases === 3 ? 1.732 : 1) * V * (n(fGen.xd) || 12) / 100);
+      iccAntes = Ig; iccA = p2p(Ig); iccFuente = 'generador ' + (fGen.nombre || '');
     } else if (tab.transformadorId) {
       const t0 = K.transformadores.find(t => String(t.id) === String(tab.transformadorId));
       const k = t0 ? (V >= 440 ? t0.kacc480 : V >= 230 ? t0.kacc240 : t0.kacc208) : null;
@@ -436,26 +462,28 @@
     if (ups) { iccA = p2p(iccA ? Math.min(ups.icc, iccA) : ups.icc); iccFuente = 'UPS (limitado por el inversor)'; }
 
     // --- segunda acometida (generador o bypass desde otro tablero) con ATS / MTS / interruptor
-    const altD = tab.alterna && tab.alterna.activo ? tab.alterna : null;
+    const altD0 = tab.alterna && tab.alterna.activo ? tab.alterna : null;
+    const gA = altD0 && altD0.tipo === 'generador' && altD0.fuenteId && FUENTES[altD0.fuenteId] && FUENTES[altD0.fuenteId].tipo === 'generador' ? FUENTES[altD0.fuenteId] : null;
+    const altD = gA ? Object.assign({}, altD0, { kva: gA.kva, xd: gA.xd, nombre: gA.nombre }) : altD0;
     let alterna = null;
     if (altD && AF139) {
       const am = altD.material || 'CU', aa = altD.aislamiento || 'XHHW-2', at = altD.tuberia || 'EMT', AL = n(altD.longitud);
-      let an = n(altD.paralelos) || AI139, ac = calibre(AF139 * AJ139 / an, am);
+      let an = n(altD.paralelos) || AI139, ac = maxCal(calibre(AF139 * AJ139 / an, am), CAL_MIN_FASE);
       let av = ac ? ampacidad(ac, am, an, aa, al.tempAmb, al.tempBorne, agrup, AE139 || 0, AF139) : null;
       for (let it = 0; autoAmp && av && !av.ok && av.ft > 0 && it < 14; it++) {
         const i = CALIBRES.indexOf(calStr(ac));
         const sig = CALIBRES.slice(i + 1).find(c => (K.conduit || []).some(x => x.cal === c) && (K.ampacidad31016 || []).some(x => x.cal === c));
-        if (sig && CALIBRES.indexOf(sig) <= CALIBRES.indexOf('500')) ac = sig; else { an++; ac = calibre(AF139 * AJ139 / an, am); }
+        if (sig && CALIBRES.indexOf(sig) <= CALIBRES.indexOf('500')) ac = sig; else { an++; ac = maxCal(calibre(AF139 * AJ139 / an, am), CAL_MIN_FASE); }
         av = ampacidad(ac, am, an, aa, al.tempAmb, al.tempBorne, agrup, AE139 || 0, AF139);
       }
       const af = facAjustado(ac ? fac(ac, am, T139) : null, V, fases, true);
       const avd = af !== null && W130 ? AL * 3.28 * Iv * af / (10000 * an) : 0;
       // ubicación del ATS: la fuente alterna llega al ATS (AL) y del ATS al tablero va el tramo común del alimentador (dAts)
-      const dAts = Math.max(0, n(altD.distAts)), dropCom = AT139 !== null && W130 && dAts ? dAts * 3.28 * Iv * AT139 / (10000 * AI139) : 0;
+      const dAts = /ATS|MTS/.test(altD.equipo || 'ATS') ? Math.max(0, n(tab.longitud)) : 0, dropCom = AT139 !== null && W130 && dAts ? dAts * 3.28 * Iv * AT139 / (10000 * AI139) : 0;
       let v0 = V, iSrc = null, carga = null, origen = '';
       if (altD.tipo === 'generador') {
         const kva = n(altD.kva), xd = n(altD.xd) || 12;
-        if (kva) { iSrc = kva * 1000 / ((fases === 3 ? 1.732 : 1) * V * xd / 100); carga = L139 / kva; }
+        if (kva) { iSrc = kva * 1000 / ((fases === 3 ? 1.732 : 1) * V * xd / 100); carga = (gA ? (SRC_LOAD[gA.id] || L139) : L139) / kva; }
         origen = (altD.nombre || 'Generador') + (kva ? ' ' + kva + ' kVA' : '');
       } else if (altOrigen) {
         if (altOrigen.V === V) { v0 = altOrigen.alim.AW139; iSrc = altOrigen.iccA; }
@@ -470,10 +498,10 @@
       const atsSel = esTr ? transferencia(altD, equipo, AF139, iccAtsKA) : null;
       const wcr = n(altD.sccr) || (atsSel ? n(atsSel.wcr) : 0);
       alterna = { equipo, tipo: altD.tipo || 'generador', origen, origenId: altD.origenId || '', nombre: altD.nombre || '', cal: ac, par: an, mat: am, ais: aa, tuberia: at, longitud: AL, val: av,
-        fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + tierra(AF139, am) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
+        fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + maxCal(tierra(AF139, am), CAL_MIN_TIERRA) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
         caida: avd + dropCom, caidaFuente: avd, caidaComun: dropCom, distAts: dAts, distNormal: Math.max(0, M139 - dAts), caidaNormal: M139 ? AV139 * Math.max(0, M139 - dAts) / M139 : 0, vBornes: v0 - avd - dropCom, cv: (V - (v0 - avd - dropCom)) * 100 / V, iccA: iAlt, iccAtsKA,
         ats: atsSel, wcr, wcrOk: !wcr || !iccAtsKA || wcr >= iccAtsKA, transicion: altD.transicion || (equipo === 'MTS' ? 'manual' : 'abierta'), polosAts: n(altD.polosAts) || 3,
-        carga, kva: n(altD.kva), xd: n(altD.xd) || 12 };
+        carga, kva: n(altD.kva), xd: n(altD.xd) || 12, fuenteId: gA ? gA.id : '', compartido: !!gA, salidas: gA ? SRC_N[gA.id] || 1 : 1 };
       if (iAlt && (!iccA || iAlt > iccA)) { iccA = iAlt; iccFuente = (iccFuente ? iccFuente + ' · ' : '') + 'máx. por ' + (alterna.tipo === 'generador' ? 'generador' : 'bypass'); }
     }
     // UPS con MTS en su propia barra: equipo manual de catálogo (amperaje ≥ protección, WCR ≥ Icc)
@@ -520,12 +548,22 @@
     nec.filter(x => x.nivel === 'error').forEach(x => avisos.push('NEC ' + x.art + ': ' + x.txt));
     if (AY139 > n(P && P.cvMaxAlim || 3)) avisos.push('Caída acumulada en bornes ' + r2(AY139) + ' % (máx. ' + n(P && P.cvMaxAlim || 3) + ' %)');
     if (val && !val.ok) avisos.push('El alimentador no cumple ampacidad corregida: ' + r2(val.cap) + ' A disponibles' + (val.okI ? '' : ' < ' + r2(AE139) + ' A requeridos') + (val.okP ? '' : ', protección ' + AF139 + ' A mayor que la permitida') + (val.ft ? '' : ' (temperatura ambiente fuera del rango del aislamiento)'));
+    if (manF || manN || manT) {
+      avisos.push('Acometida modificada manualmente' + (manF ? ': fases ' + manF : '') + (manN ? (manF ? ', ' : ': ') + 'neutro ' + manN : '') + (manT ? (manF || manN ? ', ' : ': ') + 'tierra ' + manT : '') + ' (automático: ' + [calAuto && 'fases ' + calAuto, AN139a && 'neutro ' + AN139a, tierraAuto && 'tierra ' + tierraAuto].filter(Boolean).join(', ') + ')');
+      if (manF && ci(manF) < ci(CAL_MIN_FASE)) avisos.push('Calibre de fases ' + manF + ' AWG menor que el mínimo de ' + CAL_MIN_FASE + ' AWG para un alimentador');
+      if (manN && AN139 && ci(manN) < ci(CAL_MIN_FASE)) avisos.push('Calibre de neutro ' + manN + ' AWG menor que el mínimo de ' + CAL_MIN_FASE + ' AWG para un alimentador');
+      if (manT && ci(manT) < ci(CAL_MIN_TIERRA)) avisos.push('Calibre de tierra ' + manT + ' AWG menor que el mínimo de ' + CAL_MIN_TIERRA + ' AWG para un alimentador');
+      if (manT && reqTierra && ci(manT) < ci(reqTierra)) avisos.push('Tierra de ' + manT + ' AWG menor que la requerida por el 250.122 para ' + AF139 + ' A (' + reqTierra + ' AWG)');
+    }
     if (ajustado && val && val.ok) avisos.push('Calibre del alimentador aumentado por temperatura/agrupamiento: ' + (parBase > 1 ? parBase + 'x' : '') + calBase + ' → ' + (AI139 > 1 ? AI139 + 'x' : '') + AL139 + ' AWG/kcmil');
     if (cat && espaciosUsados > n(cat.espacios)) avisos.push('Circuitos usan ' + espaciosUsados + ' espacios; el tablero tiene ' + cat.espacios);
     if (!cat) avisos.push('No hay tablero de catálogo (' + marcaTab + ') para ' + V + ' V, ' + (AF139 || '?') + ' A y ' + espaciosUsados + ' espacios');
     if (bkMain && al.unidad && al.unidad !== 'STD' && bkMain.unidad !== al.unidad) avisos.push('No hay interruptor principal ' + al.unidad + ' para ' + AF139 + ' A en el catálogo de ' + marca + '; se usó ' + (bkMain.unidad || 'STD'));
     if (bkMain && al.rated100 && !/^PDF/.test(bkMain.ref)) avisos.push('Interruptor principal 100 % rated: verifique el modelo con el fabricante (' + (bkMain.ref || bkMain.modelo) + ')');
     if (bkMain && bkMain.sccrBajo) avisos.push('SCCR del interruptor principal ' + bkMain.sccr + ' kA < Icc ' + r2(iccKA) + ' kA');
+    if (gA && gA.sistema && gA.sistema !== tab.sistema) avisos.push('El generador ' + (gA.nombre || '') + ' es de ' + gA.sistema + ' V y el tablero de ' + tab.sistema + ' V');
+    if (fGen && fGen.sistema && fGen.sistema !== tab.sistema) avisos.push('El generador ' + (fGen.nombre || '') + ' es de ' + fGen.sistema + ' V y el tablero de ' + tab.sistema + ' V');
+    if (trafo && trafo.compartido && trafo.salidas > 1) avisos.push('Transformador ' + (trafo.nombre || '') + ' compartido con ' + (trafo.salidas - 1) + ' tablero(s) más: carga total ' + r2(trafo.kvaServidos) + ' kVA');
     if (trafo && trafo.carga > 1) avisos.push('Transformador cargado al ' + r2(trafo.carga * 100) + ' %');
     if (enSerie.length) {
       const k = Math.min(...enSerie.map(x => n(x.breaker.serie.kA)));
@@ -549,7 +587,7 @@
 
     return {
       tab, nombre: nombreTablero(tab), fases, V, hilos, rows, J116, U116, U117, desbalance, tipos, W128, W129, W130, J134,
-      alim: { R139, S139, L139, T139, X139, AA139, AD139, AE139, AF139, mat, ais, AI139, AJ139, AL139, AN139, AP139, AP140, AR139, tuberia, AS139, AT139,
+      alim: { auto: { fases: calAuto, neutro: AN139a, tierra: tierraAuto }, manual: { fases: manF, neutro: manN, tierra: manT }, reqTierra, R139, S139, L139, T139, X139, AA139, AD139, AE139, AF139, mat, ais, AI139, AJ139, AL139, AN139, AP139, AP140, AR139, tuberia, AS139, AT139,
         M139, vInicio, AV139, AW139, AX139, AY139, AU140, AV140, AW140, tempF, agrF, ampReq, ampCond, agrup, val, ajustado, calBase, parBase,
         fasesTxt: pre139 + AL139, neutroTxt: AN139 ? preN + AN139 : '', tierraTxt: AP139 ? preN + AP139 : '', tuboTxt: AR139 ? preN + AR139 : '', preN, preF: pre139.trim() },
       iccA, iccKA, iccFuente, trafo, ups, alterna, upsMts, zapatas, enSerie, nec, servicio, kaSpdMin, cat, famT, marca, bkMain, spd, espaciosUsados, avisos,
@@ -561,15 +599,17 @@
   /* ---------- proyecto completo (cascada) ---------- */
   function proyecto(P, catalog) {
     K = Object.assign({}, catalog, { marcaDefecto: P.marcaDefecto || 'Eaton', ocupacion: P.ocupacion || 'comercial' });
+    FUENTES = {}; SRC_LOAD = {}; SRC_N = {}; (P.fuentes || []).forEach(x => { FUENTES[x.id] = x; });
     const tabs = P.tableros || [], byId = {}; tabs.forEach(t => { byId[t.id] = t; });
     const hijos = {}; tabs.forEach(t => { if (t.padreId && byId[t.padreId]) (hijos[t.padreId] = hijos[t.padreId] || []).push(t); });
     // ciclos: un tablero no puede alimentarse de sí mismo ni de sus derivados
     const ciclo = new Set();
     tabs.forEach(t => { const seen = new Set(); let x = t; while (x && x.padreId) { if (seen.has(x.id)) { ciclo.add(t.id); break; } seen.add(x.id); x = byId[x.padreId]; } });
     const raiz = t => !t.padreId || !byId[t.padreId] || ciclo.has(t.id);
+    MAN = {}; tabs.forEach(t => (t.circuitos || []).forEach(c => { const hj = c.tableroHijoId && byId[c.tableroHijoId]; if (hj && hj.alim) MAN[c.id] = hj.alim; }));
 
     // kVA de los tableros derivados hacia el circuito que los alimenta (de abajo hacia arriba)
-    const total = {}, visit = new Set();
+    const total = {}, visit = new Set(), demanda = {};
     function cargar(t) {
       if (visit.has(t.id)) return total[t.id] || 0; visit.add(t.id);
       (hijos[t.id] || []).forEach(cargar);
@@ -580,10 +620,12 @@
         if (rb) { if (!visit.has(rb.id)) cargar(rb); c.kva = r4(total[rb.id] || 0); c.longitud = (rb.alterna || {}).longitud; c.descripcion = 'BYPASS ' + nombreTablero(rb); }
       });
       const rt = tablero(t, P, null);
-      total[t.id] = P.cargaDerivados === 'demandada' ? rt.alim.L139 : rt.W130;
+      total[t.id] = P.cargaDerivados === 'demandada' ? rt.alim.L139 : rt.W130; demanda[t.id] = rt.alim.L139;
       return total[t.id];
     }
     tabs.forEach(cargar);
+    // carga de cada fuente compartida: suma de la demanda de los tableros (y ATS) que cuelgan de ella
+    tabs.forEach(t => [t.fuenteId, t.alterna && t.alterna.activo ? t.alterna.fuenteId : ''].forEach(id => { if (id && FUENTES[id]) { SRC_LOAD[id] = (SRC_LOAD[id] || 0) + (demanda[t.id] || 0); SRC_N[id] = (SRC_N[id] || 0) + 1; } }));
 
     // voltaje y cortocircuito de arriba hacia abajo (segunda pasada si hay bypass desde otro tablero)
     let res = {}, orden = [];
@@ -606,7 +648,8 @@
       if (r.padre && !r.circuitoPadre) r.avisos.push('El tablero ' + r.padre.nombre + ' no tiene un circuito asignado a este tablero');
       if (ciclo.has(r.tab.id)) r.avisos.push('Alimentación circular: revise "Alimentado desde"');
     });
-    return { res, orden, byId, hijos };
+    const fuentes = (P.fuentes || []).map(x => ({ fuente: x, carga: SRC_LOAD[x.id] || 0, salidas: SRC_N[x.id] || 0, cargaPct: n(x.kva) ? (SRC_LOAD[x.id] || 0) / n(x.kva) : null, tableros: tabs.filter(t => t.fuenteId === x.id || (t.alterna && t.alterna.activo && t.alterna.fuenteId === x.id)).map(t => t.id) }));
+    return { res, orden, byId, hijos, fuentes };
   }
   const r4 = v => Math.round(v * 10000) / 10000;
 
@@ -697,5 +740,5 @@
     return { detalle: best, seguro: !!cand.length && bestS >= 5, por: bestS >= 5 ? 'nombre' : 'generico' };
   }
 
-  g.Calc = { proyecto, tablero, circuito, balanceo, detalleRevit, fasePolo, nombreTablero, vLN, famBreaker, famTablero, agrupAuto, setCatalog: c => { K = c; } };
+  g.Calc = { proyecto, tablero, circuito, balanceo, detalleRevit, fasePolo, nombreTablero, vLN, famBreaker, famTablero, agrupAuto, CALIBRES, CAL_MIN_FASE, CAL_MIN_TIERRA, setCatalog: c => { K = c; } };
 })(typeof window !== 'undefined' ? window : globalThis);

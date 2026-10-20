@@ -85,9 +85,9 @@
       if (tr) {
         y += 58;
         const kt = SIMB.TRAFO_SECO.k, ht = SIMB.TRAFO_SECO.alto * kt;
-        D.simbolo('TRAFO_SECO', x, y - ht / 2, { KVA: f1(tr.kva) + ' kVA', IMPEDANCIA: 'Z ' + f2(tr.z) + ' %', VOLTAJES: (tr.Vp ? f0(tr.Vp) : '?') + ' / ' + r.tab.sistema + ' V' }, { ir: () => editarTrafo(r.tab, R), title: 'Editar transformador' });
+        D.simbolo('TRAFO_SECO', x, y - ht / 2, { KVA: f1(tr.kva) + ' kVA', IMPEDANCIA: 'Z ' + f2(tr.z) + ' %', VOLTAJES: (tr.Vp ? f0(tr.Vp) : '?') + ' / ' + r.tab.sistema + ' V' }, { ir: () => (tr.compartido ? App.go('proyecto') : editarTrafo(r.tab, R)), title: tr.compartido ? 'Transformador compartido: se edita en Proyecto → Fuentes' : 'Editar transformador' });
         huecos.push([y - ht / 2 - 3 * kt, y + ht / 2 + 3 * kt]);
-        D.texto(x + 22, y - 12, (tr.nombre ? tr.nombre + ' · ' : '') + f1(tr.kva) + ' kVA · Z ' + f2(tr.z) + ' %', 'u-t b', 'TEXTO');
+        D.texto(x + 22, y - 12, (tr.nombre ? tr.nombre + ' · ' : '') + f1(tr.kva) + ' kVA · Z ' + f2(tr.z) + ' %' + (tr.compartido ? ' · compartido (' + tr.salidas + ' salidas)' : ''), 'u-t b', 'TEXTO');
         D.texto(x + 22, y + 3, (tr.Vp ? f0(tr.Vp) : '?') + ' / ' + r.tab.sistema + ' V · carga ' + f1(tr.carga * 100) + ' %', 'u-t', 'TEXTO');
         D.texto(x + 22, y + 18, 'Icc sec. ' + f2(tr.iccSec / 1000) + ' kA · ΔV ' + f2(tr.reg) + ' %', 'u-t', 'TEXTO');
       } else {
@@ -98,7 +98,7 @@
       // con segunda acometida los datos del cable van a la izquierda de la línea
       const cx = r.alterna ? x - 10 : x + 10, al = r.alterna ? 'e' : null;
       D.texto(cx, y, A.fasesTxt + (A.neutroTxt ? '+' + A.neutroTxt + 'N' : '') + (A.tierraTxt ? '+' + A.tierraTxt + 'T' : '') + ' ' + A.mat + ' ' + A.ais, 'u-t b', 'TEXTO', al);
-      const dN = r.alterna && r.alterna.distNormal ? r.alterna.distNormal : A.M139;
+      const dN = r.alterna && /ATS|MTS/.test(r.alterna.equipo) ? r.alterna.distNormal : A.M139;
       D.texto(cx, y + 15, (r.alterna ? 'Normal → ' + r.alterna.equipo + ' ' : '') + f1(dN) + ' m · ' + (A.preN || '') + A.AR139 + ' mm ' + A.tuberia + ' · ΔV ' + f2(A.AV139 / r.V * 100) + ' %' + (A.ajustado ? ' · ajustado' : ''), 'u-t', 'TEXTO', al);
       if (A.val && !A.val.ok) D.texto(cx, y + 30, '⚠ no cumple ampacidad corregida', 'u-t mal', 'TEXTO', al);
       const fin = () => lineaV(x, y0, y1, huecos, 'ALIMENTADOR');
@@ -240,7 +240,7 @@
     raiz.forEach(r => {
       const cx = x + span[r.tab.id] / 2, y0 = 30;
       D.rect(cx - 42, y0, 84, 34, 'u-red', 'EQUIPOS');
-      D.texto(cx, y0 + 22, r.trafo ? 'RED' : (r.tab.conectadoA || 'ACOMETIDA').slice(0, 14), 'u-t b', 'TEXTO', 'c');
+      D.texto(cx, y0 + 22, r.trafo ? 'RED' : (Store.fuente(r.tab.fuenteId) ? ((Store.fuente(r.tab.fuenteId).nombre || 'GENERADOR')) : (r.tab.conectadoA || 'ACOMETIDA')).slice(0, 14), 'u-t b', 'TEXTO', 'c');
       D.texto(cx + 50, y0 + 14, r.trafo ? (P.iccRed ? 'Icc ' + f2(P.iccRed) + ' kA' : 'Icc infinita') : '', 'u-t', 'TEXTO');
       if (!r.trafo && r.iccFuente === 'manual') D.texto(cx + 50, y0 + 29, 'Icc en bornes ' + f2(r.iccKA) + ' kA (dato)', 'u-t', 'TEXTO');
       bajada(cx, y0 + 34, y0 + 34 + NIVEL - 60, r, null);

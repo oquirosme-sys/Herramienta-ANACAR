@@ -10,7 +10,7 @@
   function seccion(r) {
     const t = r.tab, A = r.alim, P = Store.project, nf = r.fases === 3 ? 3 : 2, cat = r.cat || {}, bk = r.bkMain || {};
     const circ = r.rows.map(x => [x.polos.join(','), x.descripcion, (x.det.id || '') + ' ' + (x.det.descripcion || ''), x.J, x.O || '', x.P || '', x.J ? Math.max(...x.I) : '', x.AE || '', x.AF || '',
-      x.breaker ? (x.breaker.ref || x.breaker.modelo || '') + ' ' + (x.breaker.unidad || '') + (x.breaker.serie ? ' (serie ' + x.breaker.serie.kA + ' kA)' : '') : '', x.breaker ? x.breaker.sccr : '',
+      x.breaker ? (x.breaker.ref || x.breaker.modelo || '') + ' ' + (x.c.unidad || (x.nec ? x.nec.unidad : '') || x.breaker.unidad || '') + (x.breaker.serie ? ' (serie ' + x.breaker.serie.kA + ' kA)' : '') : '', x.breaker ? x.breaker.sccr : '',
       x.AL ? x.fasesTxt.trim() + (x.neutroTxt ? ' + ' + x.neutroTxt : '') + (x.tierraTxt ? ' + ' + x.tierraTxt + 'T' : '') + ' ' + x.mat + ' ' + x.ais : '', x.tuboTxt, Number(x.c.longitud) || '', x.AY === null ? '' : x.AY]
       .concat(x.fase.slice(0, nf).map(v => v || '')));
     const val = A.val;
@@ -65,7 +65,7 @@
     + 'table{border-collapse:collapse;width:100%;margin:2pt 0 6pt}th,td{border:1px solid #888;padding:2pt 4pt;vertical-align:top}th{background:#D9D9D9;text-align:left}td.n{text-align:right}.kv2 th{width:32%;background:#EFEFEF}.chica{font-size:7.5pt}'
     + '.rep-h{display:flex;gap:14pt;align-items:center;border-bottom:3px solid #006600;padding-bottom:6pt}.rep-h img{height:46pt}p{margin:2pt 0}';
   function word(lista) {
-    const cuerpo = documento(lista).outerHTML.replace(/src="img\/logo-sinergia\.png"/, 'src="' + new URL('img/logo-sinergia.png', location.href).href + '"');
+    const cuerpo = documento(lista).outerHTML.replace(/src="anacar\/img\/logo-sinergia\.png"/, 'src="' + new URL('img/logo-sinergia.png', location.href).href + '"');
     const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Memoria de cálculo</title>'
       + '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>@page Section1{size:11in 8.5in;mso-page-orientation:landscape;margin:0.6in}div.Section1{page:Section1}' + CSS_DOC + '</style></head><body><div class="Section1">' + cuerpo + '</div></body></html>';
     U.download(App.fileBase() + ' - memoria de cálculo.doc', '﻿' + html, 'application/msword');
