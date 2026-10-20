@@ -43,7 +43,7 @@ Libro de Excel con las mismas funciones que la herramienta en línea, para traba
 
 Las funciones de selección (breakers, tableros, supresores por reglas de fabricante, clasificación en serie, ampacidad 310.15, punto a punto y GFCI/AFCI) son funciones VBA de hoja (`BREAKER_SEL`, `TABLERO_SEL`, `SPD_SEL`, `CAL_AJUSTE`, `P2P`, `NEC_UNIDAD`…) que leen los catálogos de las hojas `CAT_*` (ocultas; se editan en *Modo administrador*). El libro se genera con los scripts de la carpeta `excel/` a partir de `js/data/seed.js`, y se verifica contra los resultados del Machote del Excel original y contra el motor web (`excel/test_*.py`).
 
-## Cambios de la versión SNG v2 — 2026.1-web.15
+## Cambios de la versión SNG v2 — 2026.1-web.16
 Se aplicaron sin cambiar colores, estilos ni la integración con la Suite (base de datos, accesos y roles no se tocaron):
 - **Fuentes del proyecto** (Proyecto ▸ Fuentes): transformadores y generadores compartidos por varios tableros y ATS; los tableros que cuelgan de una fuente toman su voltaje secundario y la carga de la fuente suma la demanda de todos. «Alimentado desde» ofrece también esas fuentes.
 - **Calibres mínimos** de un alimentador: 8 AWG en fases y neutro y 10 AWG en tierra (nunca 12 AWG), y **acometida manual** (calibre de fases, neutro y tierra) con avisos si no cumple.
