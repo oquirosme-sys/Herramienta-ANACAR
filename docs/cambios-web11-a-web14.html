@@ -150,6 +150,25 @@ Trampas conocidas de VBA: no distingue mayúsculas (no uses una variable local y
     <button>Copiar</button>
   </section>
 
+  <section class="card" data-p>
+    <h2><span class="tag">Paso 10</span>Cambios traídos de la versión SNG v2 (web.15 / web.16)</h2>
+    <p>Mismo contenido que el punto P9 del prompt único; se aplica sin tocar colores, estilos ni la integración con la Suite.</p>
+    <pre>Cambios traídos de la versión SNG v2 (web.15 / web.16)
+Se aplican **sin cambiar colores ni estilos** y **sin la integración con la Suite** (base de datos, accesos, roles, rutas `anacar/…`): el repositorio de referencia usa `img/logo-sinergia.png` y localStorage.
+- **Fuentes del proyecto** (`P.fuentes`): transformadores y generadores compartidos. `Store`: `fuente(id)`, `nuevaFuente(tipo)`, `eliminarFuente(id)`, `sincronizarFuentes()`, `asignarFuente`, `opcionesAlimentacion(t)` (valores `'F:' + id`), `valorAlimentacion`, `alimentarDesde`; tableros con `fuenteId` (hereda el sistema del secundario) y `alterna.fuenteId` (generador compartido); `cambiarPadre` limpia `fuenteId`. `Calc`: `FUENTES`, `SRC_LOAD`, `SRC_N`; el transformador compartido trae `compartido`, `salidas`, `kvaServidos`; el generador compartido da la Icc de un tablero y la carga se mide con la demanda de todos los tableros; resultado `R.fuentes`. UI: tarjeta «Fuentes: transformadores y generadores» en Proyecto, «Alimentado desde» con grupos Tableros / Fuentes, selector «Generador del proyecto» en la segunda acometida, rótulos «compartido (N salidas)» en el unifilar.
+- **Calibres mínimos** de un alimentador: `CAL_MIN_FASE = '8'`, `CAL_MIN_TIERRA = '10'` (nunca 12 AWG) con `maxCal`; aplican al alimentador del tablero, a los circuitos que alimentan a otro tablero y a la 2ª acometida. **Acometida manual** (`alim.calFases/calNeutro/calTierra`, campos «Calibre de fases/neutro/tierra (manual)»): se respeta y avisa si queda bajo el mínimo o bajo el 250.122; el resultado trae `alim.auto` y `alim.manual`; `Calc.CALIBRES` se exporta.
+- **ATS / MTS:** la distancia ATS → tablero es la longitud del tablero (`dAts = tab.longitud` para ATS/MTS); `largoAlim = distNormal + longitud`. Se elimina el campo `distAts`; en la memoria queda «Longitud ATS → tablero» sobre la longitud del tablero y «Fuente normal → ATS (m)» (`distNormal`). Actualiza `tests/ui-test.html` (el chequeo de esa distancia usa `data-fk$=":lon2"` y comprueba `tab.longitud`).
+- **Zoom y mano en hojas** (`Hoja.zoomUI(clave)` con `barra()`, `opts()`, `montar(wrap)`) para las tablas resumen y los cuadros 3F/1F (`ui-cuadro.js`), `Hoja.html` acepta `opts.zoom` y `opts.onzoom`; barra de desplazamiento superior (`conBarraSuperior`) en la tabla de circuitos.
+- **Formato del cuadro de cargas** (`P.pais`: `'CR'` por defecto = formato original; `'PA'` = formato TL4 con 9 dispositivos por circuito, `js/simbolos-cuadro.js`, `tablero4()` en `hoja.js`, columnas de dispositivos en la memoria, imágenes de símbolos en el Excel exportado). Selector en Proyecto.
+- **Unidad pedida:** si el circuito pide una unidad (`c.unidad` o la del NEC) que la familia del tablero no tiene, `Calc` avisa y las tablas y reportes muestran la unidad pedida.
+- **Tablas resumen:** las tablas verticales y DU incluyen el bloque «UPS / Segunda acometida» (`Resumen.fuentes(r)`: UPS, fuente alterna, equipo, WCR/Icc, conductores, y las tres distancias) en lugar de las filas `filasTransf`.
+- **Excel:** `I23` pasa a ser una fórmula (`=IF(AND(I14="SI",OR(I15="ATS",I15="MTS")),N(C12),0)`) y `BX40` = `I24 + C12` con ATS/MTS; UDF nueva `MAXCAL(calibre, mínimo)` en `ModUDF.bas`; `BX27` (calibre base), `BX34` (tierra, con `BX135` = requerida sin mínimo), `BX85` (2ª acometida) y las columnas `AW`/`AZ` de los circuitos con tablero hijo (columna T) aplican los mínimos; entradas nuevas `F20`–`F22` (acometida manual, lista `L_CAL`) con sus avisos en `BX97`; `DuplicarTablero` copia `F3:F22`. `test_ats.py` usa `C12` en lugar de `I23`; `test_cal.py` prueba mínimos y acometida manual. **No portado al Excel:** fuentes compartidas, unidad pedida y formato Panamá.
+**Aceptación:** `tests/calc-test.html` 269 de 269; `tests/ui-test.html` 10 de 10; dos tableros colgados de un mismo transformador de 150 kVA muestran «2 salidas» y la suma de sus demandas; un alimentador pequeño sale con 8 AWG y tierra de 10 AWG; fijar fases 4 / neutro 6 / tierra 12 avisa «Acometida modificada manualmente»; con `P.pais = 'PA'` el cuadro 3F se dibuja en formato TL4 y con `'CR'` queda igual que antes.
+
+</pre>
+    <button>Copiar</button>
+  </section>
+
   <section class="card">
     <h2>Pendientes conocidos</h2>
     <ul>

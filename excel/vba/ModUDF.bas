@@ -728,3 +728,25 @@ Public Function NEC_UNIDAD(desc As String, det As Variant, Vdet As Variant, Fdet
 fallo:
     NEC_UNIDAD = "STD"
 End Function
+
+' El mayor de dos calibres (por orden de la tabla): calibre minimo de un alimentador
+Public Function MAXCAL(a As Variant, b As String) As Variant
+    Dim CALS As Variant, i As Long, j As Long, sa As String
+    If IsError(a) Then MAXCAL = a: Exit Function
+    sa = Trim$(CStr(a))
+    If sa = "" Then MAXCAL = a: Exit Function
+    CALS = Array("14", "12", "10", "8", "6", "4", "3", "2", "1", "1/0", "2/0", "3/0", "4/0", "250", "300", "350", "400", "500", "600", "700", "750", "800", "900", "1000")
+    For i = 0 To UBound(CALS)
+        If CALS(i) = sa Then Exit For
+    Next i
+    For j = 0 To UBound(CALS)
+        If CALS(j) = b Then Exit For
+    Next j
+    If i > UBound(CALS) Or j > UBound(CALS) Then
+        MAXCAL = a
+    ElseIf i < j Then
+        MAXCAL = b
+    Else
+        MAXCAL = a
+    End If
+End Function

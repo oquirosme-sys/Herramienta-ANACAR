@@ -118,7 +118,8 @@ listas = {"CH": ("Sistemas", D["listas"]["sistemas"], "L_SISTEMAS"), "CI": ("Mat
           "CP": ("Unidades", ["STD", "GFCI", "AFCI", "AFCI/GFCI", "HACR", "SHT"], "L_UNIDADES"), "CQ": ("Disparo principal", ["TM", "LI", "LSI", "LSIG"], "L_DISPARO"),
           "CR": ("SI/NO", ["SI", "NO"], "L_SINO"), "CZ": ("Transición", ["Abierta 3P", "Abierta 4P", "Retardada 3P", "Retardada 4P", "Cerrada 3P", "Cerrada 4P", "Bypass 3P", "Bypass 4P", "Manual 3P", "Manual 4P"], "L_TRANSICION"), "CS": ("Tipo", ["3F", "1F"], "L_TIPO"), "CT": ("Principal", ["Interruptor", "Zapatas"], "L_PRINCIPAL"),
           "CU": ("Tipo de equipo", ["Tablero", "Subestación"], "L_CLASE"), "CV": ("Transferencia", ["ATS", "MTS", "IP"], "L_TRANSF"), "CW": ("Fuente alterna", ["Generador", "Tablero"], "L_FUENTE"),
-          "CX": ("Ocupación", ["comercial", "vivienda", "hotel", "hospital", "industrial"], "L_OCUP"), "CY": ("Carga derivados", ["conectada", "demandada"], "L_CDERIV")}
+          "CX": ("Ocupación", ["comercial", "vivienda", "hotel", "hospital", "industrial"], "L_OCUP"), "CY": ("Carga derivados", ["conectada", "demandada"], "L_CDERIV"),
+          "DA": ("Calibres", ["14", "12", "10", "8", "6", "4", "3", "2", "1", "1/0", "2/0", "3/0", "4/0", "250", "300", "350", "400", "500", "600", "700", "750", "800", "900", "1000"], "L_CAL")}
 for col, (t, vals, nm) in listas.items():
     f(wc, col + "1", t, bold=True, fill=GRIS)
     for i, v in enumerate(vals): wc[col + str(2 + i)] = v
@@ -182,6 +183,7 @@ entradas = [  # (columna etiqueta, columna valor, fila, etiqueta, valor inicial,
     ("E", "F", 12, "Temp. bornes (°C)", 75, None), ("E", "F", 13, "Agrupamiento (vacío = auto)", None, "L_AGRUP"), ("E", "F", 14, "Unidad de disparo", "TM", "L_DISPARO"),
     ("E", "F", 15, "100 % rated", "NO", "L_SINO"), ("E", "F", 16, "Breaker principal manual (tipo)", None, None), ("E", "F", 17, "Tablero catálogo manual (tipo)", None, None),
     ("E", "F", 18, "SPD manual (tipo)", None, None), ("E", "F", 19, "Calibre fijo (no aumentar)", "NO", "L_SINO"),
+    ("E", "F", 20, "Acometida: calibre de fases (manual)", None, "L_CAL"), ("E", "F", 21, "Acometida: calibre de neutro (manual)", None, "L_CAL"), ("E", "F", 22, "Acometida: calibre de tierra (manual)", None, "L_CAL"),
     ("H", "I", 3, "Transformador aguas arriba", "NO", "L_SINO"), ("H", "I", 4, "Transformador kVA", None, None), ("H", "I", 5, "Impedancia Z (%)", None, None),
     ("H", "I", 6, "Relación X/R (vacío = 4)", None, None), ("H", "I", 7, "Voltaje primario (V)", None, None), ("H", "I", 8, "Nombre transformador", "", None),
     ("H", "I", 10, "Alimentado por UPS", "NO", "L_SINO"), ("H", "I", 11, "UPS kVA", None, None), ("H", "I", 12, "Icc del inversor (× In)", 2, None),
@@ -189,8 +191,10 @@ entradas = [  # (columna etiqueta, columna valor, fila, etiqueta, valor inicial,
     ("H", "I", 14, "Segunda acometida", "NO", "L_SINO"), ("H", "I", 15, "Equipo de transferencia", "ATS", "L_TRANSF"), ("H", "I", 16, "Fuente alterna", "Generador", "L_FUENTE"),
     ("H", "I", 17, "Tablero de origen (bypass)", None, "LISTA_TABLEROS"), ("H", "I", 18, "Generador kVA", None, None), ("H", "I", 19, "X''d del generador (%)", 12, None),
     ("H", "I", 20, "Longitud fuente → ATS (m)", None, None), ("H", "I", 21, "WCR / SCCR del ATS (kA) (vacío = modelo)", None, None),
-    ("H", "I", 22, "Transferencia: transición y polos", "Abierta 3P", "L_TRANSICION"), ("H", "I", 23, "Distancia ATS → tablero (m)", None, None),
+    ("H", "I", 22, "Transferencia: transición y polos", "Abierta 3P", "L_TRANSICION"),
     ("H", "I", 24, "Distancia fuente normal → ATS (m)", None, None)]
+f(mc, "H23", "ATS → tablero (m): la longitud del tablero (C12)", size=9, al=IZQ)
+c = f(mc, "I23", '=IF(AND($I$14="SI",OR($I$15="ATS",$I$15="MTS")),N($C$12),0)', size=10, fill=GRIS, borde=True, al=Alignment(horizontal="center")); c.border = BORDE_IN
 dvs = {}
 for le, ve, fila, et, val, lista in entradas:
     f(mc, "%s%d" % (le, fila), et, size=9, al=IZQ)
@@ -230,18 +234,20 @@ rx(23, "Ampacidad requerida [AE139]", '=IF(BX10=0,"",IF($C$8=3,MAX(BX19:BX21),IF
 rx(24, "Protección (A) [AF139]", '=IF(BX23="","",IF(N($F$10)>0,$F$10,VLOOKUP(BX23,T_PROT,2,TRUE)))')
 rx(25, "Paralelos base", '=IF(BX23="",1,IF(N($F$6)>0,$F$6,IF(BX23>1600,5,IF(BX23>1000,4,IF(BX23>600,3,IF(BX23>300,2,1))))))')
 rx(26, "Aumento (factor)", '=1+N($F$7)/100')
-rx(27, "Calibre base", '=IF(BX24="","",VLOOKUP(BX24*BX26/BX25,CHOOSE(IF(%s,2,1),T_AMPCU,T_AMPAL),2,TRUE))' % ESAL)
+rx(27, "Calibre base", '=IF(BX24="","",IF($F$20<>"",$F$20,MAXCAL(VLOOKUP(BX24*BX26/BX25,CHOOSE(IF(%s,2,1),T_AMPCU,T_AMPAL),2,TRUE),"8")))' % ESAL)
 rx(28, "Agrupamiento", '=IF($F$13<>"",$F$13,IF(AND($C$8=3,$C$9=4),"4-6","1-3"))')
-rx(29, "Validación 310.15 (n|cal|ok|cap|amp|ft|fg|term|corr)", '=IF(BX27="","",CAL_AJUSTE(BX27,%s,BX25,%s,IF($F$11="","26-30",$F$11),IF(N($F$12)>0,$F$12,75),BX28,BX23,BX24,AND(AUTO_AMP="SI",$F$19<>"SI"),BX26))' % (MAT, AIS))
+rx(29, "Validación 310.15 (n|cal|ok|cap|amp|ft|fg|term|corr)", '=IF(BX27="","",CAL_AJUSTE(BX27,%s,BX25,%s,IF($F$11="","26-30",$F$11),IF(N($F$12)>0,$F$12,75),BX28,BX23,BX24,AND(AUTO_AMP="SI",$F$19<>"SI",$F$20=""),BX26))' % (MAT, AIS))
 rx(30, "# en paralelo", '=IF(BX29="",BX25,PARTEN(BX29,1))'); rx(31, "Calibre", '=IF(BX29="",BX27,PARTE(BX29,2))')
 rx(32, "Prefijo fases", '=IF(BX30=1,"",BX30&"x")&IF($C$8=3,"3#",IF(AND($C$7>=208,$C$7<=240),"2#",""))')
-rx(33, "Neutro", '=IF(BX31="","",IF($C$9=0,"",IF(AND($C$7>=208,$C$8=3,$C$9=4),BX31,IF(AND($C$8=3,$C$9=3),"",IF(AND($C$7>=208,$C$8=1,$C$9=3),"",BX31)))))')
-rx(34, "Tierra 250.122", '=IF(BX24="","",INDEX(T_TIERRA,MATCH(TRUE,INDEX(T_TIERRA_A>=BX24,0),0),IFERROR(MATCH(%s,T_TIERRA_H,0),1)))' % MAT)
+NEU = 'IF($C$9=0,"",IF(AND($C$7>=208,$C$8=3,$C$9=4),BX31,IF(AND($C$8=3,$C$9=3),"",IF(AND($C$7>=208,$C$8=1,$C$9=3),"",BX31))))'
+rx(33, "Neutro", '=IF(BX31="","",IF(AND($F$21<>"",%s<>""),$F$21,%s))' % (NEU, NEU))
+rx(135, "Tierra 250.122 requerida (sin mínimo)", '=IF(BX24="","",INDEX(T_TIERRA,MATCH(TRUE,INDEX(T_TIERRA_A>=BX24,0),0),IFERROR(MATCH(%s,T_TIERRA_H,0),1)))' % MAT)
+rx(34, "Tierra 250.122 (mín. 10 AWG)", '=IF(BX24="","",IF($F$22<>"",$F$22,MAXCAL(BX135,"10")))')
 rx(35, "Electrodo 250.66", '=IF(BX31="","",IFERROR(IF(%s,INDEX(T_ELEC_AL,MATCH(BX31,T_ELEC_CALAL,0)),INDEX(T_ELEC_CU,MATCH(BX31,T_ELEC_CALCU,0))),""))' % ESAL)
 rx(36, "Tubería (mm)", '=IF(BX31="","",IF(OR($F$3="CU-MC",$F$3="AL-MC"),"MC",IFERROR(VLOOKUP(BX31,T_CONDUIT,IF($F$4="RHW",3,IF($F$4="XHHW",4,2)),FALSE),"")))')
 rx(37, "FAC tabla", '=IF(BX31="","",IFERROR(INDEX(CHOOSE(IF(%s,2,1),T_FAC_CU,T_FAC_AL),IF(BX15=1,1,IF(BX15>0.949,2,IF(BX15>0.899,3,IF(BX15>0.799,4,99)))),MATCH(BX31,T_FAC_H,0)),""))' % ESAL)
 rx(38, "FAC ajustado", '=IF(BX37="","",BX37*IF(AND($C$8=1,OR($C$7=120,$C$7=230,$C$7=277)),1.1547,IF(OR(AND($C$8=1,OR($C$7=208,$C$7=240)),AND($C$8=2,$C$7=240)),1.15,1)))')
-rx(39, "Corriente para caída (A)", '=IF(BX4>0,BX19,IF(BX5>0,BX20,BX21))'); rx(40, "Longitud (m)", '=IF(AND($I$14="SI",N($I$24)>0),N($I$24)+N($I$23),N($C$12))')
+rx(39, "Corriente para caída (A)", '=IF(BX4>0,BX19,IF(BX5>0,BX20,BX21))'); rx(40, "Longitud (m)", '=IF(AND($I$14="SI",OR($I$15="ATS",$I$15="MTS")),N($I$24)+N($C$12),N($C$12))')
 rx(41, "Carga del transformador", '=IF($I$3="SI",IFERROR(BX14/$I$4,0),"")')
 rx(42, "Caída en el transformador (%)", '=IF($I$3="SI",IFERROR(BX41*($I$5/SQRT(1+IF(N($I$6)>0,$I$6,4)^2))*(BX15+IF(N($I$6)>0,$I$6,4)*SQRT(1-BX15^2)),0),0)')
 rx(43, "Tablero que lo alimenta", '=$C$10')
@@ -275,7 +281,7 @@ rx(78, "SPD (tipo)", '=IF(N($F$18)>0,$F$18,SPD_SEL(BX60,$C$6,$C$8,BX77))')
 for fila, campo in [(79, "modelo"), (80, "kaLL"), (81, "kaLN"), (82, "montaje")]:
     rx(fila, "SPD: " + campo, '=IF(BX78="","",SPD_DATO(BX60,BX78,"%s",$C$6))' % campo)
 rx(84, "Segunda acometida", '=$I$14="SI"')
-rx(85, "2ª acometida: validación", '=IF(OR(NOT(BX84),BX24=""),"",CAL_AJUSTE(VLOOKUP(BX24*BX26/BX25,CHOOSE(IF(%s,2,1),T_AMPCU,T_AMPAL),2,TRUE),%s,BX25,%s,IF($F$11="","26-30",$F$11),IF(N($F$12)>0,$F$12,75),BX28,BX23,BX24,AUTO_AMP="SI",BX26))' % (ESAL, MAT, AIS))
+rx(85, "2ª acometida: validación", '=IF(OR(NOT(BX84),BX24=""),"",CAL_AJUSTE(MAXCAL(VLOOKUP(BX24*BX26/BX25,CHOOSE(IF(%s,2,1),T_AMPCU,T_AMPAL),2,TRUE),"8"),%s,BX25,%s,IF($F$11="","26-30",$F$11),IF(N($F$12)>0,$F$12,75),BX28,BX23,BX24,AUTO_AMP="SI",BX26))' % (ESAL, MAT, AIS))
 rx(86, "2ª acometida: paralelos", '=IF(BX85="","",PARTEN(BX85,1))'); rx(87, "2ª acometida: calibre", '=IF(BX85="","",PARTE(BX85,2))')
 ALTP2P = 'BX87,%s,%s,BX86,N($I$20),$C$7,$C$8,ICC_LMAX' % (AIS, TUB)
 rx(111, "2ª acometida: Icc en el ATS (A)", '=IF(OR(NOT(BX84),BX87=""),"",IF($I$16="Generador",IF(N($I$18)>0,P2P($I$18*1000/(IF($C$8=3,1.732,1)*$C$7*IF(N($I$19)>0,$I$19,12)/100),%s),""),IF($I$17<>"",IF(N(BX109)>0,P2P(BX109,%s),""),"")))' % (ALTP2P, ALTP2P))
@@ -321,6 +327,8 @@ rx(97, "Avisos", '=TRIM(IF(BX51>CVMAX_ALIM,"Caída acumulada "&FIXED(BX51,2)&" %
              '&IF(AND(BX41<>"",N(BX41)>1),"Transformador sobrecargado. ","")&IF(AND(N(BX44)>0,N(BX44)<>$C$7,$I$3<>"SI"),"Voltaje distinto al del padre: agregue transformador. ","")'
              '&IF(AND(BX93<>"",N(BX93)>CVMAX_ALIM),"Caída de la 2ª acometida alta. ","")&IF(AND($I$14="SI",OR($I$15="ATS",$I$15="MTS"),N(BX117)>0,N(BX117)<N(BX113)),"WCR del "&$I$15&" "&BX117&" kA < Icc en el "&$I$15&" "&FIXED(N(BX113),2)&" kA. ","")&IF(AND($I$14="SI",OR($I$15="ATS",$I$15="MTS"),BX114=""),"Sin "&$I$15&" de catálogo. ","")'
              '&IF(BX80<>"",IF(N(BX80)<BX77,"SPD de "&BX80&" kA < "&BX77&" kA recomendados (242). ",""),"")&IF(N(BX24)>=1200,"240.87: reducción de energía de arco. ","")'
+             '&IF(OR($F$20<>"",$F$21<>"",$F$22<>""),"Acometida modificada manualmente. ","")&IF(AND($F$20<>"",MAXCAL($F$20,"8")<>$F$20),"Calibre de fases menor que el mínimo de 8 AWG. ","")&IF(AND($F$21<>"",MAXCAL($F$21,"8")<>$F$21),"Calibre de neutro menor que el mínimo de 8 AWG. ","")'
+             '&IF(AND($F$22<>"",MAXCAL($F$22,"10")<>$F$22),"Calibre de tierra menor que el mínimo de 10 AWG. ","")&IF(AND($F$22<>"",BX135<>"",MAXCAL($F$22,BX135)<>$F$22),"Tierra menor que la requerida por el 250.122. ","")'
              '&IF(COUNTIF($BU$25:$BU$124,"?*")>0,COUNTIF($BU$25:$BU$124,"?*")&" circuito(s) con aviso. ",""))')
 mc.column_dimensions["CA"].hidden = True; mc.column_dimensions["CB"].hidden = True
 mc.column_dimensions["BW"].width = 40; mc.column_dimensions["BX"].width = 22
@@ -386,10 +394,10 @@ for i in range(100):
         "AT": '=IF($AS{r}="","",IF(N($P{r})>0,$P{r},VLOOKUP($AS{r},T_PROT,2,TRUE)))',
         "AU": '=IF($AS{r}="",1,IF(N($N{r})>0,$N{r},IF($AS{r}>1600,5,IF($AS{r}>1000,4,IF($AS{r}>600,3,IF($AS{r}>300,2,1))))))',
         "AV": '=1+N($O{r})/100',
-        "AW": '=IF($AT{r}="","",VLOOKUP($AT{r}*$AV{r}/$AU{r},CHOOSE(IF(' + ESALR + ',2,1),T_AMPCU,T_AMPAL),2,TRUE))',
+        "AW": '=IF($AT{r}="","",IF($T{r}<>"",MAXCAL(VLOOKUP($AT{r}*$AV{r}/$AU{r},CHOOSE(IF(' + ESALR + ',2,1),T_AMPCU,T_AMPAL),2,TRUE),"8"),VLOOKUP($AT{r}*$AV{r}/$AU{r},CHOOSE(IF(' + ESALR + ',2,1),T_AMPCU,T_AMPAL),2,TRUE)))',
         "AX": '=IF($AW{r}="","",IF($AU{r}=1,"",$AU{r}&"x")&IF($Z{r}=3,"3#",IF(AND($Y{r}>=208,$Y{r}<=240),"2#","")))',
         "AY": '=IF($AW{r}="","",IF($AA{r}=0,"",IF(AND($Y{r}>=208,$Z{r}=3,$AA{r}=4),$AW{r},IF(AND($Z{r}=3,$AA{r}=3),"",IF(AND($Y{r}>=208,$Z{r}=1,$AA{r}=3),"",$AW{r})))))',
-        "AZ": '=IF($AT{r}="","",INDEX(T_TIERRA,MATCH(TRUE,INDEX(T_TIERRA_A>=$AT{r},0),0),IFERROR(MATCH(' + MATR + ',T_TIERRA_H,0),1)))',
+        "AZ": '=IF($AT{r}="","",IF($T{r}<>"",MAXCAL(INDEX(T_TIERRA,MATCH(TRUE,INDEX(T_TIERRA_A>=$AT{r},0),0),IFERROR(MATCH(' + MATR + ',T_TIERRA_H,0),1)),"10"),INDEX(T_TIERRA,MATCH(TRUE,INDEX(T_TIERRA_A>=$AT{r},0),0),IFERROR(MATCH(' + MATR + ',T_TIERRA_H,0),1))))',
         "BA": '=IF($AW{r}="","",IF(OR($L{r}="CU-MC",$L{r}="AL-MC"),"MC",IFERROR(VLOOKUP($AW{r},T_CONDUIT,IF($M{r}="RHW",3,IF($M{r}="XHHW",4,2)),FALSE),"")))',
         "BB": '=IF($AW{r}="","",IFERROR(INDEX(CHOOSE(IF(' + ESALR + ',2,1),T_FAC_CU,T_FAC_AL),IF($AD{r}=1,1,IF($AD{r}>0.949,2,IF($AD{r}>0.899,3,IF($AD{r}>0.799,4,99)))),MATCH($AW{r},T_FAC_H,0)),""))',
         "BC": '=IF($BB{r}="","",$BB{r}*IF(AND($Z{r}=1,OR($Y{r}=120,$Y{r}=230,$Y{r}=277)),1.1547,IF(AND($Z{r}=1,OR($Y{r}=208,$Y{r}=240)),1.15,1)))',

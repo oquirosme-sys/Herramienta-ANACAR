@@ -207,7 +207,7 @@ Public Sub DuplicarTablero()
     Congelar
     Set ws = CrearTablero(id, CStr(o.Range("C5").Value), CStr(o.Range("C6").Value), True)
     If ws Is Nothing Then Descongelar: MsgBox "No se pudo crear " & id & " (nombre no valido o repetido).", vbExclamation: Exit Sub
-    For Each rng In Array("C4", "C6:C6", "C11:C20", "F3:F19", "I3:I24", "A25:V124")
+    For Each rng In Array("C4", "C6:C6", "C11:C20", "F3:F22", "I3:I24", "A25:V124")
         For Each c In o.Range(rng).Cells
             If c.Column <> 2 Or c.Row < FILA1 Then
                 If Not EsAuto(c) Then ws.Range(c.Address).Formula = c.Formula

@@ -5,7 +5,7 @@ try:
     wb = xl.Workbooks.Open(os.path.abspath("ANACAR.xlsm"))
     xl.Run("ModTableros.CrearTablero", "GEN-T", "3F", "120/208", True)
     ws = wb.Worksheets("MC GEN-T"); xl.EnableEvents = False
-    for k, v in {"C14": 10, "I14": "SI", "I15": "ATS", "I16": "Generador", "I18": 100, "I20": 25, "I22": "Retardada 4P", "I23": 8, "I24": 12, "E25": 55, "G25": 40, "H25": 10, "C25": 3, "D25": 5}.items(): ws.Range(k).Value = v
+    for k, v in {"C14": 10, "C12": 8, "I14": "SI", "I15": "ATS", "I16": "Generador", "I18": 100, "I20": 25, "I22": "Retardada 4P", "I24": 12, "E25": 55, "G25": 40, "H25": 10, "C25": 3, "D25": 5}.items(): ws.Range(k).Value = v
     xl.EnableEvents = True; xl.CalculateFull()
     g = lambda a: ws.Range(a).Value
     print("modelo", g("BX115"), "amp", g("BX116"), "wcr", g("BX117"), "Icc ATS kA", round(g("BX113") or 0, 2), "Icc bornes kA", round((g("BX88") or 0) / 1000, 2), "dV%", round(g("BX93") or 0, 2), "prot", g("BX24"))
