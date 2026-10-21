@@ -277,3 +277,9 @@ ol.guia li { margin: .35rem 0; line-height: 1.45; }
 .hx-wrap.pan { max-height: 78vh; } @media print { .hx-wrap.pan { max-height: none; } } .hx-wrap.mano { cursor: grab; } .hx-wrap.mano.arrastrando { cursor: grabbing; user-select: none; }
 .tbl-wrap.circ { max-height: 70vh; } .scroll-top { overflow-x: auto; overflow-y: hidden; height: 15px; margin-bottom: 2px; display: none; }
 th.dev, td.dev { background: var(--brand-soft); }
+
+/* Unifilar: textos movibles */
+.unifilar text.u-mov{ cursor: move; touch-action: none; }
+.u-wrap.mano .unifilar text.u-mov{ cursor: move; }
+.unifilar text.u-mov:hover{ fill: var(--brand); }
+.u-wrap.arrastrando .unifilar text.u-mov{ user-select: none; }

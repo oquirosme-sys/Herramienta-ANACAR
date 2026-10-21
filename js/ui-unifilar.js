@@ -10,6 +10,12 @@
   let conTabla = false;
   const anchoDatos = () => (conTabla ? 330 : 250);
   const fasesPolos = r => (r.fases === 3 ? 3 : 2);
+  /** Textos movibles: cada texto lleva una clave estable (contexto: tablero + número de orden) y su desplazamiento se guarda en el proyecto (unifilarPos). */
+  function llaves() {
+    let ctx = ''; const cont = {};
+    return { ctx(k) { const p = ctx; if (k !== undefined) ctx = k; return p; }, key() { cont[ctx] = (cont[ctx] || 0) + 1; return ctx + '#' + cont[ctx]; } };
+  }
+  const posiciones = () => (Store.project && Store.project.unifilarPos) || {};
   const colorV = V => (V >= 440 ? '#c0392b' : V >= 230 ? '#1b7f4b' : '#0b5cab');
 
   /* ---------- transformador ---------- */
@@ -76,7 +82,7 @@
       if (y1 > a) D.linea(x, a, x, y1, 'u-lin', capa);
     };
     /** Bajada desde (x, y0) hasta la barra en y1. */
-    function bajada(x, y0, y1, r, circ) {
+    function bajada_(x, y0, y1, r, circ) {
       const A = r.alim, tr = r.trafo; let y = y0; const huecos = [];
       const bkA = circ ? circ.AF : A.AF139, b = circ ? circ.breaker : r.bkMain;
       y += circ ? (conTabla ? 262 : 96) + (r.padre && r.padre.alterna ? 40 : 0) : 26;
@@ -175,7 +181,7 @@
     }
 
     /** UPS del tablero principal: dos interruptores en la barra (UPS y bypass) → UPS → MTS → interruptor de salida, aguas abajo del principal. */
-    function ramaUpsDibujo(r, xu, yb, hu) {
+    function ramaUpsDibujo_(r, xu, yb, hu) {
       const up = hu && hu.ups ? hu : r, u = up.ups, al = up.tab.alterna, mts = up === r ? !!r.tab.ups.mts : !!(al && al.activo && al.equipo === 'MTS' && al.origenId === r.tab.id), x1 = mts ? xu - 45 : xu, ir = () => App.go('memoria', up.tab.id);
       const fases = fasesPolos(r), hb1 = interruptor(x1, yb + 30, 'UPS ' + f1(u.kva) + ' kVA', false, ir, { polos: fases, unidad: 'TM' });
       const yU = yb + 120;
@@ -202,7 +208,7 @@
       return [x1, yS];
     }
 
-    function nodo(r, x0, y0) {
+    function nodo_(r, x0, y0) {
       const sw = span[r.tab.id], hs = hijos(r), yb = y0, cx = x0 + sw / 2;
       const ch = hs.reduce((a, x) => a + ancho[x.tab.id], 0) + GAP * Math.max(0, hs.length - 1) - (hs.length ? LBL : 0);
       const xs = [], xi = []; let x = cx - ch / 2;
@@ -237,7 +243,11 @@
     }
 
     let x = GAP;
-    raiz.forEach(r => {
+    const conCtx = (k, f) => { const prev = D.ctx ? D.ctx(k) : ''; try { return f(); } finally { if (D.ctx) D.ctx(prev); } };
+    const bajada = (x, y0, y1, r, circ) => conCtx(r.tab.id + (circ ? ':c' : ':b'), () => bajada_(x, y0, y1, r, circ));
+    const ramaUpsDibujo = (r, xu, yb, hu) => conCtx(r.tab.id + ':u', () => ramaUpsDibujo_(r, xu, yb, hu));
+    const nodo = (r, x0, y0) => conCtx(r.tab.id + ':n', () => nodo_(r, x0, y0));
+    raiz.forEach(r => conCtx('r:' + r.tab.id, () => {
       const cx = x + span[r.tab.id] / 2, y0 = 30;
       D.rect(cx - 42, y0, 84, 34, 'u-red', 'EQUIPOS');
       D.texto(cx, y0 + 22, r.trafo ? 'RED' : (Store.fuente(r.tab.fuenteId) ? ((Store.fuente(r.tab.fuenteId).nombre || 'GENERADOR')) : (r.tab.conectadoA || 'ACOMETIDA')).slice(0, 14), 'u-t b', 'TEXTO', 'c');
@@ -246,7 +256,7 @@
       bajada(cx, y0 + 34, y0 + 34 + NIVEL - 60, r, null);
       nodo(r, x, y0 + 34 + NIVEL - 60);
       x += ancho[r.tab.id] + GAP;
-    });
+    }));
   }
 
   /* ---------- salida SVG ---------- */
@@ -259,7 +269,9 @@
     };
     let svg = null, g0 = null;
     const tit = t => (t ? S('title', null, t) : null);
+    const L = llaves(), pos = posiciones();
     const D = {
+      ctx: L.ctx,
       tamano(w, hh) {
         svg = S('svg', { class: 'unifilar', viewBox: '0 0 ' + w + ' ' + hh, width: w, height: hh, xmlns: NS, role: 'img', 'aria-label': 'Diagrama unifilar' });
         svg.appendChild(S('defs', null, S('pattern', { id: 'rayas', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, S('line', { x1: 0, y1: 0, x2: 0, y2: 6, class: 'u-ray' }))));
@@ -268,7 +280,10 @@
       linea: (x1, y1, x2, y2, cls) => g0.appendChild(S('line', { x1, y1, x2, y2, class: cls })),
       rect: (x, y, w, hh, cls, capa, ir) => g0.appendChild(S('rect', { x, y, width: w, height: hh, class: cls + (ir ? ' clic' : ''), onclick: ir })),
       circulo: (cx, cy, r, cls, capa, ir) => g0.appendChild(S('circle', { cx, cy, r, class: cls + (ir ? ' clic' : ''), onclick: ir })),
-      texto: (x, y, t, cls, capa, al, ir, title) => g0.appendChild(S('text', { x, y, class: cls + (ir ? ' clic' : ''), 'text-anchor': al === 'c' ? 'middle' : al === 'e' ? 'end' : null, onclick: ir }, t, tit(title))),
+      texto: (x, y, t, cls, capa, al, ir, title) => {
+        const k = capa === 'TEXTO' ? L.key() : null, o = k && pos[k];
+        return g0.appendChild(S('text', { x, y, class: cls + (ir ? ' clic' : '') + (k ? ' u-mov' : ''), 'text-anchor': al === 'c' ? 'middle' : al === 'e' ? 'end' : null, 'data-k': k, transform: o ? 'translate(' + o.dx + ' ' + o.dy + ')' : null, onclick: ir }, t, tit(title || (k ? 'Arrastre para mover este texto' : null))));
+      },
       barra: (x1, x2, y, color, ir, nombre) => g0.appendChild(S('line', { x1, y1: y, x2, y2: y, class: 'u-bus', stroke: color, onclick: ir }, tit('Abrir memoria de cálculo de ' + nombre))),
       simbolo: (nombre, x, y, vals, o) => {
         o = o || {}; const Y = SIMB[nombre], k = Y.k, X = px => +(x + px * k).toFixed(2), V = py => +(y - py * k).toFixed(2);
@@ -299,12 +314,15 @@
     const esc = t => String(t).replace(/[^\x20-\x7e]/g, ch => (ch === 'Δ' ? 'D' : ch === '⚠' ? '!' : ch === '↑' ? '^' : '\\U+' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')));
     const linea = (x1, y1, x2, y2, capa) => ent.push(['0', 'LINE', '8', capa, '10', xx(x1), '20', yy(y1), '30', 0, '11', xx(x2), '21', yy(y2), '31', 0]);
     const ALTO = { 'u-n': 11, 'u-t s': 7, 'u-t s b': 7 };
+    const L = llaves(), pos = posiciones();
     const D = {
+      ctx: L.ctx,
       tamano: (w, hh) => { H = hh; },
       linea: (x1, y1, x2, y2, cls, capa) => linea(x1, y1, x2, y2, capa || 'ALIMENTADOR'),
       rect: (x, y, w, hh, cls, capa) => { const c = capa || 'EQUIPOS'; linea(x, y, x + w, y, c); linea(x + w, y, x + w, y + hh, c); linea(x + w, y + hh, x, y + hh, c); linea(x, y + hh, x, y, c); if (cls === 'u-red') for (let i = 8; i < w + hh; i += 8) linea(x + Math.max(0, i - hh), y + Math.min(hh, i), x + Math.min(w, i), y + Math.max(0, i - w), c); },
       circulo: (cx, cy, r, cls, capa) => ent.push(['0', 'CIRCLE', '8', capa || 'EQUIPOS', '10', xx(cx), '20', yy(cy), '30', 0, '40', r]),
       texto: (x, y, t, cls, capa, al) => {
+        if (capa === 'TEXTO') { const o = pos[L.key()]; if (o) { x += o.dx; y += o.dy; } }
         const hgt = ALTO[cls] || 8.5, e = ['0', 'TEXT', '8', capa || 'TEXTO', '7', 'SINERGIA', '10', xx(x), '20', yy(y), '30', 0, '40', hgt, '1', esc(t)];
         if (al === 'c' || al === 'e') e.push('72', al === 'c' ? 1 : 2, '11', xx(x), '21', yy(y), '31', 0);
         ent.push(e);
@@ -357,7 +375,7 @@
     });
   }
 
-  let zoomU = 1, manoU = true, quitarTeclas = null;   // ampliación del diagrama y herramienta mano (arrastrar para moverse); se conservan al refrescar
+  let zoomU = 1, manoU = true, quitarTeclas = null, quitarArrastre = null;   // ampliación del diagrama y herramienta mano (arrastrar para moverse); se conservan al refrescar
   const ZMIN = 0.1, ZMAX = 4;
   App.views.unifilar = function (view, R) {
     const P = Store.project;
@@ -379,6 +397,7 @@
         UI.field('Icc de la red en el primario (kA)', UI.input(P, 'iccRed', { type: 'num', fk: 'u:icc', placeholder: 'infinita', class: 'w-num' }), null, 'inline'),
         h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: conTabla, onchange: e => { conTabla = e.target.checked; App.refresh(); } }), ' Tabla de datos junto a cada tablero'),
         UI.btn('+ Tablero principal', async () => { const n = await UI.prompt('Nuevo tablero principal', 'Nombre', '', v => (v ? '' : 'Escriba un nombre')); if (n) { Store.nuevoTablero({ nombre: n }); App.refresh(); } }, 'small'),
+        UI.btn('Restablecer textos', async () => { if (!Object.keys(posiciones()).length) { UI.toast('No hay textos movidos', 'ok'); return; } if (await UI.confirm('¿Devolver todos los textos del unifilar a su posición automática?', 'Restablecer')) { Store.project.unifilarPos = {}; Store.save(); App.refresh(); } }, 'small', 'Arrastre cualquier texto del diagrama para acomodarlo; esto los devuelve a su lugar'),
         UI.btn('Descargar DXF (AutoCAD)', () => { U.download(App.fileBase() + ' - unifilar.dxf', dxf(R), 'application/dxf'); UI.toast('DXF generado: ábralo en AutoCAD y use Guardar como… DWG', 'ok'); }, 'primary small', 'AutoCAD abre el DXF directamente; con "Guardar como" queda en DWG'),
         UI.btn('Descargar SVG', () => { const s = document.querySelector('svg.unifilar'); if (s) U.download(App.fileBase() + ' - unifilar.svg', '<?xml version="1.0" encoding="UTF-8"?>' + s.outerHTML.replace(/ width="\d+"/, ' width="' + s.dataset.w + '"').replace(/ height="\d+"/, ' height="' + s.dataset.h + '"').replace('<svg', '<svg style="font-family:Arial;background:#fff"'), 'image/svg+xml'); }, 'small'),
         h('span', { class: 'zoom-u', title: 'Ctrl + rueda del ratón también acerca y aleja' },
@@ -390,6 +409,37 @@
     wrap = h('div', { class: 'u-wrap', 'data-scroll': 'unifilar' }, svgDibujo(R));
     view.appendChild(wrap);
     wrap.classList.toggle('mano', manoU);
+    {   // textos movibles: arrastrar un texto lo desplaza; la posición se guarda en el proyecto
+      let dr = null, movio = false;
+      wrap.addEventListener('pointerdown', e => {
+        const tx = e.target.closest && e.target.closest('text.u-mov'); if (!tx || e.button !== 0) return;
+        const sv = wrap.querySelector('svg.unifilar'), m = sv && sv.getScreenCTM(); if (!m) return;
+        const k = tx.getAttribute('data-k'), o = posiciones()[k] || { dx: 0, dy: 0 };
+        dr = { tx, k, x: e.clientX, y: e.clientY, dx0: o.dx, dy0: o.dy, s: m.a || 1, moved: false };
+        e.stopPropagation(); e.preventDefault();
+      }, true);
+      const mover = e => {
+        if (!dr) return;
+        const dx = (e.clientX - dr.x) / dr.s, dy = (e.clientY - dr.y) / dr.s;
+        if (!dr.moved && Math.hypot(e.clientX - dr.x, e.clientY - dr.y) < 3) return;
+        dr.moved = true; dr.nx = dr.dx0 + dx; dr.ny = dr.dy0 + dy;
+        dr.tx.setAttribute('transform', 'translate(' + dr.nx + ' ' + dr.ny + ')'); wrap.classList.add('arrastrando');
+      };
+      const soltar = () => {
+        if (!dr) return;
+        wrap.classList.remove('arrastrando');
+        if (dr.moved) {
+          const P = Store.project; P.unifilarPos = P.unifilarPos || {};
+          P.unifilarPos[dr.k] = { dx: Math.round(dr.nx * 10) / 10, dy: Math.round(dr.ny * 10) / 10 }; Store.save();
+          movio = true; setTimeout(() => { movio = false; }, 0);
+        }
+        dr = null;
+      };
+      wrap.addEventListener('click', e => { if (movio) { e.stopPropagation(); e.preventDefault(); } }, true);
+      if (quitarArrastre) quitarArrastre();
+      window.addEventListener('pointermove', mover); window.addEventListener('pointerup', soltar);
+      quitarArrastre = () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); };
+    }
     {   // mano: arrastrar para desplazar el diagrama; un arrastre no cuenta como clic sobre una barra o un tablero
       let ini = null, movio = false, espacio = false;
       const activo = e => manoU || e.button === 1 || espacio;
