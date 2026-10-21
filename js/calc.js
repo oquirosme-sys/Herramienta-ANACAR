@@ -146,8 +146,25 @@
     if (!c.length && perm.length) return breaker(marca, '', polos, amp, Object.assign({}, opt, { familias: '' }));
     const ord = b => { const f = famBreaker(b); const i = f ? perm.indexOf(f.familia) : -1; return i < 0 ? 99 : i; };
     const ok = c.filter(b => !opt.iccKA || n(b.sccr) >= opt.iccKA).sort((a, b) => n(a.sccr) - n(b.sccr) || ord(a) - ord(b));
-    if (ok.length) return res(ok[0]);
-    return res(c.sort((a, b) => n(b.sccr) - n(a.sccr))[0] || null);
+    if (ok.length) return mccb(res(ok[0]), marca, polos, amp, opt, perm);
+    return mccb(res(c.sort((a, b) => n(b.sccr) - n(a.sccr))[0] || null), marca, polos, amp, opt, perm);
+  }
+  /** Interruptores de caja moldeada (Eaton Power Defense, Schneider PowerPacT): el modelo, la capacidad interruptiva y los bornes salen de las tablas completas de los selectores (selector.js). */
+  const MARCOS_SQD = { 'Q-frame': ['Q', 'Q4'], H: ['H'], J: ['J'], L: ['LA', 'LH', 'L'], M: ['M'], P: ['P'] };
+  function mccb(cand, marca, polos, amp, opt, perm) {
+    if (!cand || opt.selector === false || !g.Selector || !amp) return cand;
+    const tipo = marca === 'Eaton' && /^PDG\d/.test(cand.fam || '') ? 'pd' : marca === 'Square D' && MARCOS_SQD[cand.fam] ? 'pp' : null;
+    if (!tipo) return cand;
+    let marcos = null;   // el tablero limita las familias de sus interruptores principales
+    if (perm.length) {
+      marcos = tipo === 'pd' ? perm.map(x => (/^PDG(\d)/.exec(x) || [])[1]).filter(Boolean).map(Number) : [].concat(...perm.map(x => MARCOS_SQD[x] || []));
+      if (!marcos.length) marcos = null;
+    }
+    const el = /^(LI|LSI|LSIG)$/.test(opt.unidad || '');
+    const s = g.Selector.pick(tipo, { V: n(opt.V) || 240, I: amp, kA: n(opt.iccKA), polos, disparo: el ? 'EL' : 'TM', marcos });
+    if (!s) return cand;
+    return Object.assign({}, cand, { modelo: s.codigo, ref: s.codigo, amperios: s.amp, polos: s.polosDig && tipo === 'pd' ? Math.min(s.polosDig, 4) : polos, sccr: s.kA, vSccr: s.kAV, marco: s.marcoAmp,
+      unidad: s.fam === 'TM' ? 'STD' : (el ? opt.unidad : (cand.unidad && cand.unidad !== 'STD' ? cand.unidad : 'LSI')), sel: s, sccrBajo: !!(s.sccrBajo || (opt.iccKA && s.kA < n(opt.iccKA))) });
   }
   /** Clasificación en serie (NEC 240.86): combinación listada por el fabricante entre el principal (línea) y el ramal (carga). */
   function serie(bkCarga, bkLinea, ampLinea, V, iccKA) {
@@ -301,6 +318,8 @@
     const nec = J && !c.unidad && !c.breakerId ? necUnidad(c.descripcion, det, O, P, AF || 0, ctx.fases, ctx.V) : null;   // vacío = automático según NEC
     const bk = J ? breaker(ctx.marca, c.breakerId, BE, AF, { V: ctx.V, familias: ctx.famRamales, iccKA: ctx.iccKA, unidad: c.unidad || (nec ? nec.unidad : 'STD') }) : null;
     const err = [];
+    let bornes = null;
+    if (bk && bk.sel && AL) { bornes = g.Selector.bornes(bk.sel, { cal: AL, par: AI, mat, V: ctx.V }); if (bornes && bornes.ok === false) err.push('Bornes ' + (bk.ref || '') + ': ' + bornes.msg); }
     if (J && !det.id) err.push('Sin detalle de carga');
     if (J && !polos.length) err.push('Sin posición');
     if (J && O && O !== ctx.V && O !== Math.round(vLN(ctx.V)) && !(ctx.V === 240 && O === 120)) err.push('El detalle es de ' + O + ' V y el tablero de ' + ctx.V + ' V: elija un detalle de carga de este voltaje');
@@ -313,7 +332,7 @@
     return {
       c, det, O, P, Q, R, S, T, L: det.tipo, J, polos, fase, dem, I, AD, AE, AF, AI, AJ, mat, ais, AL, AN, AP, AR, AS, AT, AU, AV, AW, AX, AY,
       fasesTxt: pre + AL, neutroTxt: (AN === ' ' ? '' : pre2.trim() + AN), tierraTxt: AP ? pre2.trim() + AP : '', tuboTxt: AR ? pre2.trim() + AR : '',
-      descripcion: c.descripcion || det.descripcion || '', breaker: bk, polosBreaker: BE, err, nec,
+      descripcion: c.descripcion || det.descripcion || '', breaker: bk, polosBreaker: BE, err, nec, bornes,
     };
   }
 
@@ -562,6 +581,12 @@
     if (!cat) avisos.push('No hay tablero de catálogo (' + marcaTab + ') para ' + V + ' V, ' + (AF139 || '?') + ' A y ' + espaciosUsados + ' espacios');
     if (bkMain && al.unidad && al.unidad !== 'STD' && bkMain.unidad !== al.unidad) avisos.push('No hay interruptor principal ' + al.unidad + ' para ' + AF139 + ' A en el catálogo de ' + marca + '; se usó ' + (bkMain.unidad || 'STD'));
     if (bkMain && al.rated100 && !/^PDF/.test(bkMain.ref)) avisos.push('Interruptor principal 100 % rated: verifique el modelo con el fabricante (' + (bkMain.ref || bkMain.modelo) + ')');
+    if (bkMain && bkMain.sel && AL139) {
+      const v = g.Selector.bornes(bkMain.sel, { cal: AL139, par: AI139, mat, V });
+      bkMain.bornes = v;
+      if (v && v.ok === false) avisos.push('Bornes del interruptor principal ' + (bkMain.ref || '') + ': ' + v.msg);
+    }
+    rows.forEach(x => { if (x.bornes && x.bornes.ok === false) avisos.push('Circuito [' + x.polos.join(',') + '] ' + (x.descripcion || '') + ' — bornes ' + ((x.breaker && x.breaker.ref) || '') + ': ' + x.bornes.msg); });
     if (bkMain && bkMain.sccrBajo) avisos.push('SCCR del interruptor principal ' + bkMain.sccr + ' kA < Icc ' + r2(iccKA) + ' kA');
     if (gA && gA.sistema && gA.sistema !== tab.sistema) avisos.push('El generador ' + (gA.nombre || '') + ' es de ' + gA.sistema + ' V y el tablero de ' + tab.sistema + ' V');
     if (fGen && fGen.sistema && fGen.sistema !== tab.sistema) avisos.push('El generador ' + (fGen.nombre || '') + ' es de ' + fGen.sistema + ' V y el tablero de ' + tab.sistema + ' V');

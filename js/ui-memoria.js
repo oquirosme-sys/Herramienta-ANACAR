@@ -157,6 +157,8 @@
         fila('Voltaje en bornes L-L / L-N (V)', f2(A.AW139) + ' / ' + f2(A.AW140)),
         fila('Caída acumulada (V / %)', h('b', { class: A.AY139 > Store.project.cvMaxAlim ? 'bad' : '' }, f2(A.AX139) + ' V · ' + f2(A.AY139) + ' %')),
         fila('Interruptor principal', r.bkMain ? h('span', { class: r.bkMain.sccrBajo ? 'bad' : '' }, (r.bkMain.ref || r.bkMain.modelo || '—') + ' · ' + (A.AF139 || '') + ' A · ' + r.bkMain.unidad + ' · ' + r.bkMain.polos + 'P · ' + r.bkMain.sccr + ' kA') : '—'),
+        r.bkMain && r.bkMain.sel ? fila('Interruptor: catálogo', r.bkMain.sel.desc + ' · terminal ' + r.bkMain.sel.terminal) : null,
+        r.bkMain && r.bkMain.bornes ? fila('Bornes vs cableado', r.bkMain.bornes.ok ? '✓ ' + r.bkMain.bornes.actual : r.bkMain.bornes.ok === false ? '⚠ ' + r.bkMain.bornes.msg : r.bkMain.bornes.msg, r.bkMain.bornes.ok === false ? 'bad' : '') : null,
         fila('Cortocircuito en bornes', r.iccKA ? f2(r.iccKA) + ' kA (' + r.iccFuente + ')' : '—'),
       ))), validacion(t, r)));
   }
