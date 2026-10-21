@@ -283,3 +283,12 @@ th.dev, td.dev { background: var(--brand-soft); }
 .u-wrap.mano .unifilar text.u-mov{ cursor: move; }
 .unifilar text.u-mov:hover{ fill: var(--brand); }
 .u-wrap.arrastrando .unifilar text.u-mov{ user-select: none; }
+
+/* Tabla de circuitos: columnas Fijo / Posición congeladas junto al encabezado */
+.tbl.calc tbody td:nth-child(-n+2), .tbl.calc thead tr:not(.grp) th:nth-child(-n+2){ position: sticky; }
+.tbl.calc tbody td:nth-child(1), .tbl.calc thead tr:not(.grp) th:nth-child(1){ left: 0; width: 3.2rem; min-width: 3.2rem; max-width: 3.2rem; text-align: center; }
+.tbl.calc tbody td:nth-child(2), .tbl.calc thead tr:not(.grp) th:nth-child(2){ left: 3.2rem; min-width: 6.4rem; box-shadow: 2px 0 0 var(--line); }
+.tbl.calc tbody td:nth-child(-n+2){ background: var(--surface); z-index: 1; }
+.tbl.calc tr.row-warn td:nth-child(-n+2){ background: var(--warn-bg); }
+.tbl.calc tr.row-link td:nth-child(-n+2){ background: var(--brand-soft); }
+.tbl.calc thead tr:not(.grp) th:nth-child(-n+2){ z-index: 4; }
