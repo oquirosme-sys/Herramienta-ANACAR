@@ -208,6 +208,7 @@
   const ci = c => CALIBRES.indexOf(calStr(c));
   const maxCal = (a, b) => (!a ? a : ci(a) < ci(b) ? b : a);
   let FUENTES = {}, SRC_LOAD = {}, SRC_N = {};   // fuentes del proyecto (transformadores y generadores compartidos), su carga demandada (kVA) y # de tableros que sirven
+  let FEED = {};  // tablero derivado → datos de su alimentador (protección, % de protección, factores, paralelos, aumento) que el circuito del tablero padre toma automáticamente
   let MAN = {};   // circuito que alimenta a un tablero derivado → acometida de ese tablero (para respetar lo fijado a mano)
   /** Temperatura del aislamiento: RHW, THW, TW son de 75 °C; THHN, XHHW-2, RHW-2 y MC de 90 °C. */
   const tempAis = ais => (/^(RHW|THW|TW|USE)$/i.test(String(ais || '').trim()) ? 75 : 90);
@@ -261,7 +262,8 @@
     const nPol = (c.polos || []).map(Number).filter(x => x > 0).length;
     // detalle monofásico a 208/240 V (fase-fase) conectado en 2 polos: la carga se reparte entre los 2 polos (como un detalle de 2 fases)
     const O = n(det.v), P = n(det.fases) === 1 && O >= 208 && O <= 240 && nPol === 2 ? 2 : n(det.fases), Q = n(det.hilos), T = n(det.fp) || 1;
-    const R = tiene(c.fu) ? n(c.fu) : (n(det.fd) || 1), S = fdiv01(tiene(c.fdivC) ? c.fdivC : det.fdiv);   // [R16] factor de uso, [S16] diversidad (0 a 1, multiplica)
+    const fd = c.tableroHijoId ? FEED[c.tableroHijoId] : null;   // tablero derivado: los datos salen de su alimentador
+    const R = tiene(c.fu) ? n(c.fu) : fd ? fd.R : (n(det.fd) || 1), S = fdiv01(tiene(c.fdivC) ? c.fdivC : fd ? fd.S : det.fdiv);   // [R16] factor de uso, [S16] diversidad (0 a 1, multiplica)
     const N = ctx.fases, J = n(c.kva);
     const polos = (c.polos || []).map(Number).filter(x => x > 0);
     // [U16:W16] reparto por fases
@@ -272,12 +274,12 @@
     }
     const dem = fase.map(x => x * R * S);                                      // [X16:Z16]
     const I = fase.map((u, i) => corriente(u, dem[i], O, P));                // [AA16:AC16]
-    const AD = c.mult !== undefined && c.mult !== '' && c.mult !== null ? n(c.mult) : (det.mult || 1.25);
+    const AD = c.mult !== undefined && c.mult !== '' && c.mult !== null ? n(c.mult) : fd ? fd.AD : (det.mult || 1.25);
     const AE = !J ? null : N === 3 ? Math.max(I[0], I[1], I[2]) * AD : (fase[0] > 0 ? I[0] * AD : fase[1] > 0 ? I[1] * AD : fase[2] > 0 ? I[2] * AD : null);
-    const AF = n(c.prot) || (AE !== null ? proteccion(AE) : null);          // protección
+    const AF = n(c.prot) || (fd && fd.AF) || (AE !== null ? proteccion(AE) : null);          // protección
     const mat = c.material || 'CU', ais = c.aislamiento || 'THHN';
-    const AI = n(c.paralelos) || (AE !== null ? paralelosAuto(AE) : 1);
-    const AJ = c.aumento !== undefined && c.aumento !== '' ? n(c.aumento) : 1;
+    const AI = n(c.paralelos) || (fd && fd.AI) || (AE !== null ? paralelosAuto(AE) : 1);
+    const AJ = c.aumento !== undefined && c.aumento !== '' ? n(c.aumento) : fd ? fd.AJ : 1;
     const hijoMan = c.tableroHijoId ? MAN[c.id] : null;        // acometida del tablero derivado, si el ingeniero la fijó a mano
     let AL = AF ? calibre(AF * AJ / AI, mat) : '';
     if (c.tableroHijoId) AL = maxCal(AL, CAL_MIN_FASE);       // alimentador de un tablero derivado: mínimo 8 AWG
@@ -599,7 +601,7 @@
   /* ---------- proyecto completo (cascada) ---------- */
   function proyecto(P, catalog) {
     K = Object.assign({}, catalog, { marcaDefecto: P.marcaDefecto || 'Eaton', ocupacion: P.ocupacion || 'comercial' });
-    FUENTES = {}; SRC_LOAD = {}; SRC_N = {}; (P.fuentes || []).forEach(x => { FUENTES[x.id] = x; });
+    FEED = {}; FUENTES = {}; SRC_LOAD = {}; SRC_N = {}; (P.fuentes || []).forEach(x => { FUENTES[x.id] = x; });
     const tabs = P.tableros || [], byId = {}; tabs.forEach(t => { byId[t.id] = t; });
     const hijos = {}; tabs.forEach(t => { if (t.padreId && byId[t.padreId]) (hijos[t.padreId] = hijos[t.padreId] || []).push(t); });
     // ciclos: un tablero no puede alimentarse de sí mismo ni de sus derivados
@@ -621,6 +623,8 @@
       });
       const rt = tablero(t, P, null);
       total[t.id] = P.cargaDerivados === 'demandada' ? rt.alim.L139 : rt.W130; demanda[t.id] = rt.alim.L139;
+      const dem1 = P.cargaDerivados === 'demandada';   // con kVA demandados la demanda del tablero ya está aplicada
+      FEED[t.id] = { AF: rt.alim.AF139, AD: rt.alim.AD139, AI: rt.alim.AI139, AJ: rt.alim.AJ139, R: dem1 ? 1 : rt.alim.R139, S: dem1 ? 1 : rt.alim.S139 };
       return total[t.id];
     }
     tabs.forEach(cargar);
