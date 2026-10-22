@@ -76,7 +76,7 @@
     const base = nPar + ' × ' + c.cal + ' ' + (Al ? 'Al' : 'Cu') + ' no cabe en los bornes ' + nombres[grupo - 1] + ' de ' + s.marcoTxt + ' ' + s.amp + ' A (' + act + ')';
     if (rec) {
       const letra = (d.terminales[rec - 1] || [])[0];
-      return { ok: false, msg: base + '. Use bornes ' + nombres[rec - 1] + ' (' + rango(rec) + ', terminal ' + letra + ')', sugerido: { grupo: rec, terminal: letra } };
+      return { ok: false, msg: base + '. Use bornes ' + nombres[rec - 1] + ' (' + rango(rec) + ', terminal ' + letra + ')' + (fila[13 + rec] ? ' · Cat. No. ' + fila[13 + rec] : ''), sugerido: { grupo: rec, terminal: letra, kit: fila[13 + rec] || '' } };
     }
     const kc = 7 + vIdx(num(c.V) || 480);
     const alt = minPor(d.alt.filter(a => a[2] === s.polosDig && a[3] === s.amp && a[4] === s.H && a[5] === s.cert && num(a[kc]) >= s.kA && a[10] >= nPar && a[11] <= size && a[12] >= size && (!Al || a[13] === 1)), a => a[1] * 1e5 + a[0]);
