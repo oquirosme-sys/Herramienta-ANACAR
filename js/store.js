@@ -29,6 +29,7 @@
       let c = null;
       try { c = JSON.parse(localStorage.getItem(K_CATALOG)); } catch (e) { /* ignora */ }
       Store.catalog = c && c.detallesCarga && c.breakers ? c : Store.seedCatalog();
+      Store.actualizarCatalogo();
       const lista = Store.proyectos();
       try { // proyecto único de la versión anterior → lista
         const viejo = JSON.parse(localStorage.getItem(K_PROJECT));
@@ -37,6 +38,16 @@
       let actual = null; try { actual = sessionStorage.getItem(K_ACTUAL); } catch (e) { /* ignora */ }
       Store.project = actual && lista[actual] ? lista[actual] : Store.emptyProject();
       Store.migrate();
+    },
+    /** Un catálogo guardado en este navegador recibe, una sola vez por revisión, los tableros nuevos del catálogo base (no se borra ni se cambia nada de lo que el administrador editó). */
+    actualizarCatalogo() {
+      const seed = window.SEED || {}, c = Store.catalog;
+      if (!c || (c.catRev || 1) >= (seed.catRev || 1)) { if (c && !c.catRev) c.catRev = seed.catRev || 1; return; }
+      const llave = x => [x.fabricante, x.modelo, x.barraFase, x.espacios, x.fases].join('|');
+      const hay = new Set((c.tablerosCat || []).map(llave));
+      let id = Math.max(0, ...(c.tablerosCat || []).map(x => Number(x.id) || 0));
+      (seed.tablerosCat || []).forEach(x => { if (!hay.has(llave(x))) c.tablerosCat.push(Object.assign({}, x, { id: ++id })); });
+      c.catRev = seed.catRev; try { localStorage.setItem(K_CATALOG, JSON.stringify(c)); } catch (e) { /* ignora */ }
     },
     proyectos() { try { return JSON.parse(localStorage.getItem(K_PROYECTOS)) || {}; } catch (e) { return {}; } },
     /** Lista para mostrar: los guardados, del más reciente al más antiguo. */

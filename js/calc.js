@@ -214,6 +214,7 @@
     const nec = Math.max(n(tab.espacios), Math.ceil(espaciosUsados * (1 + (n(reservaEsp) / 100))));
     const sub = tab.clase === 'subestacion', princ = tab.principal === 'zapatas' ? 'Zapatas' : 'Interruptor';
     const cand = K.tablerosCat.filter(t => {
+      if (t.auto === false) return false;   // solo para elegir a mano (modelos del catálogo que la selección automática no usa)
       if (t.fabricante !== marca || n(t.barraFase) < n(prot) || n(t.espacios) < nec) return false;
       const f = famTablero(t), clase = (f && f.clase) || 'tablero';
       if (f && n(f.vMax) < V) return false;

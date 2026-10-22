@@ -45,7 +45,7 @@
   function datosTablero(t, r, R) {
     const L = Store.catalog.listas, k = 'd:' + t.id + ':', C = Store.catalog;
     const marcaOpts = UI.opts(Store.catalog.marcas, 'Del proyecto (' + Store.project.marcaDefecto + ')');
-    const catOpts = [{ value: '', label: r.cat ? 'Auto: ' + r.cat.modelo + ' (' + r.cat.fabricante + ')' : 'Automático' }].concat(C.tablerosCat.map(x => ({ value: x.id, label: x.id + ' · ' + x.modelo + ' · ' + x.barraFase + ' A · ' + x.espacios + ' esp.', group: x.fabricante }))).concat([MANUAL]);
+    const catOpts = [{ value: '', label: r.cat ? 'Auto: ' + r.cat.modelo + ' (' + r.cat.fabricante + ')' : 'Automático' }].concat(C.tablerosCat.map(x => ({ value: x.id, label: x.id + ' · ' + x.modelo + ' · ' + x.barraFase + ' A · ' + x.espacios + ' esp.' + (x.auto === false ? ' (solo manual)' : ''), group: x.fabricante }))).concat([MANUAL]);
     const spdOpts = [{ value: '', label: r.spd ? 'Auto: ' + r.spd.modelo : 'Automático' }].concat(C.supresores.filter(x => x.marca === r.marca).map(x => ({ value: x.id, label: x.id + ' · ' + x.modelo + ' · ' + x.voltaje + ' V ' + x.fases + 'F · ' + x.kaLL + ' kA', group: x.montaje })));
     const padres = Store.posiblesPadres(t);
     return UI.card('Datos del tablero', h('div', { class: 'grid4' },
