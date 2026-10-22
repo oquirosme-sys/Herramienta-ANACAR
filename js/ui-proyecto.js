@@ -45,12 +45,15 @@
         h('td', null, gen ? UI.input(fu, 'xd', { type: 'num', fk: k + 'xd', class: 'w-num', label: "X''d %", placeholder: '12' }) : UI.input(fu, 'xr', { type: 'num', fk: k + 'xr', class: 'w-num', label: 'X/R', placeholder: '4' })),
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.input(fu, 'primario', { type: 'num', fk: k + 'pri', class: 'w-num', label: 'Primario (V)' })),
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.bind(fu, 'fases', [{ value: 3, label: '3F' }, { value: 1, label: '1F' }], { num: true, fk: k + 'fas', label: 'Fases' })),
+        h('td', null, gen ? h('span', { class: 'muted' }, '—') : h('div', { class: 'col' },
+          h('label', { class: 'chk', title: 'Interruptor en el primario del transformador' }, h('input', { type: 'checkbox', checked: fu.protPrim !== false, onchange: e => { fu.protPrim = e.target.checked; Store.save(); App.refresh(); } }), ' Primario'),
+          h('label', { class: 'chk', title: 'Interruptor en el secundario del transformador' }, h('input', { type: 'checkbox', checked: fu.protSec === true, onchange: e => { fu.protSec = e.target.checked; Store.save(); App.refresh(); } }), ' Secundario'))),
         h('td', null, lista || h('span', { class: 'muted' }, '—')),
         h('td', null, i.salidas ? h('span', { title: nombres }, i.salidas + ' · ' + f2(i.carga) + ' kVA' + (i.cargaPct !== null ? ' (' + f2(i.cargaPct * 100) + ' %)' : '')) : h('span', { class: 'muted' }, 'Sin tableros')),
         h('td', { class: 'acc' }, UI.iconBtn('🗑', 'Eliminar', async () => { if (await UI.confirm('¿Eliminar ' + (fu.nombre || 'la fuente') + '? Los tableros que cuelgan de ella quedan sin fuente.', 'Eliminar')) { Store.eliminarFuente(fu.id); App.refresh(); } }, 'danger')));
     });
     return UI.card('Fuentes: transformadores y generadores (' + p.fuentes.length + ')',
-      p.fuentes.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Nombre', 'Tipo', 'kVA', 'Secundario (V)', 'Z (%)', "X/R · X''d (%)", 'Primario (V)', 'Fases', 'De la lista del Excel', 'Tableros · carga', ''].map(x => h('th', null, x)))), h('tbody', null, filas)))
+      p.fuentes.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Nombre', 'Tipo', 'kVA', 'Secundario (V)', 'Z (%)', "X/R · X''d (%)", 'Primario (V)', 'Fases', 'Protección', 'De la lista del Excel', 'Tableros · carga', ''].map(x => h('th', null, x)))), h('tbody', null, filas)))
         : h('p', { class: 'muted' }, 'Opcional. Cree aquí el transformador de pedestal o el generador y luego, en "Alimentado desde" de cada tablero (o en la segunda acometida de un ATS), elija esa fuente: varios tableros comparten el mismo equipo y toman su voltaje secundario.'),
       h('div', { class: 'toolbar' }, UI.btn('+ Transformador', () => { Store.nuevaFuente('transformador'); App.refresh(); }, 'small'), UI.btn('+ Generador', () => { Store.nuevaFuente('generador'); App.refresh(); }, 'small')));
   }

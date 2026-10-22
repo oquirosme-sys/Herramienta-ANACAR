@@ -455,7 +455,7 @@
     // --- transformador (opcional) aguas arriba del alimentador: regulación y cortocircuito
     const fte = tab.fuenteId && FUENTES[tab.fuenteId] ? FUENTES[tab.fuenteId] : null;
     const fTr = fte && fte.tipo !== 'generador' ? fte : null, fGen = fte && fte.tipo === 'generador' ? fte : null;
-    const tr = fTr ? (n(fTr.kva) && n(fTr.z) ? { activo: true, kva: fTr.kva, z: fTr.z, xr: fTr.xr, primario: fTr.primario, fases: fTr.fases, nombre: fTr.nombre } : null)
+    const tr = fTr ? (n(fTr.kva) && n(fTr.z) ? { activo: true, kva: fTr.kva, z: fTr.z, xr: fTr.xr, primario: fTr.primario, fases: fTr.fases, nombre: fTr.nombre, protPrim: fTr.protPrim, protSec: fTr.protSec, protPrimA: fTr.protPrimA, protSecA: fTr.protSecA } : null)
       : tab.trafo && tab.trafo.activo && n(tab.trafo.kva) && n(tab.trafo.z) ? tab.trafo : null;
     const Vpadre = ctxIn && ctxIn.Vpadre;
     let vInicio = V, trafo = null;
@@ -464,7 +464,7 @@
       const sin = Math.sqrt(Math.max(0, 1 - T139 * T139)), carga = kva ? (fTr ? (SRC_LOAD[fTr.id] || L139) : L139) / kva : 0;
       const reg = carga * (pR * T139 + pX * sin);                                  // caída de tensión en el transformador (%)
       vInicio = V * (1 - reg / 100);
-      trafo = { kva, z, xr, carga, reg, Vp: n(tr.primario) || Vpadre || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139 };
+      trafo = { kva, z, xr, carga, reg, Vp: n(tr.primario) || Vpadre || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139, protPrim: tr.protPrim !== false, protSec: tr.protSec === true };
     } else if (ctxIn && ctxIn.vInicio && (!Vpadre || Vpadre === V)) vInicio = ctxIn.vInicio;   // cascada [AU139]
     const upsD = tab.ups && tab.ups.activo && n(tab.ups.kva) ? tab.ups : null;
     let ups = null;
@@ -576,6 +576,26 @@
     const polosBk = fases === 3 ? 3 : (V >= 208 && V <= 240 ? 2 : fases);
     const zapatas = tab.principal === 'zapatas';
     const bkMain = AF139 && !zapatas ? breaker(marca, al.breakerId, polosBk, AF139, { V, familias: famT ? famT.principales : '', iccKA, unidad: al.unidad || 'STD', manual: al.breakerManual }) : null;
+    if (trafo) {   // protección del transformador (NEC 450.3(B)): primario y secundario opcionales; el check del transformador decide si se dibujan
+      const k3 = trafo.fases === 3, Vp = trafo.Vp || null, f3 = k3 ? 1.732 : 1;
+      trafo.Isec = trafo.kva * 1000 / (f3 * V); trafo.Iprim = Vp ? trafo.kva * 1000 / (f3 * Vp) : null;
+      const pol = k3 ? 3 : 2;
+      const mk = (I, Vn, icc, man, lim) => {
+        if (!I) return null;
+        const A = n(man) || proteccion(lim ? lim * I : 1.25 * I);
+        if (!A) return null;
+        return { A, auto: !n(man), bk: Vn && Vn <= 600 ? breaker(marca, '', pol, A, { V: Vn, iccKA: icc }) : null };
+      };
+      trafo.avisos = [];
+      trafo.sec = mk(trafo.Isec, V, trafo.iccSec ? trafo.iccSec / 1000 : null, tr.protSecA);
+      trafo.prim = mk(trafo.Iprim, Vp, trafo.iccPrim ? trafo.iccPrim / 1000 : null, tr.protPrimA);
+      // límites de 450.3(B): secundario 125 % de la corriente nominal; primario 125 % (250 % si hay protección en el secundario), con el siguiente tamaño estándar
+      const topeS = proteccion(1.25 * trafo.Isec), topeP = trafo.Iprim ? proteccion((trafo.protSec ? 2.5 : 1.25) * trafo.Iprim) : null;
+      if (trafo.protSec && n(tr.protSecA) && topeS && n(tr.protSecA) > topeS) trafo.avisos.push('Protección del secundario ' + n(tr.protSecA) + ' A mayor que el máximo de 450.3(B): ' + topeS + ' A (125 % de ' + r2(trafo.Isec) + ' A)');
+      if (trafo.protPrim && n(tr.protPrimA) && topeP && n(tr.protPrimA) > topeP) trafo.avisos.push('Protección del primario ' + n(tr.protPrimA) + ' A mayor que el máximo de 450.3(B): ' + topeP + ' A (' + (trafo.protSec ? '250' : '125') + ' % de ' + r2(trafo.Iprim) + ' A)');
+      if (trafo.protSec && trafo.sec && trafo.sec.bk && trafo.sec.bk.sccrBajo) trafo.avisos.push('SCCR de la protección del secundario ' + (trafo.sec.bk.ref || '') + ' ' + trafo.sec.bk.sccr + ' kA < Icc del secundario ' + r2(trafo.iccSec / 1000) + ' kA');
+      if (trafo.protPrim && trafo.prim && trafo.prim.bk && trafo.prim.bk.sccrBajo) trafo.avisos.push('SCCR de la protección del primario ' + (trafo.prim.bk.ref || '') + ' ' + trafo.prim.bk.sccr + ' kA < Icc del primario');
+    }
     if (bkMain && al.rated100) { bkMain.rated100 = true; if (/^PDG/.test(bkMain.ref)) bkMain.ref = bkMain.ref.replace(/^PDG/, 'PDF'); }
     const rows = circs.map(c => {
       const x = circuito(c, tab, { fases, V, vBus: AW139, vBusLN: AW140, marca, cvMaxTotal, iccKA, famRamales: famT ? famT.ramales : '' });
@@ -603,6 +623,7 @@
     rows.filter(x => x.nec && !x.c.unidad).forEach(x => nec.push({ art: x.nec.motivo.split(':')[0], nivel: 'info', txt: (x.descripcion || '') + ' [' + x.polos.join(',') + ']: interruptor ' + x.nec.unidad + ' (' + x.nec.motivo + ').' }));
 
     const avisos = [];
+    if (trafo && trafo.avisos) trafo.avisos.forEach(x => avisos.push(x));
     nec.filter(x => x.nivel === 'error').forEach(x => avisos.push('NEC ' + x.art + ': ' + x.txt));
     if (AY139 > n(P && P.cvMaxAlim || 3)) avisos.push('Caída acumulada en bornes ' + r2(AY139) + ' % (máx. ' + n(P && P.cvMaxAlim || 3) + ' %)');
     if (val && !val.ok) avisos.push('El alimentador no cumple ampacidad corregida: ' + r2(val.cap) + ' A disponibles' + (val.okI ? '' : ' < ' + r2(AE139) + ' A requeridos') + (val.okP ? '' : ', protección ' + AF139 + ' A mayor que la permitida') + (val.ft ? '' : ' (temperatura ambiente fuera del rango del aislamiento)'));
