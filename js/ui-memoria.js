@@ -17,14 +17,35 @@
     const tipos = {}; Store.catalog.tiposCarga.forEach(t => { tipos[t.id] = t.nombre; });
     return Store.catalog.detallesCarga.map(d => ({ value: d.id, label: d.id + ' · ' + d.descripcion + ' (' + d.v + ' V ' + d.fases + 'F)', group: tipos[d.tipo] || 'Tipo ' + d.tipo }));
   };
+  /** Interruptor o tablero que no calza con el catálogo: se escribe a mano (modelo, kA, etc.) con la opción «Otro (manual)». */
+  const MANUAL = { value: 'manual', label: '✎ Otro (escribir a mano)…', group: 'Manual' };
+  function bkManual(obj, fk, unico) {
+    if (String(obj.breakerId) !== 'manual') return null;
+    const m = obj.breakerManual = obj.breakerManual || {};
+    return h('div', { class: 'row', style: { gap: '.4rem', marginTop: '.3rem', flexWrap: 'wrap' } },
+      UI.input(m, 'modelo', { fk: fk + 'bmo', placeholder: 'Modelo / Cat. No.', class: 'w-bk' }),
+      UI.input(m, 'amperios', { type: 'num', fk: fk + 'bam', placeholder: 'A', class: 'w-xs', label: 'Amperios' }),
+      UI.input(m, 'sccr', { type: 'num', fk: fk + 'bkA', placeholder: 'kA', class: 'w-xs', label: 'Capacidad interruptiva (kA)' }),
+      unico ? UI.bind(m, 'unidad', [{ value: '', label: 'STD' }].concat(['GFCI', 'AFCI', 'LI', 'LSI', 'LSIG'].map(u => ({ value: u, label: u }))), { fk: fk + 'bun', class: 'w-xs' }) : null);
+  }
   const bkOpts = (marca, auto) => [{ value: '', label: auto ? 'Auto: ' + auto : 'Automático' }].concat(Store.catalog.breakers.filter(b => b.marca === marca).map(b => ({
     value: b.id, label: b.id + ' · ' + (b.modelo || '—') + ' ' + (b.amperios || '') + ' A ' + (b.unidad || '') + ' ' + (b.polos || '') + 'P ' + (b.sccr || '') + ' kA @' + (b.vSccr || '') + ' V', group: (b.polos || '?') + ' polos',
-  })));
+  }))).concat([MANUAL]);
 
+  function tabManual(t, k) {
+    if (String(t.catalogoId) !== 'manual') return null;
+    const m = t.tableroManual = t.tableroManual || {};
+    return h('div', { class: 'row', style: { gap: '.4rem', marginTop: '.3rem', flexWrap: 'wrap' } },
+      UI.input(m, 'modelo', { fk: k + 'tmo', placeholder: 'Modelo del tablero', class: 'w-bk' }),
+      UI.input(m, 'barraFase', { type: 'num', fk: k + 'tbf', placeholder: 'Barras A', class: 'w-xs', label: 'Barras de fase (A)' }),
+      UI.input(m, 'barraNeutro', { type: 'num', fk: k + 'tbn', placeholder: 'Neutro A', class: 'w-xs', label: 'Barra de neutro (A)' }),
+      UI.input(m, 'barraTierra', { type: 'num', fk: k + 'tbt', placeholder: 'Tierra A', class: 'w-xs', label: 'Barra de tierra (A)' }),
+      UI.input(m, 'espacios', { type: 'num', fk: k + 'tes', placeholder: 'Espacios', class: 'w-xs', label: 'Espacios (polos)' }));
+  }
   function datosTablero(t, r, R) {
     const L = Store.catalog.listas, k = 'd:' + t.id + ':', C = Store.catalog;
     const marcaOpts = UI.opts(Store.catalog.marcas, 'Del proyecto (' + Store.project.marcaDefecto + ')');
-    const catOpts = [{ value: '', label: r.cat ? 'Auto: ' + r.cat.modelo + ' (' + r.cat.fabricante + ')' : 'Automático' }].concat(C.tablerosCat.map(x => ({ value: x.id, label: x.id + ' · ' + x.modelo + ' · ' + x.barraFase + ' A · ' + x.espacios + ' esp.', group: x.fabricante })));
+    const catOpts = [{ value: '', label: r.cat ? 'Auto: ' + r.cat.modelo + ' (' + r.cat.fabricante + ')' : 'Automático' }].concat(C.tablerosCat.map(x => ({ value: x.id, label: x.id + ' · ' + x.modelo + ' · ' + x.barraFase + ' A · ' + x.espacios + ' esp.', group: x.fabricante }))).concat([MANUAL]);
     const spdOpts = [{ value: '', label: r.spd ? 'Auto: ' + r.spd.modelo : 'Automático' }].concat(C.supresores.filter(x => x.marca === r.marca).map(x => ({ value: x.id, label: x.id + ' · ' + x.modelo + ' · ' + x.voltaje + ' V ' + x.fases + 'F · ' + x.kaLL + ' kA', group: x.montaje })));
     const padres = Store.posiblesPadres(t);
     return UI.card('Datos del tablero', h('div', { class: 'grid4' },
@@ -44,7 +65,7 @@
       UI.field('Principal', UI.bind(t, 'principal', [{ value: 'interruptor', label: 'Interruptor principal' }, { value: 'zapatas', label: 'Zapatas (main lugs)' }], { fk: k + 'pri' }), t.principal === 'zapatas' ? 'Protegido por el interruptor del tablero que lo alimenta' : null),
       UI.field('Espacios (polos)', UI.bind(t, 'espacios', [{ value: '', label: 'Auto (' + r.espaciosUsados + ' usados + ' + (Store.project.reservaEspacios || 0) + ' %)' }].concat(Array.from(new Set(C.tablerosCat.filter(x => x.fabricante === r.marca && n(x.espacios) < 999).map(x => n(x.espacios)))).sort((a, b) => a - b).map(v => ({ value: v, label: v + ' espacios' }))), { num: true, fk: k + 'esp' })),
       UI.field('Marca', UI.bind(t, 'marca', marcaOpts, { fk: k + 'mar' })),
-      UI.field('Tablero (catálogo)', UI.bind(t, 'catalogoId', catOpts, { fk: k + 'cat' }), r.cat ? (r.famT ? 'Familia ' + r.famT.familia + ' · ' : '') + 'Barras ' + r.cat.barraFase + '/' + r.cat.barraNeutro + '/' + r.cat.barraTierra + ' A · ' + r.cat.espacios + ' espacios (usa ' + r.espaciosUsados + ', reserva ' + (Store.project.reservaEspacios || 0) + ' %)' : null, 'span2'),
+      UI.field('Tablero (catálogo)', h('div', null, UI.bind(t, 'catalogoId', catOpts, { fk: k + 'cat' }), tabManual(t, k)), r.cat ? (r.famT ? 'Familia ' + r.famT.familia + ' · ' : '') + 'Barras ' + r.cat.barraFase + '/' + r.cat.barraNeutro + '/' + r.cat.barraTierra + ' A · ' + r.cat.espacios + ' espacios (usa ' + r.espaciosUsados + ', reserva ' + (Store.project.reservaEspacios || 0) + ' %)' : null, 'span2'),
       UI.field('Montaje', UI.bind(t, 'montaje', L.montajes, { fk: k + 'mon' })),
       UI.field('Supresor (SPD)', UI.bind(t, 'supresorId', spdOpts, { fk: k + 'spd' }), r.spd ? r.spd.montaje + ' · ' + r.spd.kaLL + '/' + r.spd.kaLN + ' kA' : null),
     ));
@@ -135,7 +156,7 @@
         UI.field('Protección (A)', UI.input(a, 'prot', { type: 'num', fk: k + 'pro', placeholder: 'Auto ' + (A.AF139 || '') })),
         t.principal === 'zapatas' ? null : UI.field('Unidad de disparo', UI.bind(a, 'unidad', [{ value: '', label: 'Termomagnético (TM)' }, { value: 'LI', label: 'Electrónico LI' }, { value: 'LSI', label: 'Electrónico LSI' }, { value: 'LSIG', label: 'Electrónico LSIG' }], { fk: k + 'uni' })),
         t.principal === 'zapatas' ? null : UI.field('Capacidad', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!a.rated100, onchange: e => { a.rated100 = e.target.checked; Store.save(); App.refresh(); } }), ' 100 % rated'), 'Lleva el 100 % de la carga continua (215.3 / 230.42 exc.)'),
-        t.principal === 'zapatas' ? UI.field('Interruptor principal', h('div', { class: 'ro' }, 'Zapatas (sin interruptor principal)'), null, 'span3') : UI.field('Interruptor principal', UI.bind(a, 'breakerId', bkOpts(r.marca, r.bkMain && !a.breakerId ? (r.bkMain.ref || r.bkMain.modelo) + ' · ' + r.bkMain.sccr + ' kA' : ''), { fk: k + 'bk' }), r.famT ? 'Familias permitidas en ' + r.famT.familia + ': ' + r.famT.principales : null, 'span3'),
+        t.principal === 'zapatas' ? UI.field('Interruptor principal', h('div', { class: 'ro' }, 'Zapatas (sin interruptor principal)'), null, 'span3') : UI.field('Interruptor principal', h('div', null, UI.bind(a, 'breakerId', bkOpts(r.marca, r.bkMain && !a.breakerId ? (r.bkMain.ref || r.bkMain.modelo) + ' · ' + r.bkMain.sccr + ' kA' : ''), { fk: k + 'bk' }), bkManual(a, k + 'a', true)), r.famT ? 'Familias permitidas en ' + r.famT.familia + ': ' + r.famT.principales : null, 'span3'),
         UI.field('Temp. ambiente (°C)', UI.bind(a, 'tempAmb', L.temperaturas, { fk: k + 'ta' })),
         UI.field('Temp. bornes (°C)', UI.bind(a, 'tempBorne', [60, 75, 90], { num: true, fk: k + 'tb' }), 'Columna 310.16 que limita'),
         UI.field('Cond. portadores (agrup.)', UI.bind(a, 'agrupamiento', [{ value: '', label: 'Auto (' + A.agrup + ')' }].concat(L.agrupamientos.map(x => ({ value: x, label: x }))), { fk: k + 'ag' })),
@@ -232,7 +253,7 @@
         h('td', { class: 'r' }, x.tuboTxt), h('td', { class: 'r' }, x.AU ? f1(x.AU) : ''), h('td', { class: 'r' }, x.AV !== null ? f2(x.AV) : ''),
         h('td', { class: 'r ' + (x.AY > Store.project.cvMaxTotal ? 'bad' : '') }, x.AY !== null ? f2(x.AY) : ''),
         h('td', { title: x.nec ? 'NEC ' + x.nec.motivo : null }, UI.bind(c, 'unidad', [{ value: '', label: x.nec ? 'Auto: ' + x.nec.unidad : 'Auto (STD)' }, { value: 'STD', label: 'STD' }].concat(['GFCI', 'AFCI', 'AFCI/GFCI', 'HACR', 'SHT'].map(u => ({ value: u, label: u }))), { fk: kk + 'uni', class: 'w-xs' })),
-        h('td', null, UI.bind(c, 'breakerId', bkOpts(r.marca, x.breaker && !c.breakerId ? (x.breaker.fam || x.breaker.modelo || x.breaker.unidad) : ''), { fk: kk + 'bk', class: 'w-bk' })),
+        h('td', null, UI.bind(c, 'breakerId', bkOpts(r.marca, x.breaker && !c.breakerId ? (x.breaker.fam || x.breaker.modelo || x.breaker.unidad) : ''), { fk: kk + 'bk', class: 'w-bk' }), bkManual(c, kk, false)),
         h('td', { class: x.breaker && x.breaker.sccrBajo ? 'bad' : '' }, x.breaker ? (x.breaker.ref || x.breaker.modelo || '—') + (x.breaker.unidad && x.breaker.unidad !== 'STD' ? ' ' + x.breaker.unidad : '') : ''), h('td', { class: 'r' }, x.J ? x.polosBreaker : ''), h('td', { class: 'r' }, x.breaker ? x.breaker.sccr : ''),
         h('td', { class: 'acc' },
           UI.iconBtn('⧉', 'Duplicar circuito', () => { const n = U.clone(c); n.id = U.uid(); n.tableroHijoId = ''; n.auto = false; n.polos = Store.posicionLibre(t, Math.max(1, c.polos.length)); t.circuitos.push(n); Store.save(); App.refresh(); }),

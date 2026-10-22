@@ -131,9 +131,14 @@
     return f.plantilla.replace('{p}', polos).replace('{a3}', String(amp).padStart(3, '0')).replace('{a}', amp).replace('{m3}', String(b.modelo || '').slice(0, 3)).replace('{u}', b.unidad || '');
   }
   /** Elige el breaker: familias permitidas por el tablero, voltaje, polos, rango de amperios, tipo de unidad y SCCR ≥ Icc (el menor que cumpla). */
+  const V0 = o => (n(o.V) <= 240 ? 240 : 480);
   function breaker(marca, id, polos, amp, opt) {
     opt = opt || {};
     const todos = K.breakers.filter(b => b.marca === marca);
+    if (String(id) === 'manual' && opt.manual && opt.manual.modelo) {   // interruptor escrito a mano: no calza con el catálogo
+      const m = opt.manual, sccr = n(m.sccr);
+      return { id: 'manual', manual: true, marca, modelo: m.modelo, ref: m.modelo, fam: 'Manual', amperios: n(m.amperios) || amp, polos: n(m.polos) || polos, unidad: m.unidad || 'STD', sccr, vSccr: n(m.vSccr) || V0(opt), sccrBajo: !!(opt.iccKA && sccr && sccr < opt.iccKA) };
+    }
     const res = b => (b ? Object.assign({}, b, { fam: (famBreaker(b) || {}).familia || '', ref: modeloRef(b, polos, amp), sccrBajo: !!(opt.iccKA && n(b.sccr) && n(b.sccr) < opt.iccKA) }) : null);
     if (id) return res(todos.find(b => String(b.id) === String(id)));
     const V = n(opt.V) || 240, perm = lista(opt.familias), unidad = opt.unidad || 'STD';
@@ -200,6 +205,10 @@
   /** Tablero de catálogo: familias del fabricante válidas para el voltaje y el tipo (1F/3F), barras ≥ protección principal,
       espacios ≥ espacios usados + reserva; la familia más sencilla primero (orden), luego barras y espacios. */
   function tableroCat(tab, prot, espaciosUsados, V, reservaEsp) {
+    if (String(tab.catalogoId) === 'manual' && tab.tableroManual && tab.tableroManual.modelo) {   // tablero escrito a mano: no calza con el catálogo
+      const m = tab.tableroManual;
+      return { id: 'manual', manual: true, modelo: m.modelo, fabricante: tab.marca || K.marcaDefecto || 'Eaton', barraFase: n(m.barraFase), barraNeutro: n(m.barraNeutro) || n(m.barraFase), barraTierra: n(m.barraTierra) || n(m.barraFase), espacios: n(m.espacios) || 999, nota: m.nota || null, fases: m.fases || (Number(tab.fases) === 3 ? '3F' : '1F'), principal: 'Ambos' };
+    }
     if (tab.catalogoId) return K.tablerosCat.find(t => String(t.id) === String(tab.catalogoId)) || null;
     const marca = tab.marca || K.marcaDefecto || 'Eaton', tipo = tab.tipo || (Number(tab.fases) === 3 ? '3F' : '1F');
     const nec = Math.max(n(tab.espacios), Math.ceil(espaciosUsados * (1 + (n(reservaEsp) / 100))));
@@ -316,7 +325,7 @@
     const AW = AV !== null ? AU - AV : null, AX = AW !== null ? O - AW : null, AY = AX !== null && O ? AX * 100 / O : null;
     const BE = P === 3 ? 3 : (O >= 208 && O <= 240 ? 2 : P || 1);
     const nec = J && !c.unidad && !c.breakerId ? necUnidad(c.descripcion, det, O, P, AF || 0, ctx.fases, ctx.V) : null;   // vacío = automático según NEC
-    const bk = J ? breaker(ctx.marca, c.breakerId, BE, AF, { V: ctx.V, familias: ctx.famRamales, iccKA: ctx.iccKA, unidad: c.unidad || (nec ? nec.unidad : 'STD') }) : null;
+    const bk = J ? breaker(ctx.marca, c.breakerId, BE, AF, { V: ctx.V, familias: ctx.famRamales, iccKA: ctx.iccKA, unidad: c.unidad || (nec ? nec.unidad : 'STD'), manual: c.breakerManual }) : null;
     const err = [];
     let bornes = null;
     if (bk && bk.sel && AL) { bornes = g.Selector.bornes(bk.sel, { cal: AL, par: AI, mat, V: ctx.V }); if (bornes && bornes.ok === false) err.push('Bornes ' + (bk.ref || '') + ': ' + bornes.msg); }
@@ -340,7 +349,7 @@
   /** Calcula un tablero. ctx: { vInicio, iccInicioA } que vienen del tablero que lo alimenta (cascada). */
   function tablero(tab, P, ctxIn, altOrigen) {
     const fases = n(tab.fases) || 3, V = n(tab.voltaje) || 208, al = tab.alim || {};
-    const marcaTab = tab.catalogoId ? ((K.tablerosCat.find(t => String(t.id) === String(tab.catalogoId)) || {}).fabricante) : (tab.marca || K.marcaDefecto || 'Eaton');
+    const marcaTab = tab.catalogoId && String(tab.catalogoId) !== 'manual' ? ((K.tablerosCat.find(t => String(t.id) === String(tab.catalogoId)) || {}).fabricante) : (tab.marca || K.marcaDefecto || 'Eaton');
 
     // --- 1) cargas y fases, sin voltaje (para conocer el alimentador primero)
     // orden físico del tablero: primero el lado impar (1, 3, 5…) y luego el par (2, 4, 6…)
@@ -538,7 +547,7 @@
     const cvMaxTotal = n(P && P.cvMaxTotal) || 5;
     const polosBk = fases === 3 ? 3 : (V >= 208 && V <= 240 ? 2 : fases);
     const zapatas = tab.principal === 'zapatas';
-    const bkMain = AF139 && !zapatas ? breaker(marca, al.breakerId, polosBk, AF139, { V, familias: famT ? famT.principales : '', iccKA, unidad: al.unidad || 'STD' }) : null;
+    const bkMain = AF139 && !zapatas ? breaker(marca, al.breakerId, polosBk, AF139, { V, familias: famT ? famT.principales : '', iccKA, unidad: al.unidad || 'STD', manual: al.breakerManual }) : null;
     if (bkMain && al.rated100) { bkMain.rated100 = true; if (/^PDG/.test(bkMain.ref)) bkMain.ref = bkMain.ref.replace(/^PDG/, 'PDF'); }
     const rows = circs.map(c => {
       const x = circuito(c, tab, { fases, V, vBus: AW139, vBusLN: AW140, marca, cvMaxTotal, iccKA, famRamales: famT ? famT.ramales : '' });
