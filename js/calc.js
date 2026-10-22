@@ -171,6 +171,33 @@
     return Object.assign({}, cand, { modelo: s.codigo, ref: s.codigo, amperios: s.amp, polos: s.polosDig && tipo === 'pd' ? Math.min(s.polosDig, 4) : polos, sccr: s.kA, vSccr: s.kAV, marco: s.marcoAmp,
       unidad: s.fam === 'TM' ? 'STD' : (el ? opt.unidad : (cand.unidad && cand.unidad !== 'STD' ? cand.unidad : 'LSI')), sel: s, sccrBajo: !!(s.sccrBajo || (opt.iccKA && s.kA < n(opt.iccKA))) });
   }
+  /** Tableros Eaton Pow-R-Line (tablas del catálogo DG014001EN en data/prl.js): caja y principales disponibles; solo informa y avisa, no cambia la selección. */
+  function prlInfo(cat, tab, V, iccKA, bkMain, necEsp, zapatas, prot) {
+    const D = g.PRL, m = cat && cat.fabricante === 'Eaton' ? /^PRL([1-4])x$/i.exec(String(cat.modelo || '')) : null;
+    if (!D || !m) return null;
+    const x = Number(m[1]), kc = V <= 240 ? 3 : V <= 480 ? 4 : 5;
+    const nombre = 'PRL' + x + 'X', bus = n(cat.barraFase), avisos = [];
+    if (x === 4) {
+      const amp = Math.min(...D.p4x.map(r => r[0]).filter(a => a >= (n(prot) || 0)).concat([bus]));   // el principal PRL4X se elige por su amperaje, no por la barra
+      const mains = D.p4x.filter(r => r[0] === amp).map(r => ({ tipo: r[1], kA: r[kc - 1], nota: r[7] }));
+      const mx = Math.max(0, ...mains.map(r => n(r.kA)));
+      if (iccKA && mains.length && mx && iccKA > mx) avisos.push(nombre + ' ' + amp + ' A: la Icc ' + r2(iccKA) + ' kA supera la capacidad del mayor interruptor principal del catálogo (' + mx + ' kA a ' + V + ' V)');
+      return { familia: nombre, bus: amp, mains, caja: null, avisos };
+    }
+    const fam = x + 'X';
+    if (x === 1 && V > 240) avisos.push('PRL1X es de 240 V como máximo; con ' + V + ' V use PRL2X');
+    const mains = D.main.filter(r => r[0] === fam && r[1] === bus).map(r => ({ tipo: r[2], kA: V <= 240 ? r[3] : r[4], nota: r[5] })).filter(r => r.kA);
+    const mx = Math.max(0, ...mains.map(r => n(r.kA)));
+    if (!zapatas && iccKA && mains.length && mx && iccKA > mx) avisos.push(nombre + ' ' + bus + ' A: la Icc ' + r2(iccKA) + ' kA supera la del mayor interruptor principal del catálogo (' + mx + ' kA a ' + V + ' V)');
+    if (!zapatas && bkMain && bkMain.ref && !bkMain.manual && mains.length) {
+      const pref = String(bkMain.ref).replace(/^PDF/, 'PDG');
+      if (!mains.some(r => new RegExp('^' + r.tipo.replace(/x/g, '[0-9]'), 'i').test(pref))) avisos.push('El interruptor principal ' + bkMain.ref + ' no está entre los del catálogo Eaton para ' + nombre + ' ' + bus + ' A (' + mains.map(r => r.tipo).join(', ') + ')');
+    }
+    const cfg = zapatas ? 'ML' : 'MB', cajas = D.box.filter(r => r[0] === fam && r[1] === bus && r[2] === cfg && r[3] === 'none').sort((a, b) => a[4] - b[4]);
+    const fila = cajas.find(r => r[4] >= necEsp) || null;
+    if (!fila && cajas.length) avisos.push(nombre + ' ' + bus + ' A: ' + necEsp + ' polos superan los de las cajas del catálogo (máx. ' + cajas[cajas.length - 1][4] + ')');
+    return { familia: nombre, bus, mains, caja: fila ? { codigo: fila[8], alto: fila[5], ancho: fila[6], fondo: fila[7], polos: fila[4] } : null, avisos };
+  }
   /** Clasificación en serie (NEC 240.86): combinación listada por el fabricante entre el principal (línea) y el ramal (carga). */
   function serie(bkCarga, bkLinea, ampLinea, V, iccKA) {
     if (!bkCarga || !bkLinea || !iccKA) return null;
@@ -597,6 +624,8 @@
       if (v && v.ok === false) avisos.push('Bornes del interruptor principal ' + (bkMain.ref || '') + ': ' + v.msg);
     }
     rows.forEach(x => { if (x.bornes && x.bornes.ok === false) avisos.push('Circuito [' + x.polos.join(',') + '] ' + (x.descripcion || '') + ' — bornes ' + ((x.breaker && x.breaker.ref) || '') + ': ' + x.bornes.msg); });
+    const prl = prlInfo(cat, tab, V, iccKA, bkMain, Math.max(n(tab.espacios), Math.ceil(espaciosUsados * (1 + n(P && P.reservaEspacios) / 100))), zapatas, AF139);
+    if (prl) prl.avisos.forEach(a => avisos.push(a));
     if (bkMain && bkMain.sccrBajo) avisos.push('SCCR del interruptor principal ' + bkMain.sccr + ' kA < Icc ' + r2(iccKA) + ' kA');
     if (gA && gA.sistema && gA.sistema !== tab.sistema) avisos.push('El generador ' + (gA.nombre || '') + ' es de ' + gA.sistema + ' V y el tablero de ' + tab.sistema + ' V');
     if (fGen && fGen.sistema && fGen.sistema !== tab.sistema) avisos.push('El generador ' + (fGen.nombre || '') + ' es de ' + fGen.sistema + ' V y el tablero de ' + tab.sistema + ' V');
@@ -627,7 +656,7 @@
       alim: { auto: { fases: calAuto, neutro: AN139a, tierra: tierraAuto }, manual: { fases: manF, neutro: manN, tierra: manT }, reqTierra, R139, S139, L139, T139, X139, AA139, AD139, AE139, AF139, mat, ais, AI139, AJ139, AL139, AN139, AP139, AP140, AR139, tuberia, AS139, AT139,
         M139, vInicio, AV139, AW139, AX139, AY139, AU140, AV140, AW140, tempF, agrF, ampReq, ampCond, agrup, val, ajustado, calBase, parBase,
         fasesTxt: pre139 + AL139, neutroTxt: AN139 ? preN + AN139 : '', tierraTxt: AP139 ? preN + AP139 : '', tuboTxt: AR139 ? preN + AR139 : '', preN, preF: pre139.trim() },
-      iccA, iccKA, iccFuente, trafo, ups, alterna, upsMts, zapatas, enSerie, nec, servicio, kaSpdMin, cat, famT, marca, bkMain, spd, espaciosUsados, avisos,
+      iccA, iccKA, iccFuente, trafo, ups, alterna, upsMts, zapatas, enSerie, nec, servicio, kaSpdMin, cat, famT, marca, bkMain, spd, prl, espaciosUsados, avisos,
     };
   }
 
