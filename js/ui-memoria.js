@@ -22,6 +22,11 @@
   function bkManual(obj, fk, unico) {
     if (String(obj.breakerId) !== 'manual') return null;
     const m = obj.breakerManual = obj.breakerManual || {};
+    if (!unico) {   // en la tabla de circuitos: una sola línea compacta para no agrandar la fila
+      const mod = UI.input(m, 'modelo', { fk: fk + 'bmo', placeholder: 'Modelo', class: 'w-xs' }), ka = UI.input(m, 'sccr', { type: 'num', fk: fk + 'bkA', placeholder: 'kA', class: 'w-xxs', label: 'Capacidad interruptiva (kA)' });
+      mod.style.width = '6.5rem'; mod.title = 'Modelo / Cat. No. del interruptor'; ka.style.width = '3rem';
+      return h('div', { style: { display: 'flex', gap: '.2rem', flexWrap: 'nowrap' } }, mod, ka);
+    }
     return h('div', { class: 'row', style: { gap: '.4rem', marginTop: '.3rem', flexWrap: 'wrap' } },
       UI.input(m, 'modelo', { fk: fk + 'bmo', placeholder: 'Modelo / Cat. No.', class: 'w-bk' }),
       UI.input(m, 'amperios', { type: 'num', fk: fk + 'bam', placeholder: 'A', class: 'w-xs', label: 'Amperios' }),
@@ -259,7 +264,7 @@
         h('td', { class: 'r' }, x.tuboTxt), h('td', { class: 'r' }, x.AU ? f1(x.AU) : ''), h('td', { class: 'r' }, x.AV !== null ? f2(x.AV) : ''),
         h('td', { class: 'r ' + (x.AY > Store.project.cvMaxTotal ? 'bad' : '') }, x.AY !== null ? f2(x.AY) : ''),
         h('td', { title: x.nec ? 'NEC ' + x.nec.motivo : null }, UI.bind(c, 'unidad', [{ value: '', label: x.nec ? 'Auto: ' + x.nec.unidad : 'Auto (STD)' }, { value: 'STD', label: 'STD' }].concat(['GFCI', 'AFCI', 'AFCI/GFCI', 'HACR', 'SHT'].map(u => ({ value: u, label: u }))), { fk: kk + 'uni', class: 'w-xs' })),
-        h('td', null, UI.bind(c, 'breakerId', bkOpts(r.marca, x.breaker && !c.breakerId ? (x.breaker.fam || x.breaker.modelo || x.breaker.unidad) : ''), { fk: kk + 'bk', class: 'w-bk' }), bkManual(c, kk, false)),
+        h('td', null, h('div', { style: { display: 'flex', gap: '.2rem', alignItems: 'center', flexWrap: 'nowrap' } }, UI.bind(c, 'breakerId', bkOpts(r.marca, x.breaker && !c.breakerId ? (x.breaker.fam || x.breaker.modelo || x.breaker.unidad) : ''), { fk: kk + 'bk', class: 'w-bk' }), bkManual(c, kk, false))),
         h('td', { class: x.breaker && x.breaker.sccrBajo ? 'bad' : '' }, x.breaker ? (x.breaker.ref || x.breaker.modelo || '—') + (x.breaker.unidad && x.breaker.unidad !== 'STD' ? ' ' + x.breaker.unidad : '') : ''), h('td', { class: 'r' }, x.J ? x.polosBreaker : ''), h('td', { class: 'r' }, x.breaker ? x.breaker.sccr : ''),
         h('td', { class: 'acc' },
           UI.iconBtn('⧉', 'Duplicar circuito', () => { const n = U.clone(c); n.id = U.uid(); n.tableroHijoId = ''; n.auto = false; n.polos = Store.posicionLibre(t, Math.max(1, c.polos.length)); t.circuitos.push(n); Store.save(); App.refresh(); }),
