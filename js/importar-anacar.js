@@ -27,7 +27,7 @@
           v: (rel, c) => fila(rel)[ci(c)],
           f: (rel, c) => !!(hoja.formulas[rel + off - 1] || [])[ci(c)],
         };
-        b.nombre = txt(b.v(10, 'I')); b.prefijo = txt(b.v(10, 'B'));
+        b.nombre = txt(b.v(10, 'I')).split(' ').filter(Boolean).join(' '); b.prefijo = txt(b.v(10, 'B'));
         out.push(b);
       }
     }
@@ -46,20 +46,35 @@
     const todos = bloques(hoja).filter(b => b.nombre && !/^machote$/i.test(b.nombre));
     if (!todos.length) throw new Error('No se encontraron tableros en la hoja ANACAR.');
     const esTab = b => /^TABLERO$/i.test(b.prefijo);
-    const porNombre = {}; todos.forEach(b => { porNombre[b.nombre.toUpperCase()] = b; });
-    // número de circuitos de un bloque (fila con detalle de carga y posición)
-    const nC = b => { let n = 0; for (let rel = 16; rel <= 115; rel++) if (num(b.v(rel, 'K')) > 0 && ['D', 'F', 'H'].some(c => num(b.v(rel, c)) > 0)) n++; return n; };
-    // transferencia con generador: GENERADOR → ATS/MTS ← IP(s) ← fuente; son bloques de paso (sin circuitos propios o con uno solo hacia el siguiente)
+    const cl = x => String(x || '').toUpperCase().split(' ').filter(Boolean).join(' ');   // nombre sin diferencias de mayúsculas ni espacios
+    const porNombre = {}; todos.forEach(b => { porNombre[cl(b.nombre)] = b; });
+    // circuitos de un bloque (fila con detalle de carga y posición) y a qué bloque alimenta cada uno (descripción «TABLERO <nombre>»)
+    const filas = b => { const out = []; for (let rel = 16; rel <= 115; rel++) if (num(b.v(rel, 'K')) > 0 && ['D', 'F', 'H'].some(c => num(b.v(rel, c)) > 0)) out.push(rel); return out; };
+    const nC = b => filas(b).length;
+    const hijosDe = b => filas(b).map(rel => { const d = cl(b.v(rel, 'I')); const h = d.indexOf('TABLERO ') === 0 ? porNombre[d.slice(8)] : null; return h && h !== b ? h : null; }).filter(Boolean);
+    const padresDe = {}; todos.forEach(b => hijosDe(b).forEach(h => { const k = cl(h.nombre); (padresDe[k] = padresDe[k] || []); if (!padresDe[k].includes(b)) padresDe[k].push(b); }));
+    // transferencia con generador: GENERADOR → ATS/MTS; el ATS y los IP que lo preceden son bloques de paso (con un circuito o ninguno)
+    const gens = todos.filter(g => /^GEN/i.test(g.nombre) && nC(g) <= 3);
     const cadenas = [], equipoSet = new Set();
-    todos.filter(g => /^GEN/i.test(g.nombre) && nC(g) <= 1).forEach(g => {
-      const a = porNombre[txt(g.v(10, 'P')).toUpperCase()];
-      if (!a || !/^(ATS|MTS)/i.test(a.nombre) || nC(a) > 1) return;
-      const ips = []; let e = porNombre[txt(a.v(10, 'P')).toUpperCase()];
-      while (e && /^IP/i.test(e.nombre) && nC(e) <= 1 && ips.length < 4) { ips.push(e); e = porNombre[txt(e.v(10, 'P')).toUpperCase()]; }
-      cadenas.push({ g, a, ips, arriba: e && !equipoSet.has(e) ? e : null, arribaTxt: txt((ips.length ? ips[ips.length - 1] : a).v(10, 'P')) });
-      [g, a].concat(ips).forEach(x => equipoSet.add(x));
+    todos.filter(a => /^(ATS|MTS)/i.test(a.nombre) && nC(a) <= 1).forEach(a => {
+      const G = gens.filter(g => cl(txt(g.v(10, 'P'))) === cl(a.nombre) || (padresDe[cl(a.nombre)] || []).includes(g));
+      if (!G.length) return;
+      const ips = []; let U = null;
+      const normal = (padresDe[cl(a.nombre)] || []).filter(p => !gens.includes(p));
+      if (normal.length) {   // por circuitos: quién tiene un circuito hacia este ATS
+        let P = normal[0];
+        while (P && /^IP/i.test(P.nombre) && nC(P) <= 1 && ips.length < 4) { ips.push(P); P = (padresDe[cl(P.nombre)] || []).filter(p => !gens.includes(p))[0] || null; }
+        U = P;
+      } else {   // bloques de paso sin circuitos: se sigue «Conectado a»
+        let e = porNombre[cl(txt(a.v(10, 'P')))];
+        while (e && /^IP/i.test(e.nombre) && nC(e) <= 1 && ips.length < 4) { ips.push(e); e = porNombre[cl(txt(e.v(10, 'P')))]; }
+        U = e;
+      }
+      cadenas.push({ g: G[0], a, ips, arriba: U && !equipoSet.has(U) ? U : null, arribaTxt: txt((ips.length ? ips[ips.length - 1] : a).v(10, 'P')) });
+      [a].concat(ips, G).forEach(x => equipoSet.add(x));
     });
-    const equipos = todos.filter(b => equipoSet.has(b) || !esTab(b));
+    const vacio = b => nC(b) === 0 && !(padresDe[cl(b.nombre)] || []).length && !equipoSet.has(b);   // bloque sin circuitos al que nadie alimenta (p. ej. un bloque en blanco)
+    const equipos = todos.filter(b => equipoSet.has(b) || !esTab(b) || vacio(b));
     const tabs = todos.filter(b => !equipos.includes(b));
     const aviso = [];
     const mapa = {};   // nombre del bloque → tablero de la herramienta
@@ -96,6 +111,7 @@
         c._descExcel = desc;
         if (!b.f(rel, 'I')) c.descripcion = desc;
         c.kva = num(b.v(rel, 'J')); c._kvaF = b.f(rel, 'J');
+        c._jConst = !b.f(rel, 'J'); c._jVal = num(b.v(rel, 'J'));
         if (!b.f(rel, 'AF') && num(b.v(rel, 'AF'))) c.prot = num(b.v(rel, 'AF'));
         if (!b.f(rel, 'AI') && num(b.v(rel, 'AI')) > 0) c.paralelos = num(b.v(rel, 'AI'));
         if (!b.f(rel, 'R') && txt(b.v(rel, 'R')) !== '') c.fu = num(b.v(rel, 'R'));
@@ -114,41 +130,62 @@
           else aviso.push('«' + nombreTab(t) + '»: factor de diversidad ' + num(b.v(132, col)) + ' en ' + tp.nombre + '. En el Excel divide la demanda (la aumenta ' + Math.round((1 / num(b.v(132, col)) - 1) * 100) + ' %); la herramienta solo admite diversidad de 0 a 1 que la reduce, así que se dejó en 1 y la demanda de ese tipo saldrá menor que en el Excel.');
         }
       });
-      mapa[b.nombre.toUpperCase()] = t;
+      mapa[cl(b.nombre)] = t;
     });
 
-    // jerarquía: un circuito cuya descripción es «TABLERO <nombre>» alimenta a ese tablero; si no, vale «Conectado a»
-    tabs.forEach(b => {
-      const t = mapa[b.nombre.toUpperCase()];
-      t.circuitos.forEach(c => {
-        const m = /^TABLERO\s+(.+)$/i.exec(c._descExcel), hijo = m && mapa[m[1].trim().toUpperCase()];
-        if (hijo && hijo !== t) { c.tableroHijoId = hijo.id; c.descripcion = ''; c.kva = 0; hijo.padreId = t.id; }
-      });
-    });
-    tabs.forEach(b => {
-      const t = mapa[b.nombre.toUpperCase()];
-      const p = mapa[t.conectadoA.toUpperCase()];
-      if (p && p !== t && !t.padreId) { t.padreId = p.id; aviso.push('«' + nombreTab(t) + '» cuelga de «' + nombreTab(p) + '» por «Conectado a», pero ese tablero no tiene un circuito para él: la herramienta le crea uno.'); }
-    });
-
+    // --- jerarquía ---
+    // el circuito que alimenta a otro tablero tiene por descripción «TABLERO <nombre>». Un circuito no asignado conserva su carga como carga común.
+    const sueltos = (c, t) => { c.tableroHijoId = ''; c.descripcion = c._descExcel || c.descripcion; };
+    const circHacia = (p, hijoNombre) => p.circuitos.filter(c => cl(c._descExcel) === 'TABLERO ' + cl(hijoNombre));
+    const enlazar = (p, t, via) => {
+      const cs = circHacia(p, via || t.nombre); if (!cs.length) return false;
+      // kVA escritos a mano en el circuito que alimenta al tablero (distintos de los del tablero de abajo): se conservan
+      if (cs[0]._jConst && !via && Math.abs(cs[0]._jVal - num(t._bloque.v(130, 'W'))) > 0.05) { cs[0].kvaManual = cs[0]._jVal; aviso.push('«' + nombreTab(p) + '»: el circuito hacia «' + nombreTab(t) + '» tiene ' + cs[0]._jVal + ' kVA escritos a mano en el Excel (el tablero de abajo suma ' + redondea(num(t._bloque.v(130, 'W')), 2) + '); se conservó el valor del Excel.'); }
+      cs[0].tableroHijoId = t.id; cs[0].descripcion = ''; cs[0].kva = 0; t.padreId = p.id; return true; };
     // transferencia con generador: el tablero que cuelga del ATS lleva la segunda acometida y pasa a colgar de lo que alimentaba la cadena
     cadenas.forEach(ch => {
-      const bajo = tabs.filter(b => txt(b.v(10, 'P')).toUpperCase() === ch.a.nombre.toUpperCase());
-      const distNormal = [ch.a].concat(ch.ips).reduce((x, e) => x + num(e.v(10, 'R')), 0);
+      const nombresCadena = [ch.a].concat(ch.ips);
+      const bajoCirc = hijosDe(ch.a).filter(h => esTab(h) && !equipos.includes(h));
+      const bajoTxt = tabs.filter(b => cl(txt(b.v(10, 'P'))) === cl(ch.a.nombre));
+      const bajo = Array.from(new Set(bajoCirc.concat(bajoTxt)));
+      const distNormal = nombresCadena.reduce((x, e) => x + num(e.v(10, 'R')), 0);
       const primero = (ch.ips.length ? ch.ips[ch.ips.length - 1] : ch.a).nombre;
       bajo.forEach(b => {
-        const t = mapa[b.nombre.toUpperCase()], up = ch.arriba && esTab(ch.arriba) ? mapa[ch.arriba.nombre.toUpperCase()] : null;
+        const t = mapa[cl(b.nombre)], up = ch.arriba && esTab(ch.arriba) && !equipos.includes(ch.arriba) ? mapa[cl(ch.arriba.nombre)] : null;
+        if (!t) return;
         t.alterna = { activo: true, equipo: /^MTS/i.test(ch.a.nombre) ? 'MTS' : 'ATS', tipo: 'generador', nombre: ch.g.nombre, kva: '', xd: 12, origenId: '', fuenteId: '', longitud: num(ch.g.v(10, 'R')), distNormal, material: 'CU', aislamiento: 'XHHW-2', tuberia: 'EMT', paralelos: '' };
+        t._padreFijo = true;
         if (up) {
-          const clave = x => String(x || '').toUpperCase().split(' ').filter(Boolean).join(' '), c = up.circuitos.find(x => clave(x._descExcel) === clave('TABLERO ' + primero));
-          if (c) { c.tableroHijoId = t.id; c.descripcion = ''; c.kva = 0; t.padreId = up.id; t.conectadoA = ''; }
-          else { t.padreId = up.id; t.conectadoA = ''; aviso.push('«' + nombreTab(up) + '» no tiene el circuito hacia «' + primero + '»: la herramienta crea uno para «' + nombreTab(t) + '».'); }
+          if (!enlazar(up, t, primero)) { t.padreId = up.id; aviso.push('«' + nombreTab(up) + '» no tiene el circuito hacia «' + primero + '»: la herramienta crea uno para «' + nombreTab(t) + '».'); }
+          t.conectadoA = '';
         } else t.conectadoA = ch.arribaTxt || t.conectadoA;
-        aviso.push('«' + nombreTab(t) + '»: ' + [ch.a].concat(ch.ips).map(x => x.nombre).join(' ← ') + ' y generador «' + ch.g.nombre + '» pasaron a la segunda acometida (' + t.alterna.equipo + '). Revise la capacidad del generador (kVA) y la distancia normal → ' + t.alterna.equipo + ' (' + distNormal + ' m, suma de ' + [ch.a].concat(ch.ips).map(x => x.nombre).join(' + ') + ').');
+        aviso.push('«' + nombreTab(t) + '»: ' + nombresCadena.map(x => x.nombre).join(' ← ') + ' y generador «' + ch.g.nombre + '» pasaron a la segunda acometida (' + t.alterna.equipo + '). Revise la capacidad del generador (kVA) y la distancia normal → ' + t.alterna.equipo + ' (' + distNormal + ' m, suma de ' + nombresCadena.map(x => x.nombre).join(' + ') + ').');
       });
     });
-    // bloques que no son tableros y no forman parte de una transferencia con generador: queda el texto en «Conectado a»
-    equipos.filter(e => !equipoSet.has(e)).forEach(e => aviso.push('«' + e.nombre + '» no se importó como tablero (' + (esTab(e) ? 'bloque de equipo' : 'sin prefijo TABLERO') + '); revise si es un equipo que la herramienta no modela.'));
+    // padre de los demás tableros: quien tenga un circuito hacia él; con varios candidatos, el que coincide con «Conectado a» y si no el primero
+    const multi = [];
+    tabs.forEach(b => {
+      const t = mapa[cl(b.nombre)]; if (t._padreFijo) return;
+      const cand = (padresDe[cl(b.nombre)] || []).filter(p => !equipos.includes(p)).map(p => mapa[cl(p.nombre)]).filter(p => p && p !== t);
+      if (!cand.length) return;
+      const p = cand.find(x => cl(x.nombre) === cl(t.conectadoA)) || cand[0];
+      enlazar(p, t);
+      if (cand.length > 1) multi.push('«' + nombreTab(t) + '» (' + cand.map(x => x.nombre).join(' y ') + ' → se tomó ' + p.nombre + ')');
+    });
+    // sin circuito que lo alimente: no se cuelga de nadie (la herramienta tendría que crear un circuito y sumar su carga al tablero de arriba); «Conectado a» queda como texto
+    const huerfanos = tabs.map(b => mapa[cl(b.nombre)]).filter(t => !t.padreId && mapa[cl(t.conectadoA)] && mapa[cl(t.conectadoA)] !== t);
+    if (huerfanos.length) aviso.push(huerfanos.length + ' tablero(s) dicen estar conectados a otro tablero pero este no tiene un circuito hacia ellos (por ejemplo tableros típicos de habitación): quedaron como tableros independientes y «Conectado a» quedó como texto, para no sumar su carga al otro: ' + huerfanos.slice(0, 12).map(t => nombreTab(t) + ' (' + t.conectadoA + ')').join('; ') + (huerfanos.length > 12 ? '; …' : '') + '.');
+    // ciclos: se corta el enlace del tablero que cierra el ciclo
+    const byId = {}; tabs.forEach(b => { const t = mapa[cl(b.nombre)]; byId[t.id] = t; });
+    tabs.forEach(b => {
+      const t = mapa[cl(b.nombre)], vistos = new Set([t.id]); let x = byId[t.padreId];
+      while (x) { if (vistos.has(x.id)) { const p = byId[t.padreId]; if (p) p.circuitos.filter(c => c.tableroHijoId === t.id).forEach(c => sueltos(c, t)); aviso.push('Se cortó el enlace «' + nombreTab(p) + '» → «' + nombreTab(t) + '» porque cerraba un ciclo; el circuito quedó como carga común.'); t.padreId = ''; break; } vistos.add(x.id); x = byId[x.padreId]; }
+    });
+    // circuitos que apuntaban a un tablero pero no quedaron enlazados: carga común con los kVA del Excel
+    tabs.forEach(b => { const t = mapa[cl(b.nombre)]; t.circuitos.forEach(c => { if (!c.tableroHijoId && /^TABLERO /i.test(cl(c._descExcel)) && porNombre[cl(c._descExcel).slice(8)]) { c.descripcion = c._descExcel; } }); });
+    if (multi.length) aviso.push('Tableros alimentados por más de un circuito (la herramienta admite un solo tablero de arriba; los otros circuitos quedaron como carga común con los kVA del Excel): ' + multi.join('; ') + '.');
+    // bloques que no son tableros y no forman parte de una transferencia con generador
+    equipos.filter(e => !equipoSet.has(e)).forEach(e => aviso.push('«' + e.nombre + '» no se importó como tablero (' + (vacio(e) ? 'bloque sin circuitos al que nadie alimenta' : esTab(e) ? 'bloque de equipo' : 'sin prefijo TABLERO') + ').'));
 
     // orden y exclusión de las tablas resumen (hoja ORDEN TABLEROS)
     const ord = sheets.find(s => /^ORDEN TABLEROS$/i.test(s.name));
@@ -159,8 +196,8 @@
 
     const proy = Store.emptyProject();
     proy.nombre = (nombreArchivo || '').replace(/\.(xlsm|xlsx)$/i, '').replace(/^ANACAR[\s\d.]*-?\s*/i, '').trim() || 'Proyecto importado de Excel';
-    proy.tableros = tabs.map(b => mapa[b.nombre.toUpperCase()]);
-    return { proy, tabs: tabs.map(b => mapa[b.nombre.toUpperCase()]), mapa, aviso, equipos };
+    proy.tableros = tabs.map(b => mapa[cl(b.nombre)]);
+    return { proy, tabs: tabs.map(b => mapa[cl(b.nombre)]), mapa, aviso, equipos };
   }
 
   /** Detalles de carga: cada Excel trae su propia hoja DCARGAS y los números pueden no coincidir con los de la herramienta.
@@ -244,7 +281,7 @@
 
   /** Importa el archivo: crea el proyecto en la herramienta y devuelve el reporte. */
   async function importar(buf, nombreArchivo) {
-    const sheets = await XlsxRead.read(buf);
+    const sheets = await XlsxRead.read(buf, { hojas: ['ANACAR', 'DCARGAS', 'ORDEN TABLEROS'] });
     const res = construir(sheets, nombreArchivo);
     Store.newProject();
     const P = Store.project; P.nombre = res.proy.nombre;
@@ -253,6 +290,7 @@
     // los breakers escritos en el Excel se concilian con el catálogo después del primer cálculo
     Store.sincronizarBypass && Store.sincronizarBypass();
     let R = Calc.proyecto(P, Store.catalog);
+    conciliarCircuitos(res, R, nota);
     conciliarAlimentadores(res, R, nota, 'prot');
     R = Calc.proyecto(P, Store.catalog);
     conciliarAlimentadores(res, R, nota, 'cable');
@@ -262,7 +300,7 @@
     const dif = comparar(res, R);
     const noCumple = R.orden.filter(r => r.alim.val && !r.alim.val.ok).map(r => r.tab.nombre);
     if (noCumple.length) nota.push('Según la herramienta, ' + noCumple.length + ' alimentador(es) del Excel no cumplen la ampacidad corregida por temperatura y agrupamiento (310.15): ' + noCumple.join(', ') + '. Se conservó el cableado del Excel; revise el aviso en la memoria de cada tablero.');
-    res.tabs.forEach(t => { delete t._bloque; delete t._cat; delete t._spdId; t.circuitos.forEach(c => { delete c._rel; delete c._descExcel; delete c._kvaF; }); });
+    res.tabs.forEach(t => { delete t._bloque; delete t._cat; delete t._spdId; delete t._padreFijo; t.circuitos.forEach(c => { delete c._rel; delete c._descExcel; delete c._kvaF; delete c._jConst; delete c._jVal; }); });
     Store.save();
     return { tableros: res.tabs.length, circuitos: res.tabs.reduce((a, t) => a + t.circuitos.length, 0), equipos: res.equipos.map(e => e.nombre), aviso: res.aviso.concat(nota), dif };
   }
@@ -286,6 +324,21 @@
       }
     });
     if (cambios.length) nota.push((que === 'prot' ? 'Protección del alimentador fijada con el valor del Excel en ' : 'Calibres del alimentador fijados con los del Excel en ') + cambios.length + ' tablero(s): ' + cambios.join('; ') + '. La herramienta los respeta y avisa en la memoria si no cumplen la ampacidad corregida (310.15).');
+  }
+
+  /** Protección de cada circuito ramal: si la herramienta calcula otro amperaje se fija el del Excel (cada Excel trae su propia lista de tamaños y a veces calcula distinto). */
+  function conciliarCircuitos(res, R, nota) {
+    let n = 0; const ej = [];
+    res.tabs.forEach(t => {
+      const b = t._bloque, r = R.res[t.id]; if (!r) return;
+      t.circuitos.forEach(c => {
+        if (c.tableroHijoId || c.prot) return;
+        const x = r.rows.find(z => z.c === c); if (!x) return;
+        const eP = num(b.v(c._rel, 'AF'));
+        if (eP > 0 && x.AF && x.AF !== eP) { c.prot = eP; n++; if (ej.length < 5) ej.push(nombreTab(t) + ' [' + c.polos.join(',') + '] ' + eP + ' A'); }
+      });
+    });
+    if (n) nota.push('Protección de ' + n + ' circuito(s) ramal(es) fijada con el valor del Excel (' + ej.join('; ') + (n > ej.length ? '; …' : '') + ').');
   }
 
   /** Interruptores: se compara el que eligió Excel con el de la herramienta (polos, unidad, kA); si no coinciden se fija el del Excel (del catálogo o escrito a mano). */

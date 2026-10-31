@@ -74,6 +74,7 @@
     async importarExcel() {
       const f = await UI.pickFile('.xlsm,.xlsx'); if (!f) return;
       try {
+        UI.toast('Importando ' + f.name + '… los proyectos grandes tardan unos segundos', 'ok'); await new Promise(r => setTimeout(r, 60));
         const rep = await ImportAnacar.importar(await UI.readBuffer(f), f.name);
         App.render();
         const cv = rep.dif.filter(d => /caída de voltaje/i.test(d.que)), otras = rep.dif.filter(d => !/caída de voltaje/i.test(d.que));

@@ -240,7 +240,7 @@
         h('td', { class: 'sticky' }, polos),
         h('td', null, hijo ? h('a', { href: '#memoria/' + hijo.id, class: 'link' }, (resp ? '↺ bypass de ' : '→ ') + Calc.nombreTablero(hijo)) : null, UI.bind(c, 'detalleId', dOpts, { num: true, fk: kk + 'det', class: 'w-det', label: 'Detalle de carga' })),
         h('td', null, hijo ? h('span', { class: 'ro' }, x.descripcion) : UI.input(c, 'descripcion', { fk: kk + 'des', class: 'w-desc', placeholder: x.det.descripcion || '' })),
-        h('td', null, hijo ? h('span', { class: 'ro r' }, f2(x.J)) : UI.input(c, 'kva', { type: 'num', fk: kk + 'kva', class: 'w-num' })),
+        h('td', null, hijo && !resp ? UI.input(c, 'kvaManual', { type: 'num', fk: kk + 'kvm', class: 'w-num', placeholder: f2(c.kvaAuto === undefined ? x.J : c.kvaAuto), title: 'kVA del tablero de abajo; escriba otro valor para fijarlo a mano (vacío = automático)' }) : hijo ? h('span', { class: 'ro r' }, f2(x.J)) : UI.input(c, 'kva', { type: 'num', fk: kk + 'kva', class: 'w-num' })),
         h('td', null, hijo ? h('span', { class: 'ro r' }, f1(c.longitud)) : UI.input(c, 'longitud', { type: 'num', fk: kk + 'lon', class: 'w-num' })),
         h('td', { class: 'r' }, x.O || ''), h('td', { class: 'r' }, x.P || ''),
         h('td', null, UI.pct(c, 'mult', { fk: kk + 'mul', class: 'w-xs', placeholder: U.fmt(x.AD * 100, 0) })),

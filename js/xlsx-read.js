@@ -32,30 +32,43 @@
   }
   const colIdx = ref => { const m = /^([A-Z]+)/.exec(ref); let n = 0; for (const ch of m[1]) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
 
-  async function read(buf) {
+  const decodifica = t => (t.indexOf('&') < 0 ? t : t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (m, d) => String.fromCharCode(Number(d))).replace(/&amp;/g, '&'));
+  /** opts.hojas: lista de nombres de hoja (o expresión regular) a leer; las demás se omiten (los libros de ANACAR traen hojas de decenas de miles de filas). */
+  async function read(buf, opts) {
     if (typeof DecompressionStream === 'undefined') throw new Error('Este navegador no puede leer Excel. Exporte la tabla de Revit como .txt/.csv o pegue las filas.');
     const z = await unzip(buf), P = new DOMParser();
     const xml = async n => { const t = await z.text(n); return t ? P.parseFromString(t, 'application/xml') : null; };
+    const quiere = nombre => !opts || !opts.hojas || (opts.hojas instanceof RegExp ? opts.hojas.test(nombre) : opts.hojas.some(h => h.toUpperCase() === nombre.toUpperCase()));
     const ss = [], sst = await xml('xl/sharedStrings.xml');
     if (sst) Array.from(sst.getElementsByTagName('si')).forEach(si => ss.push(Array.from(si.getElementsByTagName('t')).map(t => t.textContent).join('')));
     const wb = await xml('xl/workbook.xml'), rels = await xml('xl/_rels/workbook.xml.rels'), target = {};
     Array.from(rels.getElementsByTagName('Relationship')).forEach(r => { target[r.getAttribute('Id')] = r.getAttribute('Target'); });
     const sheets = [];
     for (const s of Array.from(wb.getElementsByTagName('sheet'))) {
+      const nombre = s.getAttribute('name'); if (!quiere(nombre)) continue;
       const rid = s.getAttribute('r:id') || s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
       let path = target[rid] || ''; path = path.startsWith('/') ? path.slice(1) : 'xl/' + path.replace(/^\.\//, '');
-      const doc = await xml(path); if (!doc) continue;
+      const texto = await z.text(path); if (!texto) continue;
       const rows = [], fml = [];   // fml: marca las celdas que traen fórmula (el valor leído es el último calculado por Excel)
-      Array.from(doc.getElementsByTagName('row')).forEach(row => {
-        const r = Number(row.getAttribute('r')) - 1, arr = rows[r] = [], fa = fml[r] = [];
-        Array.from(row.getElementsByTagName('c')).forEach(c => {
-          const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0], is = c.getElementsByTagName('is')[0];
-          let val = v ? v.textContent : (is ? is.textContent : '');
-          if (t === 's') val = ss[Number(val)] || ''; else if (t === 'b') val = val === '1'; else if (t !== 'str' && t !== 'inlineStr' && val !== '' && !isNaN(Number(val))) val = Number(val);
-          arr[colIdx(c.getAttribute('r'))] = val; if (c.getElementsByTagName('f')[0]) fa[colIdx(c.getAttribute('r'))] = true;
-        });
-      });
-      sheets.push({ name: s.getAttribute('name'), state: s.getAttribute('state') || 'visible', rows: Array.from(rows, x => x || []), formulas: Array.from(fml, x => x || []) });
+      // lectura con expresiones regulares: mucho más rápida que el DOM en hojas de decenas de miles de filas
+      const reFila = /<row\b[^>]*?\br="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g, reCelda = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+      let mf;
+      while ((mf = reFila.exec(texto))) {
+        const r = Number(mf[1]) - 1, arr = rows[r] = [], fa = fml[r] = [];
+        if (!mf[2]) continue;
+        let mc; reCelda.lastIndex = 0;
+        const cuerpo = mf[2], rc = new RegExp(reCelda.source, 'g');
+        while ((mc = rc.exec(cuerpo))) {
+          const at = mc[1], ref = /\br="([A-Z]+)\d+"/.exec(at); if (!ref) continue;
+          const t = (/\bt="(\w+)"/.exec(at) || [])[1], inner = mc[2] || '';
+          const mv = /<v>([\s\S]*?)<\/v>/.exec(inner), mi = t === 'inlineStr' ? /<is>([\s\S]*?)<\/is>/.exec(inner) : null;
+          let val = mv ? mv[1] : (mi ? Array.from(mi[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)).map(x => x[1]).join('') : '');
+          if (t === 's') val = ss[Number(val)] || ''; else if (t === 'b') val = val === '1'; else if (t === 'str' || t === 'inlineStr' || t === 'e') val = decodifica(val); else if (val !== '' && !isNaN(Number(val))) val = Number(val);
+          const col = colIdx(ref[1]); arr[col] = val;
+          if (inner.indexOf('<f') >= 0) fa[col] = true;
+        }
+      }
+      sheets.push({ name: nombre, state: s.getAttribute('state') || 'visible', rows: Array.from(rows, x => x || []), formulas: Array.from(fml, x => x || []) });
     }
     return sheets;
   }
