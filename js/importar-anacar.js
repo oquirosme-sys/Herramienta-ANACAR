@@ -104,7 +104,8 @@
 
   /** Marca de un breaker de la hoja (modelo de referencia, unidad, polos, kA) en el formato de la herramienta. */
   function breakerExcel(b, rel) {
-    return { modelo: txt(b.v(rel, 'BA')), marco: num(b.v(rel, 'BB')), amperios: txt(b.v(rel, 'BC')), unidad: txt(b.v(rel, 'BD')) || 'STD', polos: num(b.v(rel, 'BE')), sccr: num(b.v(rel, 'BF')) };
+    const mod = txt(b.v(rel, 'BA'));
+    return { modelo: mod === '0' ? '' : mod, marco: num(b.v(rel, 'BB')), amperios: txt(b.v(rel, 'BC')), unidad: txt(b.v(rel, 'BD')) || 'STD', polos: num(b.v(rel, 'BE')), sccr: num(b.v(rel, 'BF')) };
   }
 
   /** Construye el borrador del proyecto con las entradas del Excel. */
@@ -444,11 +445,11 @@
       // ramales
       t.circuitos.forEach(c => {
         const x = r.rows.find(z => z.c === c); if (!x || !x.breaker || c.tableroHijoId) return;
-        const e = breakerExcel(b, c._rel); if (!e.modelo && !e.sccr) return;
+        const e = breakerExcel(b, c._rel); if (!e.modelo) return;   // sin modelo en el Excel (0 o vacío): el interruptor queda en automático
         if (igual(x.breaker, e)) return;
         const hall = buscar(marca, e);
         if (hall) c.breakerId = hall.id;
-        else { c.breakerId = 'manual'; c.breakerManual = { modelo: e.modelo, sccr: e.sccr, unidad: e.unidad === 'STD' ? '' : e.unidad }; }
+        else if (e.modelo) { c.breakerId = 'manual'; c.breakerManual = { modelo: e.modelo, sccr: e.sccr, unidad: e.unidad === 'STD' ? '' : e.unidad }; }
       });
     });
   }
