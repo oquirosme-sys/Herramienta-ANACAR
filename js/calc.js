@@ -710,7 +710,7 @@
         if (rb) { if (!visit.has(rb.id)) cargar(rb); c.kva = r4(total[rb.id] || 0); c.longitud = (rb.alterna || {}).longitud; c.descripcion = 'BYPASS ' + nombreTablero(rb); }
       });
       const rt = tablero(t, P, null);
-      total[t.id] = P.cargaDerivados === 'demandada' ? rt.alim.L139 : rt.W130; demanda[t.id] = rt.alim.L139;
+      total[t.id] = P.cargaDerivados === 'demandada' ? rt.alim.L139 : P.cargaDerivados === 'sinreserva' ? rt.W128 : rt.W130; demanda[t.id] = rt.alim.L139;
       const dem1 = P.cargaDerivados === 'demandada';   // con kVA demandados la demanda del tablero ya está aplicada
       FEED[t.id] = { V: rt.V, fases: rt.fases === 3 ? rt.U116.slice(0, 3) : rt.fases === 2 ? rt.U116.slice(0, 2) : null, AF: rt.alim.AF139, AD: rt.alim.AD139, AI: rt.alim.AI139, AJ: rt.alim.AJ139, R: dem1 ? 1 : rt.alim.R139, S: dem1 ? 1 : rt.alim.S139 };
       return total[t.id];
