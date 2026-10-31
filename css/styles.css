@@ -292,3 +292,13 @@ th.dev, td.dev { background: var(--brand-soft); }
 .tbl.calc tr.row-warn td:nth-child(-n+2){ background: var(--warn-bg); }
 .tbl.calc tr.row-link td:nth-child(-n+2){ background: var(--brand-soft); }
 .tbl.calc thead tr:not(.grp) th:nth-child(-n+2){ z-index: 4; }
+
+/* Memoria de cálculo: lista de tableros vertical (opcional) */
+.mem-layout { display: grid; grid-template-columns: 14rem minmax(0, 1fr); gap: 1rem; align-items: start; }
+.mem-lado { position: sticky; top: 3.2rem; max-height: calc(100vh - 4rem); display: flex; flex-direction: column; gap: .4rem; }
+.mem-side { display: flex; flex-direction: column; gap: 2px; overflow: auto; padding-right: 2px; flex: 1 1 auto; min-height: 0; } .mem-side a { flex: 0 0 auto; }
+.mem-side a { padding: .3rem .6rem; border-radius: 6px; text-decoration: none; color: var(--ink); font-size: .86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid transparent; }
+.mem-side a:hover { background: var(--line-2); } .mem-side a.active { background: var(--brand); color: var(--brand-ink); font-weight: 600; } .mem-side a.warn:not(.active) { border-left-color: var(--warn); }
+.mem-principal { min-width: 0; }
+@media (max-width: 900px) { .mem-layout { grid-template-columns: 1fr; } .mem-lado { position: static; max-height: 12rem; } }
+@media print { .mem-layout { display: block; } .mem-lado { display: none; } }

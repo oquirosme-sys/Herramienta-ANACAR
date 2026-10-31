@@ -13,6 +13,18 @@
     }, (r.nivel ? '↳ '.repeat(1) : '') + r.nombre)));
   }
 
+  /** Forma de la lista de tableros: horizontal (botones arriba) o vertical (barra a la izquierda). Se recuerda en este navegador. */
+  const LISTA_K = 'anacar.memoria.lista';
+  const listaVertical = () => { try { return localStorage.getItem(LISTA_K) === 'v'; } catch (e) { return false; } };
+  function selectorVertical(R, id) {
+    return h('nav', { class: 'mem-side', 'aria-label': 'Tableros' }, R.orden.map(r => h('a', {
+      class: (r.tab.id === id ? 'active' : '') + (r.avisos.length ? ' warn' : ''), href: '#memoria/' + r.tab.id, title: (r.avisos.join(String.fromCharCode(10)) || r.nombre),
+      style: { paddingLeft: (0.6 + 0.9 * (r.nivel || 0)) + 'rem' },
+    }, (r.nivel ? '↳ ' : '') + r.nombre)));
+  }
+  const checkLista = () => h('label', { class: 'chk no-print', style: { fontSize: '.84rem' }, title: 'Mostrar la lista de tableros como barra vertical a la izquierda o como botones arriba' },
+    h('input', { type: 'checkbox', checked: listaVertical(), onchange: e => { try { localStorage.setItem(LISTA_K, e.target.checked ? 'v' : 'h'); } catch (x) { /* sin almacenamiento */ } App.refresh(); } }), ' Lista de tableros vertical');
+
   const detOpts = () => {
     const tipos = {}; Store.catalog.tiposCarga.forEach(t => { tipos[t.id] = t.nombre; });
     return Store.catalog.detallesCarga.map(d => ({ value: d.id, label: d.id + ' · ' + d.descripcion + ' (' + d.v + ' V ' + d.fases + 'F)', group: tipos[d.tipo] || 'Tipo ' + d.tipo }));
@@ -335,7 +347,10 @@
   App.views.memoria = function (view, R, id) {
     if (!R.orden.length) { view.appendChild(h('div', { class: 'empty' }, 'No hay tableros. Créelos en la pestaña Proyecto o impórtelos de Revit.')); return; }
     const r = R.res[id] || R.orden[0], t = r.tab;
-    view.appendChild(selector(R, t.id));
+    if (listaVertical()) {   // barra vertical a la izquierda; el resto de la vista va en la columna derecha
+      const lado = h('div', { class: 'mem-lado no-print' }, checkLista(), selectorVertical(R, t.id)), principal = h('div', { class: 'mem-principal' });
+      view.appendChild(h('div', { class: 'mem-layout' }, lado, principal)); view = principal;
+    } else { view.appendChild(h('div', { class: 'row no-print', style: { marginBottom: '.4rem' } }, checkLista())); view.appendChild(selector(R, t.id)); }
     view.appendChild(h('div', { class: 'page-h row' }, h('div', null, h('h2', null, r.nombre), h('p', { class: 'muted' }, t.tipo + ' · ' + t.sistema + ' V · alimentado desde ' + (r.alimentadoDesde || '—'))),
       h('div', { class: 'toolbar' }, UI.btn('Ver tablero ' + t.tipo, () => App.go(t.tipo === '1F' ? 'tab1f' : 'tab3f', t.id), 'small'),
         UI.btn('Memoria: PDF / Word / Excel', () => App.go('reporte', t.id), 'primary small'))));
