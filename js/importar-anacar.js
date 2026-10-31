@@ -46,8 +46,21 @@
     const todos = bloques(hoja).filter(b => b.nombre && !/^machote$/i.test(b.nombre));
     if (!todos.length) throw new Error('No se encontraron tableros en la hoja ANACAR.');
     const esTab = b => /^TABLERO$/i.test(b.prefijo);
-    const tabs = todos.filter(esTab), equipos = todos.filter(b => !esTab(b));
     const porNombre = {}; todos.forEach(b => { porNombre[b.nombre.toUpperCase()] = b; });
+    // número de circuitos de un bloque (fila con detalle de carga y posición)
+    const nC = b => { let n = 0; for (let rel = 16; rel <= 115; rel++) if (num(b.v(rel, 'K')) > 0 && ['D', 'F', 'H'].some(c => num(b.v(rel, c)) > 0)) n++; return n; };
+    // transferencia con generador: GENERADOR → ATS/MTS ← IP(s) ← fuente; son bloques de paso (sin circuitos propios o con uno solo hacia el siguiente)
+    const cadenas = [], equipoSet = new Set();
+    todos.filter(g => /^GEN/i.test(g.nombre) && nC(g) <= 1).forEach(g => {
+      const a = porNombre[txt(g.v(10, 'P')).toUpperCase()];
+      if (!a || !/^(ATS|MTS)/i.test(a.nombre) || nC(a) > 1) return;
+      const ips = []; let e = porNombre[txt(a.v(10, 'P')).toUpperCase()];
+      while (e && /^IP/i.test(e.nombre) && nC(e) <= 1 && ips.length < 4) { ips.push(e); e = porNombre[txt(e.v(10, 'P')).toUpperCase()]; }
+      cadenas.push({ g, a, ips, arriba: e && !equipoSet.has(e) ? e : null, arribaTxt: txt((ips.length ? ips[ips.length - 1] : a).v(10, 'P')) });
+      [g, a].concat(ips).forEach(x => equipoSet.add(x));
+    });
+    const equipos = todos.filter(b => equipoSet.has(b) || !esTab(b));
+    const tabs = todos.filter(b => !equipos.includes(b));
     const aviso = [];
     const mapa = {};   // nombre del bloque → tablero de la herramienta
 
@@ -63,7 +76,13 @@
         material: txt(b.v(139, 'AG')) || 'CU', aislamiento: txt(b.v(139, 'AH')) || 'XHHW-2', paralelos: b.f(139, 'AI') ? '' : num(b.v(139, 'AI')) || '', aumento: num(b.v(139, 'AJ')) || 1,
         mult: num(b.v(139, 'AD')) || 1.25, fp: num(b.v(139, 'T')) || 0.9, tuberia: txt(b.v(140, 'AQ')) || 'EMT', tempAmb: txt(b.v(10, 'Y')) || '26-30', tempBorne: num(b.v(10, 'Z')) || 75, agrupamiento: txt(b.v(10, 'AB')),
       };
-      if (!b.f(139, 'S') && num(b.v(139, 'S'))) t.fdivTablero = num(b.v(139, 'S'));
+      if (!b.f(139, 'R') && num(b.v(139, 'R')) > 0) t.fdTablero = num(b.v(139, 'R'));   // factor de demanda del tablero escrito a mano en el Excel
+      if (!b.f(139, 'S') && num(b.v(139, 'S')) && num(b.v(139, 'S')) !== 1) {   // diversidad del tablero: según la versión del Excel multiplica o divide; se deduce de los valores calculados
+        const S = num(b.v(139, 'S')), J = num(b.v(139, 'J')), Rr = num(b.v(139, 'R')), L = num(b.v(139, 'L')), rho = J * Rr ? L / (J * Rr) : null;
+        if (rho !== null && Math.abs(rho - S) <= 0.01 * Math.max(1, S)) { if (S <= 1) t.fdivTablero = S; else aviso.push('«' + nombreTab(t) + '»: factor de diversidad del tablero ' + S + ' (multiplica y aumenta la demanda); la herramienta solo admite de 0 a 1, se dejó en 1.'); }
+        else if (rho !== null && Math.abs(rho - 1 / S) <= 0.01) { const dv = diversidad(S); if (dv.ok) t.fdivTablero = dv.web; else aviso.push('«' + nombreTab(t) + '»: factor de diversidad del tablero ' + S + ' (divide y aumenta la demanda); la herramienta solo admite de 0 a 1, se dejó en 1.'); }
+        else aviso.push('«' + nombreTab(t) + '»: no se pudo deducir cómo aplica el Excel el factor de diversidad del tablero (' + S + '); se dejó en 1.');
+      }
       t._bloque = b; t._cat = { fab: txt(b.v(11, 'BK')), modelo: txt(b.v(11, 'BJ')), barraFase: num(b.v(11, 'BL')), barraNeutro: num(b.v(11, 'BM')), barraTierra: num(b.v(11, 'BN')), espacios: num(b.v(11, 'BO')), idExcel: num(b.v(11, 'BI')) };
       t._spdId = num(b.v(16, 'BI'));
       // circuitos (rel. 16 a 115): el detalle de carga (K) marca una fila usada
@@ -112,22 +131,24 @@
       if (p && p !== t && !t.padreId) { t.padreId = p.id; aviso.push('«' + nombreTab(t) + '» cuelga de «' + nombreTab(p) + '» por «Conectado a», pero ese tablero no tiene un circuito para él: la herramienta le crea uno.'); }
     });
 
-    // equipos intermedios (IP, ATS, generador): el tablero que cuelga de un ATS lleva la segunda acometida
-    equipos.forEach(e => { e._sig = porNombre[txt(e.v(10, 'P')).toUpperCase()] || null; });
-    tabs.forEach(b => {
-      const t = mapa[b.nombre.toUpperCase()];
-      let e = porNombre[t.conectadoA.toUpperCase()]; const cadena = [];
-      while (e && !esTab(e) && cadena.length < 8) { cadena.push(e); e = e._sig || null; }
-      if (!cadena.length) return;
-      const ats = cadena.find(x => /^(ATS|MTS)/i.test(x.nombre)), gen = ats && equipos.find(x => /GEN/i.test(x.nombre) && txt(x.v(10, 'P')).toUpperCase() === ats.nombre.toUpperCase());
-      const final = cadena[cadena.length - 1], fin = txt(final.v(10, 'P'));
-      if (ats) {
-        const distNormal = cadena.filter(x => x === ats || cadena.indexOf(x) > cadena.indexOf(ats)).reduce((a, x) => a + num(x.v(10, 'R')), 0);
-        t.alterna = { activo: true, equipo: /^MTS/i.test(ats.nombre) ? 'MTS' : 'ATS', tipo: gen ? 'generador' : 'bypass', nombre: gen ? gen.nombre : '', kva: '', xd: 12, origenId: '', fuenteId: '', longitud: gen ? num(gen.v(10, 'R')) : '', distNormal, material: 'CU', aislamiento: 'XHHW-2', tuberia: 'EMT', paralelos: '' };
-        aviso.push('«' + nombreTab(t) + '»: ' + cadena.map(x => x.nombre).join(' → ') + (gen ? ' y generador «' + gen.nombre + '»' : '') + ' pasaron a la segunda acometida (' + t.alterna.equipo + '). Revise la capacidad del generador (kVA) y la distancia normal → ' + t.alterna.equipo + '.');
-      } else aviso.push('«' + nombreTab(t) + '» cuelga de ' + cadena.map(x => x.nombre).join(' → ') + ': equipos que la herramienta no modela; se dejó como texto en «Conectado a».');
-      t.conectadoA = fin || t.conectadoA;
+    // transferencia con generador: el tablero que cuelga del ATS lleva la segunda acometida y pasa a colgar de lo que alimentaba la cadena
+    cadenas.forEach(ch => {
+      const bajo = tabs.filter(b => txt(b.v(10, 'P')).toUpperCase() === ch.a.nombre.toUpperCase());
+      const distNormal = [ch.a].concat(ch.ips).reduce((x, e) => x + num(e.v(10, 'R')), 0);
+      const primero = (ch.ips.length ? ch.ips[ch.ips.length - 1] : ch.a).nombre;
+      bajo.forEach(b => {
+        const t = mapa[b.nombre.toUpperCase()], up = ch.arriba && esTab(ch.arriba) ? mapa[ch.arriba.nombre.toUpperCase()] : null;
+        t.alterna = { activo: true, equipo: /^MTS/i.test(ch.a.nombre) ? 'MTS' : 'ATS', tipo: 'generador', nombre: ch.g.nombre, kva: '', xd: 12, origenId: '', fuenteId: '', longitud: num(ch.g.v(10, 'R')), distNormal, material: 'CU', aislamiento: 'XHHW-2', tuberia: 'EMT', paralelos: '' };
+        if (up) {
+          const clave = x => String(x || '').toUpperCase().split(' ').filter(Boolean).join(' '), c = up.circuitos.find(x => clave(x._descExcel) === clave('TABLERO ' + primero));
+          if (c) { c.tableroHijoId = t.id; c.descripcion = ''; c.kva = 0; t.padreId = up.id; t.conectadoA = ''; }
+          else { t.padreId = up.id; t.conectadoA = ''; aviso.push('«' + nombreTab(up) + '» no tiene el circuito hacia «' + primero + '»: la herramienta crea uno para «' + nombreTab(t) + '».'); }
+        } else t.conectadoA = ch.arribaTxt || t.conectadoA;
+        aviso.push('«' + nombreTab(t) + '»: ' + [ch.a].concat(ch.ips).map(x => x.nombre).join(' ← ') + ' y generador «' + ch.g.nombre + '» pasaron a la segunda acometida (' + t.alterna.equipo + '). Revise la capacidad del generador (kVA) y la distancia normal → ' + t.alterna.equipo + ' (' + distNormal + ' m, suma de ' + [ch.a].concat(ch.ips).map(x => x.nombre).join(' + ') + ').');
+      });
     });
+    // bloques que no son tableros y no forman parte de una transferencia con generador: queda el texto en «Conectado a»
+    equipos.filter(e => !equipoSet.has(e)).forEach(e => aviso.push('«' + e.nombre + '» no se importó como tablero (' + (esTab(e) ? 'bloque de equipo' : 'sin prefijo TABLERO') + '); revise si es un equipo que la herramienta no modela.'));
 
     // orden y exclusión de las tablas resumen (hoja ORDEN TABLEROS)
     const ord = sheets.find(s => /^ORDEN TABLEROS$/i.test(s.name));
@@ -194,12 +215,16 @@
     const dif = [], tol = { kva: 0.02, cv: 0.05, amp: 0.5 };
     res.tabs.forEach(t => {
       const b = t._bloque, r = R.res[t.id], nm = nombreTab(t); if (!r) return;
-      const add = (que, excel, web, ok, tipo) => { if (!ok) dif.push({ tablero: nm, que, excel, web, tipo: tipo || 'calculo' }); };
+      const add = (que, excel, web, ok, tipo, nota) => { if (!ok) dif.push({ tablero: nm, que, excel, web, tipo: tipo || 'calculo', nota: nota || '' }); };
       const eW130 = num(b.v(130, 'W')), eL139 = num(b.v(139, 'L')), eAF = num(b.v(139, 'AF')), eAL = txt(b.v(139, 'AL')), eAY = num(b.v(139, 'AY')), eDes = num(b.v(118, 'U'));
       add('kVA conectados totales', redondea(eW130, 2), redondea(r.W130, 2), Math.abs(eW130 - r.W130) <= Math.max(tol.kva, eW130 * 0.002));
       add('kVA demandados', redondea(eL139, 2), redondea(r.alim.L139, 2), Math.abs(eL139 - r.alim.L139) <= Math.max(tol.kva, eL139 * 0.002));
-      add('Protección del alimentador (A)', eAF || '—', r.alim.AF139 || '—', !eAF || eAF === r.alim.AF139);
-      add('Calibre del alimentador', eAL || '—', r.alim.AL139 || '—', !eAL || String(eAL) === String(r.alim.AL139), 'cable');
+      // el Excel de algunos proyectos calcula la ampacidad requerida con la corriente de la fase A y no con la más cargada
+      const eAA = ['AA', 'AB', 'AC'].map(c => num(b.v(139, c))), eAE = num(b.v(139, 'AE')), eAD = num(b.v(139, 'AD')) || 1;
+      const soloA = eAE > 0 && Math.abs(eAE - eAA[0] * eAD) < 0.5 && eAE < Math.max.apply(null, eAA) * eAD - 0.5;
+      const notaA = soloA ? 'El Excel usa la corriente de la fase A (' + redondea(eAA[0], 0) + ' A) para la ampacidad requerida; la herramienta usa la fase más cargada (' + redondea(Math.max.apply(null, eAA), 0) + ' A).' : '';
+      add('Protección del alimentador (A)', eAF || '—', r.alim.AF139 || '—', !eAF || eAF === r.alim.AF139, 'proteccion', notaA);
+      add('Calibre del alimentador', eAL || '—', r.alim.AL139 || '—', !eAL || String(eAL) === String(r.alim.AL139), 'cable', notaA);
       add('Caída de voltaje acumulada en el alimentador (%)', redondea(eAY, 2), redondea(r.alim.AY139, 2), !eAY || Math.abs(eAY - r.alim.AY139) <= 0.15);
       add('Desbalance máximo (%)', redondea(eDes, 1), redondea(r.desbalance, 1), Math.abs(eDes - r.desbalance) <= 0.2);
       // circuitos: se emparejan por la primera posición
@@ -228,12 +253,39 @@
     // los breakers escritos en el Excel se concilian con el catálogo después del primer cálculo
     Store.sincronizarBypass && Store.sincronizarBypass();
     let R = Calc.proyecto(P, Store.catalog);
+    conciliarAlimentadores(res, R, nota, 'prot');
+    R = Calc.proyecto(P, Store.catalog);
+    conciliarAlimentadores(res, R, nota, 'cable');
+    R = Calc.proyecto(P, Store.catalog);
     conciliarBreakers(res, R, nota);
     R = Calc.proyecto(P, Store.catalog);
     const dif = comparar(res, R);
+    const noCumple = R.orden.filter(r => r.alim.val && !r.alim.val.ok).map(r => r.tab.nombre);
+    if (noCumple.length) nota.push('Según la herramienta, ' + noCumple.length + ' alimentador(es) del Excel no cumplen la ampacidad corregida por temperatura y agrupamiento (310.15): ' + noCumple.join(', ') + '. Se conservó el cableado del Excel; revise el aviso en la memoria de cada tablero.');
     res.tabs.forEach(t => { delete t._bloque; delete t._cat; delete t._spdId; t.circuitos.forEach(c => { delete c._rel; delete c._descExcel; delete c._kvaF; }); });
     Store.save();
     return { tableros: res.tabs.length, circuitos: res.tabs.reduce((a, t) => a + t.circuitos.length, 0), equipos: res.equipos.map(e => e.nombre), aviso: res.aviso.concat(nota), dif };
+  }
+
+  /** Alimentador de cada tablero: se respeta lo que dejó el Excel (protección y calibres). Si la herramienta calcula otra cosa se fija el valor del Excel;
+      la herramienta lo conserva y avisa si no cumple la ampacidad corregida. */
+  function conciliarAlimentadores(res, R, nota, que) {
+    const cambios = [];
+    res.tabs.forEach(t => {
+      const b = t._bloque, r = R.res[t.id]; if (!r) return;
+      if (que === 'prot') {
+        const eAF = num(b.v(139, 'AF'));
+        if (eAF > 0 && r.alim.AF139 !== eAF) { t.alim.prot = eAF; cambios.push(nombreTab(t) + ' ' + eAF + ' A'); }
+      } else {
+        const eF = txt(b.v(139, 'AL')), eN = txt(b.v(139, 'AN')), eT = txt(b.v(139, 'AP'));
+        let c = 0;
+        if (eF && String(r.alim.AL139) !== eF) { t.alim.calFases = eF; c++; }
+        if (eN && eN !== ' ' && String(r.alim.AN139) !== eN) { t.alim.calNeutro = eN; c++; }
+        if (eT && eT !== ' ' && String(r.alim.AP139) !== eT) { t.alim.calTierra = eT; c++; }
+        if (c) cambios.push(nombreTab(t) + ' calibre ' + eF);
+      }
+    });
+    if (cambios.length) nota.push((que === 'prot' ? 'Protección del alimentador fijada con el valor del Excel en ' : 'Calibres del alimentador fijados con los del Excel en ') + cambios.length + ' tablero(s): ' + cambios.join('; ') + '. La herramienta los respeta y avisa en la memoria si no cumplen la ampacidad corregida (310.15).');
   }
 
   /** Interruptores: se compara el que eligió Excel con el de la herramienta (polos, unidad, kA); si no coinciden se fija el del Excel (del catálogo o escrito a mano). */

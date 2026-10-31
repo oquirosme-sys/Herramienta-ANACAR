@@ -324,7 +324,10 @@
     const fase = [0, 0, 0];
     if (J && P) {
       if (N === 1) fase[0] = J;
-      else polos.forEach(p => { fase[fasePolo(p, N)] = J / P; });
+      else if (fd && fd.fases && fd.fases.length === polos.length && fd.fases.reduce((a, x) => a + x, 0) > 0) {   // tablero derivado: su desbalance sube al circuito que lo alimenta (como en el Excel)
+        const sf = fd.fases.reduce((a, x) => a + x, 0);
+        polos.forEach((p, k) => { fase[fasePolo(p, N)] += fd.fases[k] * J / sf; });
+      } else polos.forEach(p => { fase[fasePolo(p, N)] = J / P; });
     }
     const dem = fase.map(x => x * R * S);                                      // [X16:Z16]
     const I = fase.map((u, i) => corriente(u, dem[i], O, P));                // [AA16:AC16]
@@ -414,7 +417,7 @@
     const W130 = W128 + W129, J134 = tipos.reduce((a, t) => a + t.demandados, 0);
 
     // --- 3) alimentador / acometida [fila 139]
-    const R139 = W130 ? J134 / W130 : 1, S139 = fdiv01(tab.fdivTablero), L139 = W130 * R139 * S139, T139 = n(al.fp) || 0.9;
+    const R139 = n(tab.fdTablero) > 0 ? n(tab.fdTablero) : (W130 ? J134 / W130 : 1), S139 = fdiv01(tab.fdivTablero), L139 = W130 * R139 * S139, T139 = n(al.fp) || 0.9;
     const X139 = U117.map(u => L139 * u / 3);
     const AA139 = X139.map(x => (x > 0 ? corrienteAlim(x, V, fases) : 0));
     const AD139 = al.rated100 ? 1 : (al.mult !== undefined && al.mult !== '' ? n(al.mult) : 1.25);
@@ -709,7 +712,7 @@
       const rt = tablero(t, P, null);
       total[t.id] = P.cargaDerivados === 'demandada' ? rt.alim.L139 : rt.W130; demanda[t.id] = rt.alim.L139;
       const dem1 = P.cargaDerivados === 'demandada';   // con kVA demandados la demanda del tablero ya está aplicada
-      FEED[t.id] = { AF: rt.alim.AF139, AD: rt.alim.AD139, AI: rt.alim.AI139, AJ: rt.alim.AJ139, R: dem1 ? 1 : rt.alim.R139, S: dem1 ? 1 : rt.alim.S139 };
+      FEED[t.id] = { fases: rt.fases === 3 ? rt.U116.slice(0, 3) : rt.fases === 2 ? rt.U116.slice(0, 2) : null, AF: rt.alim.AF139, AD: rt.alim.AD139, AI: rt.alim.AI139, AJ: rt.alim.AJ139, R: dem1 ? 1 : rt.alim.R139, S: dem1 ? 1 : rt.alim.S139 };
       return total[t.id];
     }
     tabs.forEach(cargar);

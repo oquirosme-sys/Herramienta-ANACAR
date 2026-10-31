@@ -76,12 +76,13 @@
       try {
         const rep = await ImportAnacar.importar(await UI.readBuffer(f), f.name);
         App.render();
-        const fila = d => h('tr', null, h('td', null, d.tablero), h('td', null, d.que), h('td', { class: 'r' }, String(d.excel)), h('td', { class: 'r' }, String(d.web)));
-        const tabla = rep.dif.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Tablero', 'Dato', 'Excel', 'Herramienta'].map(x => h('th', null, x)))), h('tbody', null, rep.dif.slice(0, 80).map(fila)))) : h('p', { class: 'muted' }, 'Sin diferencias: la herramienta recalculó los mismos valores que dejó Excel.');
+        const cv = rep.dif.filter(d => /caída de voltaje/i.test(d.que)), otras = rep.dif.filter(d => !/caída de voltaje/i.test(d.que));
+        const fila = d => h('tr', { title: d.nota || null }, h('td', null, d.tablero), h('td', null, d.que + (d.nota ? ' ⓘ' : '')), h('td', { class: 'r' }, String(d.excel)), h('td', { class: 'r' }, String(d.web)));
+        const tabla = rep.dif.length ? h('div', null, otras.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Tablero', 'Dato', 'Excel', 'Herramienta'].map(x => h('th', null, x)))), h('tbody', null, otras.slice(0, 80).map(fila)))) : null, cv.length ? h('p', { class: 'muted' }, cv.length + ' valor(es) de caída de voltaje difieren en más de 0,15 %: el Excel y la herramienta acumulan la caída de forma distinta entre tableros (la herramienta la suma desde la acometida).') : null, otras.some(d => d.nota) ? h('ul', null, Array.from(new Set(otras.filter(d => d.nota).map(d => d.nota))).map(n => h('li', { class: 'muted' }, 'ⓘ ' + n))) : null) : h('p', { class: 'muted' }, 'Sin diferencias: la herramienta recalculó los mismos valores que dejó Excel.');
         UI.modal('Proyecto importado: ' + Store.project.nombre, h('div', null,
           h('p', null, rep.tableros + ' tablero(s) y ' + rep.circuitos + ' circuito(s) copiados. Cargas, longitudes, posiciones, protecciones, calibres, interruptores y tableros se tomaron del Excel; caídas de voltaje, balanceo, avisos y cortocircuito los recalculó la herramienta.'),
           rep.aviso.length ? h('div', null, h('h4', null, 'Para revisar (' + rep.aviso.length + ')'), h('ul', null, rep.aviso.map(a => h('li', null, a)))) : null,
-          h('h4', null, 'Comparación con el Excel' + (rep.dif.length ? ' (' + rep.dif.length + ' diferencia(s)' + (rep.dif.length > 80 ? ', se muestran 80' : '') + ')' : '')), tabla), [{ label: 'Cerrar', cls: 'primary' }]);
+          h('h4', null, 'Comparación con el Excel' + (rep.dif.length ? ' (' + otras.length + ' diferencia(s) de cálculo' + (otras.length > 80 ? ', se muestran 80' : '') + (cv.length ? ' y ' + cv.length + ' de caída de voltaje' : '') + ')' : '')), tabla), [{ label: 'Cerrar', cls: 'primary' }]);
         App.go('proyecto');
       } catch (e) { UI.alert('No se pudo importar: ' + e.message); }
     },
