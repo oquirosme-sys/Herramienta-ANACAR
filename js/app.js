@@ -58,6 +58,7 @@
         UI.btn('Nuevo proyecto (en blanco)', () => { Store.newProject(); App.go('proyecto'); App.render(); UI.toast('Proyecto nuevo. El anterior quedó en Proyectos guardados.', 'ok'); }, 'ghost'),
         UI.btn('Proyectos guardados…', () => App.proyectosGuardados(), 'ghost'),
         UI.btn('Abrir proyecto (.json)…', async () => { const f = await UI.pickFile('.json,application/json'); if (!f) return; try { Store.importProject(await UI.readText(f)); App.render(); UI.toast('Proyecto abierto', 'ok'); } catch (e) { UI.alert(e.message); } }, 'ghost'),
+        UI.btn('Importar proyecto de ANACAR en Excel (.xlsm)…', () => App.importarExcel(), 'ghost'),
         UI.btn('Guardar proyecto (.json)', () => U.download(App.fileBase() + '.json', Store.exportProject(), 'application/json'), 'ghost'),
         h('hr'),
         UI.btn('Exportar a Excel (tablas resumen y tableros)', () => ExportExcel.download(App.R), 'ghost'),
@@ -68,6 +69,21 @@
         ? UI.btn('Administrador ✓', async () => { if (await UI.confirm('¿Salir del modo administrador?', 'Salir', false)) { Auth.logout(); } }, 'admin-on', 'Salir del modo administrador')
         : UI.btn('Administrador', () => App.login(), 'ghost', 'Entrar como administrador para editar catálogos');
       box.append(st, menu, adm);
+    },
+    /** Importa un proyecto hecho en ANACAR (Excel): crea el proyecto en la herramienta y muestra el reporte de lo copiado y lo recalculado. */
+    async importarExcel() {
+      const f = await UI.pickFile('.xlsm,.xlsx'); if (!f) return;
+      try {
+        const rep = await ImportAnacar.importar(await UI.readBuffer(f), f.name);
+        App.render();
+        const fila = d => h('tr', null, h('td', null, d.tablero), h('td', null, d.que), h('td', { class: 'r' }, String(d.excel)), h('td', { class: 'r' }, String(d.web)));
+        const tabla = rep.dif.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Tablero', 'Dato', 'Excel', 'Herramienta'].map(x => h('th', null, x)))), h('tbody', null, rep.dif.slice(0, 80).map(fila)))) : h('p', { class: 'muted' }, 'Sin diferencias: la herramienta recalculó los mismos valores que dejó Excel.');
+        UI.modal('Proyecto importado: ' + Store.project.nombre, h('div', null,
+          h('p', null, rep.tableros + ' tablero(s) y ' + rep.circuitos + ' circuito(s) copiados. Cargas, longitudes, posiciones, protecciones, calibres, interruptores y tableros se tomaron del Excel; caídas de voltaje, balanceo, avisos y cortocircuito los recalculó la herramienta.'),
+          rep.aviso.length ? h('div', null, h('h4', null, 'Para revisar (' + rep.aviso.length + ')'), h('ul', null, rep.aviso.map(a => h('li', null, a)))) : null,
+          h('h4', null, 'Comparación con el Excel' + (rep.dif.length ? ' (' + rep.dif.length + ' diferencia(s)' + (rep.dif.length > 80 ? ', se muestran 80' : '') + ')' : '')), tabla), [{ label: 'Cerrar', cls: 'primary' }]);
+        App.go('proyecto');
+      } catch (e) { UI.alert('No se pudo importar: ' + e.message); }
     },
     /** Lista de proyectos guardados en este navegador (abrir o eliminar). */
     proyectosGuardados(contenedor) {

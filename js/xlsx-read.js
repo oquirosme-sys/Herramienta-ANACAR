@@ -45,17 +45,17 @@
       const rid = s.getAttribute('r:id') || s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
       let path = target[rid] || ''; path = path.startsWith('/') ? path.slice(1) : 'xl/' + path.replace(/^\.\//, '');
       const doc = await xml(path); if (!doc) continue;
-      const rows = [];
+      const rows = [], fml = [];   // fml: marca las celdas que traen fórmula (el valor leído es el último calculado por Excel)
       Array.from(doc.getElementsByTagName('row')).forEach(row => {
-        const r = Number(row.getAttribute('r')) - 1, arr = rows[r] = [];
+        const r = Number(row.getAttribute('r')) - 1, arr = rows[r] = [], fa = fml[r] = [];
         Array.from(row.getElementsByTagName('c')).forEach(c => {
           const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0], is = c.getElementsByTagName('is')[0];
           let val = v ? v.textContent : (is ? is.textContent : '');
           if (t === 's') val = ss[Number(val)] || ''; else if (t === 'b') val = val === '1'; else if (t !== 'str' && t !== 'inlineStr' && val !== '' && !isNaN(Number(val))) val = Number(val);
-          arr[colIdx(c.getAttribute('r'))] = val;
+          arr[colIdx(c.getAttribute('r'))] = val; if (c.getElementsByTagName('f')[0]) fa[colIdx(c.getAttribute('r'))] = true;
         });
       });
-      sheets.push({ name: s.getAttribute('name'), state: s.getAttribute('state') || 'visible', rows: Array.from(rows, x => x || []) });
+      sheets.push({ name: s.getAttribute('name'), state: s.getAttribute('state') || 'visible', rows: Array.from(rows, x => x || []), formulas: Array.from(fml, x => x || []) });
     }
     return sheets;
   }
