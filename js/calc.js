@@ -51,7 +51,8 @@
     return t.g[t.lim.findIndex(x => area <= x + 1e-9)];
   }
   /** Conductor de puesta a tierra según el criterio del proyecto: 250.122 (por la protección) o 250.66 (por el calibre de los conductores). */
-  const tierraDe = (prot, cal, nPar, mat) => (K.tierraNorma === '250.66' && tierra66(cal, nPar, mat)) || tierra(prot, mat);
+  let NORMA_TIERRA = '250.122';   // criterio de tierra del tablero que se está calculando (el del tablero o, si no, el del proyecto)
+  const tierraDe = (prot, cal, nPar, mat) => (NORMA_TIERRA === '250.66' && tierra66(cal, nPar, mat)) || tierra(prot, mat);
   /** Diámetro de tubería, tabla C.10 [CONDISEÑO L101:O118]. Igual que el Excel: "XHHW-2" usa la columna THHN. */
   function conduit(cal, mat, ais) {
     if (esMC(mat)) return 'MC';
@@ -392,6 +393,7 @@
   /* ---------- un tablero completo ---------- */
   /** Calcula un tablero. ctx: { vInicio, iccInicioA } que vienen del tablero que lo alimenta (cascada). */
   function tablero(tab, P, ctxIn, altOrigen) {
+    NORMA_TIERRA = tab.tierraNorma || K.tierraNorma || '250.122';
     const fases = n(tab.fases) || 3, V = n(tab.voltaje) || 208, al = tab.alim || {};
     const marcaTab = tab.catalogoId && String(tab.catalogoId) !== 'manual' ? ((K.tablerosCat.find(t => String(t.id) === String(tab.catalogoId)) || {}).fabricante) : (tab.marca || K.marcaDefecto || 'Eaton');
 
@@ -651,7 +653,7 @@
       if (manF && ci(manF) < ci(CAL_MIN_FASE)) avisos.push('Calibre de fases ' + manF + ' AWG menor que el mínimo de ' + CAL_MIN_FASE + ' AWG para un alimentador');
       if (manN && AN139 && ci(manN) < ci(CAL_MIN_FASE)) avisos.push('Calibre de neutro ' + manN + ' AWG menor que el mínimo de ' + CAL_MIN_FASE + ' AWG para un alimentador');
       if (manT && ci(manT) < ci(CAL_MIN_TIERRA)) avisos.push('Calibre de tierra ' + manT + ' AWG menor que el mínimo de ' + CAL_MIN_TIERRA + ' AWG para un alimentador');
-      if (manT && reqTierra && ci(manT) < ci(reqTierra)) avisos.push('Tierra de ' + manT + ' AWG menor que la requerida por el ' + (K.tierraNorma === '250.66' ? '250.66 para conductores de ' + AL139 + ' AWG' : '250.122 para ' + AF139 + ' A') + ' (' + reqTierra + ' AWG)');
+      if (manT && reqTierra && ci(manT) < ci(reqTierra)) avisos.push('Tierra de ' + manT + ' AWG menor que la requerida por el ' + (NORMA_TIERRA === '250.66' ? '250.66 para conductores de ' + AL139 + ' AWG' : '250.122 para ' + AF139 + ' A') + ' (' + reqTierra + ' AWG)');
     }
     if (ajustado && val && val.ok) avisos.push('Calibre del alimentador aumentado por temperatura/agrupamiento: ' + (parBase > 1 ? parBase + 'x' : '') + calBase + ' → ' + (AI139 > 1 ? AI139 + 'x' : '') + AL139 + ' AWG/kcmil');
     if (cat && espaciosUsados > n(cat.espacios)) avisos.push('Circuitos usan ' + espaciosUsados + ' espacios; el tablero tiene ' + cat.espacios);
@@ -693,7 +695,7 @@
 
     return {
       tab, nombre: nombreTablero(tab), fases, V, hilos, rows, J116, U116, U117, desbalance, tipos, W128, W129, W130, J134,
-      alim: { auto: { fases: calAuto, neutro: AN139a, tierra: tierraAuto }, manual: { fases: manF, neutro: manN, tierra: manT }, reqTierra, R139, S139, L139, T139, X139, AA139, AD139, AE139, AF139, mat, ais, AI139, AJ139, AL139, AN139, AP139, AP140, AR139, tuberia, AS139, AT139,
+      alim: { normaTierra: NORMA_TIERRA, auto: { fases: calAuto, neutro: AN139a, tierra: tierraAuto }, manual: { fases: manF, neutro: manN, tierra: manT }, reqTierra, R139, S139, L139, T139, X139, AA139, AD139, AE139, AF139, mat, ais, AI139, AJ139, AL139, AN139, AP139, AP140, AR139, tuberia, AS139, AT139,
         M139, vInicio, AV139, AW139, AX139, AY139, AU140, AV140, AW140, tempF, agrF, ampReq, ampCond, agrup, val, ajustado, calBase, parBase,
         fasesTxt: pre139 + AL139, neutroTxt: AN139 ? preN + AN139 : '', tierraTxt: AP139 ? preN + AP139 : '', tuboTxt: AR139 ? preN + AR139 : '', preN, preF: pre139.trim() },
       iccA, iccKA, iccFuente, trafo, ups, alterna, upsMts, zapatas, enSerie, nec, servicio, kaSpdMin, cat, famT, marca, bkMain, spd, prl, espaciosUsados, avisos,
