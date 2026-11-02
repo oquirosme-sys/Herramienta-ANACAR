@@ -482,7 +482,7 @@
       const reg = carga * (pR * T139 + pX * sin);                                  // caída de tensión en el transformador (%)
       const tap = n(tr.tap);   // derivación (tap) del transformador: sube (+) o baja (−) la tensión del secundario en vacío
       vInicio = V * fp * (1 + tap / 100 - reg / 100);
-      trafo = { kva, z, xr, carga, reg, tap, Vp: n(tr.primario) || Vpadre || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139, protPrim: tr.protPrim !== false, protSec: tr.protSec === true };
+      trafo = { kva, z, xr, carga, reg, tap, Vp: n(tr.primario) || Vpadre || n(P && P.vRed) || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139, protPrim: tr.protPrim !== false, protSec: tr.protSec === true };
     } else if (ctxIn && ctxIn.vInicio) vInicio = Vpadre ? V * fp : ctxIn.vInicio;   // cascada [AU139]
     const upsD = tab.ups && tab.ups.activo && n(tab.ups.kva) ? tab.ups : null;
     let ups = null;
@@ -754,6 +754,14 @@
       r.circuitoPadre = r.padre ? (r.padre.rows.find(x => x.c.tableroHijoId === r.tab.id) || null) : null;
       if (r.padre && !r.circuitoPadre) r.avisos.push('El tablero ' + r.padre.nombre + ' no tiene un circuito asignado a este tablero');
       if (ciclo.has(r.tab.id)) r.avisos.push('Alimentación circular: revise "Alimentado desde"');
+      // validación de voltajes de barras: debajo de un transformador el voltaje es el del secundario; sin transformador, el del tablero de arriba
+      const dif = (x, y) => x && y && Math.abs(x - y) > 0.02 * Math.max(x, y);
+      if (r.padre && !r.trafo && !ciclo.has(r.tab.id) && dif(r.V, r.padre.V)) {
+        const tp = r.padre.trafo;
+        r.avisos.push('Voltaje de barras: este tablero es de ' + r.V + ' V y cuelga de ' + r.padre.nombre + ' (' + r.padre.V + ' V' + (tp ? ', secundario del transformador ' + (tp.nombre ? tp.nombre + ' ' : '') + (tp.Vp ? tp.Vp + ' V / ' : '') + tp.Vs + ' V' : '') + ') sin un transformador entre ellos: agregue el transformador o corrija el sistema del tablero');
+      }
+      if (r.trafo && r.padre && dif(r.trafo.Vp, r.padre.V)) r.avisos.push('El primario del transformador (' + r.trafo.Vp + ' V) no coincide con el voltaje de ' + r.padre.nombre + ' (' + r.padre.V + ' V)');
+      if (r.trafo && !r.padre && n(P.vRed) && r.trafo.Vp && dif(r.trafo.Vp, n(P.vRed))) r.avisos.push('El primario del transformador (' + r.trafo.Vp + ' V) no coincide con el voltaje de la red del proyecto (' + n(P.vRed) + ' V)');
     });
     const fuentes = (P.fuentes || []).map(x => ({ fuente: x, carga: SRC_LOAD[x.id] || 0, salidas: SRC_N[x.id] || 0, cargaPct: n(x.kva) ? (SRC_LOAD[x.id] || 0) / n(x.kva) : null, tableros: tabs.filter(t => t.fuenteId === x.id || (t.alterna && t.alterna.activo && t.alterna.fuenteId === x.id)).map(t => t.id) }));
     return { res, orden, byId, hijos, fuentes };

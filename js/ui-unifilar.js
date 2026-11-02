@@ -21,7 +21,7 @@
   /* ---------- transformador ---------- */
   function editarTrafo(t, R) {
     const tr = t.trafo, r = R.res[t.id], padreV = r && r.padre ? r.padre.V : '';
-    const d = { activo: true, kva: tr.kva, z: tr.z, xr: tr.xr, primario: tr.primario || padreV || '', tap: Number(tr.tap) || 0, fases: tr.fases || (Number(t.fases) === 3 ? 3 : 1), nombre: tr.nombre || '' };
+    const d = { activo: true, kva: tr.kva, z: tr.z, xr: tr.xr, primario: tr.primario || padreV || Store.project.vRed || '', sistema: t.sistema, tap: Number(tr.tap) || 0, fases: tr.fases || (Number(t.fases) === 3 ? 3 : 1), nombre: tr.nombre || '' };
     const pres = UI.select(UI.opts(Store.catalog.transformadores.map(x => ({ value: x.id, label: x.nombre + ' · Z ' + x.z + ' %', group: x.tipo })), '— Elegir de la lista (opcional) —'), '', v => {
       const x = Store.catalog.transformadores.find(o => String(o.id) === v); if (!x) return;
       const m = /(\d+(?:[.,]\d+)?)\s*KVA/i.exec(x.nombre); if (m) { d.kva = Number(m[1].replace(',', '.')); kva.value = String(d.kva).replace('.', ','); }
@@ -31,13 +31,14 @@
     const xr = UI.input(d, 'xr', { type: 'num', save: false, after: () => {}, placeholder: '4' }), vp = UI.input(d, 'primario', { type: 'num', save: false, after: () => {} });
     const fs = UI.select([{ value: 3, label: 'Trifásico' }, { value: 1, label: 'Monofásico' }], d.fases, v => { d.fases = Number(v); });
     const nom = UI.input(d, 'nombre', { save: false, after: () => {}, placeholder: 'T-1' });
+    const sisSel = UI.select(Store.catalog.listas.sistemas, d.sistema, v => { d.sistema = v; });
     const tapSel = UI.select([{ value: -5, label: '−5 %' }, { value: -2.5, label: '−2,5 %' }, { value: 0, label: '0 (nominal)' }, { value: 2.5, label: '+2,5 %' }, { value: 5, label: '+5 %' }], d.tap, v => { d.tap = Number(v); });
     d.protPrim = tr.protPrim !== false; d.protSec = tr.protSec === true; d.protPrimA = tr.protPrimA || ''; d.protSecA = tr.protSecA || '';
     const chk = (k, txt) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!d[k], onchange: e => { d[k] = e.target.checked; } }), ' ' + txt);
     UI.modal('Transformador que alimenta a ' + Calc.nombreTablero(t), h('div', null,
-      h('p', { class: 'muted' }, 'Se ubica entre ' + (r && r.padre ? r.padre.nombre : 'la red') + ' y el alimentador de ' + Calc.nombreTablero(t) + '. El secundario es el sistema del tablero (' + t.sistema + ' V).'),
+      h('p', { class: 'muted' }, 'Se ubica entre ' + (r && r.padre ? r.padre.nombre : 'la red') + ' y el alimentador de ' + Calc.nombreTablero(t) + '. El primario viene del tablero de arriba o de la red del proyecto, y el secundario es el sistema del tablero; ambos se pueden cambiar aquí.'),
       h('div', { class: 'grid2' }, UI.field('De la lista del Excel', pres, null, 'span2'), UI.field('Nombre', nom), UI.field('Fases', fs), UI.field('Capacidad (kVA)', kva), UI.field('Impedancia Z (%)', z),
-        UI.field('Relación X/R', xr, 'Para la caída de tensión en el transformador; 4 si no se conoce'), UI.field('Derivación (tap)', tapSel, 'Compensa la regulación: +2,5 % o +5 % suben la tensión del secundario'), UI.field('Voltaje primario (V)', vp, padreV ? 'Voltaje del tablero que lo alimenta: ' + padreV + ' V' : 'Voltaje de la red'),
+        UI.field('Relación X/R', xr, 'Para la caída de tensión en el transformador; 4 si no se conoce'), UI.field('Derivación (tap)', tapSel, 'Compensa la regulación: +2,5 % o +5 % suben la tensión del secundario'), UI.field('Voltaje secundario (sistema)', sisSel, 'Es el sistema del tablero; al cambiarlo cambia el voltaje del tablero'), UI.field('Voltaje primario (V)', vp, padreV ? 'Voltaje del tablero que lo alimenta: ' + padreV + ' V' : (Store.project.vRed ? 'Voltaje de la red del proyecto: ' + Store.project.vRed + ' V' : 'Voltaje de la red (se puede definir en Proyecto)')),
         UI.field('Protección en el primario', chk('protPrim', 'Dibujar interruptor en el primario'), 'Desmarque si no aplica: no aparece en el unifilar', 'span2'),
         UI.field('Protección primaria (A)', UI.input(d, 'protPrimA', { type: 'num', save: false, after: () => {}, placeholder: 'Auto (125 % de la corriente nominal)' }), 'Vacío = automática, NEC 450.3(B)'),
         UI.field('Protección en el secundario', chk('protSec', 'Dibujar interruptor en el secundario'), 'Marque si el transformador lleva protección en el secundario', 'span2'),
@@ -46,7 +47,9 @@
       { label: 'Cancelar' },
       { label: 'Guardar', cls: 'primary', onclick: () => {
         if (!Number(d.kva) || !Number(d.z)) { UI.alert('Indique la capacidad (kVA) y la impedancia (%).'); return false; }
+        const sis = d.sistema; delete d.sistema;
         Object.assign(tr, d, { activo: true });
+        if (sis && sis !== t.sistema) { t.sistema = sis; Object.assign(t, Store.voltajeDe(sis, t.tipo)); }
         const padre = Store.tablero(t.padreId), circ = padre && padre.circuitos.find(c => c.tableroHijoId === t.id);
         if (circ && Number(padre.voltaje) !== Number(t.voltaje)) circ.detalleId = Store.detalleTablero(t, padre);
         Store.save(); App.refresh();
@@ -263,7 +266,7 @@
     raiz.forEach(r => conCtx('r:' + r.tab.id, () => {
       const cx = x + span[r.tab.id] / 2, y0 = 30;
       D.rect(cx - 42, y0, 84, 34, 'u-red', 'EQUIPOS');
-      D.texto(cx, y0 + 22, r.trafo ? 'RED' : (Store.fuente(r.tab.fuenteId) ? ((Store.fuente(r.tab.fuenteId).nombre || 'GENERADOR')) : (r.tab.conectadoA || 'ACOMETIDA')).slice(0, 14), 'u-t b', 'TEXTO', 'c');
+      D.texto(cx, y0 + 22, r.trafo ? 'RED' + (Number(Store.project.vRed) ? ' ' + (Number(Store.project.vRed) >= 1000 ? f1(Number(Store.project.vRed) / 1000) + ' kV' : f0(Number(Store.project.vRed)) + ' V') : '') : (Store.fuente(r.tab.fuenteId) ? ((Store.fuente(r.tab.fuenteId).nombre || 'GENERADOR')) : (r.tab.conectadoA || 'ACOMETIDA')).slice(0, 14), 'u-t b', 'TEXTO', 'c');
       D.texto(cx + 50, y0 + 14, r.trafo ? (P.iccRed ? 'Icc ' + f2(P.iccRed) + ' kA' : 'Icc infinita') : '', 'u-t', 'TEXTO');
       if (!r.trafo && r.iccFuente === 'manual') D.texto(cx + 50, y0 + 29, 'Icc en bornes ' + f2(r.iccKA) + ' kA (dato)', 'u-t', 'TEXTO');
       bajada(cx, y0 + 34, y0 + 34 + NIVEL - 60, r, null);
