@@ -471,17 +471,19 @@
     // --- transformador (opcional) aguas arriba del alimentador: regulación y cortocircuito
     const fte = tab.fuenteId && FUENTES[tab.fuenteId] ? FUENTES[tab.fuenteId] : null;
     const fTr = fte && fte.tipo !== 'generador' ? fte : null, fGen = fte && fte.tipo === 'generador' ? fte : null;
-    const tr = fTr ? (n(fTr.kva) && n(fTr.z) ? { activo: true, kva: fTr.kva, z: fTr.z, xr: fTr.xr, primario: fTr.primario, fases: fTr.fases, nombre: fTr.nombre, protPrim: fTr.protPrim, protSec: fTr.protSec, protPrimA: fTr.protPrimA, protSecA: fTr.protSecA } : null)
+    const tr = fTr ? (n(fTr.kva) && n(fTr.z) ? { activo: true, kva: fTr.kva, z: fTr.z, xr: fTr.xr, primario: fTr.primario, fases: fTr.fases, nombre: fTr.nombre, tap: fTr.tap, protPrim: fTr.protPrim, protSec: fTr.protSec, protPrimA: fTr.protPrimA, protSecA: fTr.protSecA } : null)
       : tab.trafo && tab.trafo.activo && n(tab.trafo.kva) && n(tab.trafo.z) ? tab.trafo : null;
     const Vpadre = ctxIn && ctxIn.Vpadre;
     let vInicio = V, trafo = null;
+    const fp = ctxIn && ctxIn.vInicio && Vpadre ? ctxIn.vInicio / Vpadre : 1;   // fracción de la tensión que llega desde arriba: la caída acumulada sigue a través de un transformador o cambio de voltaje
     if (tr) {
       const kva = n(tr.kva), z = n(tr.z), xr = n(tr.xr) || 4, pR = z / Math.sqrt(1 + xr * xr), pX = pR * xr;
       const sin = Math.sqrt(Math.max(0, 1 - T139 * T139)), carga = kva ? (fTr ? (SRC_LOAD[fTr.id] || L139) : L139) / kva : 0;
       const reg = carga * (pR * T139 + pX * sin);                                  // caída de tensión en el transformador (%)
-      vInicio = V * (1 - reg / 100);
-      trafo = { kva, z, xr, carga, reg, Vp: n(tr.primario) || Vpadre || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139, protPrim: tr.protPrim !== false, protSec: tr.protSec === true };
-    } else if (ctxIn && ctxIn.vInicio && (!Vpadre || Vpadre === V)) vInicio = ctxIn.vInicio;   // cascada [AU139]
+      const tap = n(tr.tap);   // derivación (tap) del transformador: sube (+) o baja (−) la tensión del secundario en vacío
+      vInicio = V * fp * (1 + tap / 100 - reg / 100);
+      trafo = { kva, z, xr, carga, reg, tap, Vp: n(tr.primario) || Vpadre || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139, protPrim: tr.protPrim !== false, protSec: tr.protSec === true };
+    } else if (ctxIn && ctxIn.vInicio) vInicio = Vpadre ? V * fp : ctxIn.vInicio;   // cascada [AU139]
     const upsD = tab.ups && tab.ups.activo && n(tab.ups.kva) ? tab.ups : null;
     let ups = null;
     if (upsD) { vInicio = V; ups = { kva: n(upsD.kva), factor: n(upsD.factorIcc) || 2, carga: L139 / n(upsD.kva), nombre: upsD.nombre || 'UPS' }; ups.icc = ups.factor * ups.kva * 1000 / ((fases === 3 ? 1.732 : 1) * V); }

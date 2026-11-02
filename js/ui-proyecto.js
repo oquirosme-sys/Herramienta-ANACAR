@@ -25,12 +25,31 @@
   }
 
   /** Árbol de alimentación (unifilar simplificado). */
+  /** Revisión de caídas de voltaje: los alimentadores y circuitos con mayor caída acumulada, con el desglose por tramo. */
+  function tarjetaCaidas(R) {
+    const P = Store.project, lim = n => (n === undefined ? 0 : n);
+    const filasT = R.orden.map(r => { const A = r.alim, propia = r.V ? A.AV139 * 100 / r.V : 0, tr = r.trafo ? r.trafo.reg - (r.trafo.tap || 0) : 0; return { r, acum: A.AY139, propia, tr, previa: A.AY139 - propia - tr }; })
+      .sort((a, b) => b.acum - a.acum).slice(0, 12);
+    const filasC = [];
+    R.orden.forEach(r => r.rows.forEach(x => { if (x.AY !== null && x.AY !== undefined && !x.c.tableroHijoId) filasC.push({ r, x, tot: x.AY, tab: r.alim.AY139, circ: x.AY - r.alim.AY139 }); }));
+    filasC.sort((a, b) => b.tot - a.tot); const topC = filasC.slice(0, 12);
+    const cel = (v, lim_) => h('td', { class: 'r' + (lim_ && v > lim_ ? ' bad' : '') }, f2(v));
+    const tabla = (cab, filas) => h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, cab.map(x => h('th', null, x)))), h('tbody', null, filas)));
+    return UI.card('Caídas de voltaje más altas', h('div', null,
+      h('p', { class: 'muted' }, 'Para ver qué tramo pesa más. La caída del alimentador se acumula desde la fuente, también a través de transformadores y cambios de voltaje; la del transformador es su regulación menos la derivación (tap). Máximos: alimentador ' + f2(P.cvMaxAlim) + ' %, circuito ' + f2(P.cvMaxTotal) + ' %.'),
+      h('h4', null, 'Tableros (alimentador)'),
+      tabla(['Tablero', 'Acumulada %', 'Transformador %', 'De arriba %', 'Alimentador %'], filasT.map(o => h('tr', null, h('td', null, h('a', { href: '#memoria/' + o.r.tab.id, class: 'link' }, o.r.nombre)), cel(o.acum, P.cvMaxAlim), cel(o.tr), cel(o.previa), cel(o.propia)))),
+      h('h4', null, 'Circuitos ramales'),
+      tabla(['Tablero', 'Circuito', 'Total %', 'Hasta el tablero %', 'Del circuito %'], topC.map(o => h('tr', null, h('td', null, h('a', { href: '#memoria/' + o.r.tab.id, class: 'link' }, o.r.nombre)), h('td', null, '[' + o.x.c.polos.join(',') + '] ' + (o.x.descripcion || '').slice(0, 40)), cel(o.tot, P.cvMaxTotal), cel(o.tab), cel(o.circ))))));
+  }
+
   /** Transformadores y generadores del proyecto: un mismo equipo puede alimentar varios tableros y ATS; el voltaje de esos tableros es el secundario nominal. */
   function tarjetaFuentes(R) {
     const p = Store.project, L = Store.catalog.listas;
     const info = id => (R.fuentes || []).find(x => x.fuente.id === id) || { salidas: 0, carga: 0, cargaPct: null, tableros: [] };
     const filas = p.fuentes.map(fu => {
       const k = 'fu:' + fu.id + ':', gen = fu.tipo === 'generador', i = info(fu.id);
+      if (fu.tap === undefined) fu.tap = 0;
       const sis = UI.select(L.sistemas, fu.sistema, v => { fu.sistema = v; Store.sincronizarFuentes(); Store.save(); App.refresh(); }, { fk: k + 'sis', label: 'Secundario' });
       const lista = gen ? null : UI.select(UI.opts(Store.catalog.transformadores.map(x => ({ value: x.id, label: x.nombre + ' · Z ' + x.z + ' %', group: x.tipo })), '— elegir —'), '', v => {
         const x = Store.catalog.transformadores.find(o => String(o.id) === v); if (!x) return;
@@ -44,6 +63,7 @@
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.input(fu, 'z', { type: 'num', fk: k + 'z', class: 'w-num', label: 'Z %' })),
         h('td', null, gen ? UI.input(fu, 'xd', { type: 'num', fk: k + 'xd', class: 'w-num', label: "X''d %", placeholder: '12' }) : UI.input(fu, 'xr', { type: 'num', fk: k + 'xr', class: 'w-num', label: 'X/R', placeholder: '4' })),
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.input(fu, 'primario', { type: 'num', fk: k + 'pri', class: 'w-num', label: 'Primario (V)' })),
+        h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.bind(fu, 'tap', [{ value: -5, label: '−5 %' }, { value: -2.5, label: '−2,5 %' }, { value: 0, label: '0 (nominal)' }, { value: 2.5, label: '+2,5 %' }, { value: 5, label: '+5 %' }], { num: true, fk: k + 'tap', label: 'Derivación (tap)' })),
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.bind(fu, 'fases', [{ value: 3, label: '3F' }, { value: 1, label: '1F' }], { num: true, fk: k + 'fas', label: 'Fases' })),
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : h('div', { class: 'col' },
           h('label', { class: 'chk', title: 'Interruptor en el primario del transformador' }, h('input', { type: 'checkbox', checked: fu.protPrim !== false, onchange: e => { fu.protPrim = e.target.checked; Store.save(); App.refresh(); } }), ' Primario'),
@@ -53,7 +73,7 @@
         h('td', { class: 'acc' }, UI.iconBtn('🗑', 'Eliminar', async () => { if (await UI.confirm('¿Eliminar ' + (fu.nombre || 'la fuente') + '? Los tableros que cuelgan de ella quedan sin fuente.', 'Eliminar')) { Store.eliminarFuente(fu.id); App.refresh(); } }, 'danger')));
     });
     return UI.card('Fuentes: transformadores y generadores (' + p.fuentes.length + ')',
-      p.fuentes.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Nombre', 'Tipo', 'kVA', 'Secundario (V)', 'Z (%)', "X/R · X''d (%)", 'Primario (V)', 'Fases', 'Protección', 'De la lista del Excel', 'Tableros · carga', ''].map(x => h('th', null, x)))), h('tbody', null, filas)))
+      p.fuentes.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Nombre', 'Tipo', 'kVA', 'Secundario (V)', 'Z (%)', "X/R · X''d (%)", 'Primario (V)', 'Tap', 'Fases', 'Protección', 'De la lista del Excel', 'Tableros · carga', ''].map(x => h('th', null, x)))), h('tbody', null, filas)))
         : h('p', { class: 'muted' }, 'Opcional. Cree aquí el transformador de pedestal o el generador y luego, en "Alimentado desde" de cada tablero (o en la segunda acometida de un ATS), elija esa fuente: varios tableros comparten el mismo equipo y toman su voltaje secundario.'),
       h('div', { class: 'toolbar' }, UI.btn('+ Transformador', () => { Store.nuevaFuente('transformador'); App.refresh(); }, 'small'), UI.btn('+ Generador', () => { Store.nuevaFuente('generador'); App.refresh(); }, 'small')));
   }
@@ -99,6 +119,7 @@
       ))));
 
     view.appendChild(tarjetaFuentes(R));
+    if (R.orden.length) view.appendChild(tarjetaCaidas(R));
 
     // ---- tableros
     const cuerpo = h('tbody');
