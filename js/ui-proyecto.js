@@ -94,6 +94,7 @@
         UI.field('Carga de tableros derivados', UI.bind(p, 'cargaDerivados', [{ value: 'conectada', label: 'kVA conectados con su reserva' }, { value: 'sinreserva', label: 'kVA conectados sin reserva (como el Excel)' }, { value: 'demandada', label: 'kVA demandados (no repite demanda)' }], { fk: 'p:cder' }), 'Con qué carga sube cada tablero al que lo alimenta'),
         UI.field('Reserva de espacios (%)', UI.input(p, 'reservaEspacios', { type: 'num', fk: 'p:res' }), 'Para elegir el tablero de catálogo'),
         UI.field('Icc de la red (kA)', UI.input(p, 'iccRed', { type: 'num', fk: 'p:iccr', placeholder: 'infinita' }), 'En el primario de los transformadores principales'),
+        UI.field('Conductor de puesta a tierra', UI.bind(p, 'tierraNorma', [{ value: '250.122', label: '250.122 · por la protección (tierra de equipo)' }, { value: '250.66', label: '250.66 · por el calibre de los conductores (electrodo / puente de unión)' }], { fk: 'p:tnorma' }), '250.122: calibre según el interruptor que protege el circuito. 250.66: según el calibre del conductor de fase (con paralelos, el área equivalente)'),
         UI.field('Alimentadores', h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: p.autoAmpacidad !== false, onchange: e => { p.autoAmpacidad = e.target.checked; Store.save(); App.refresh(); } }), ' Aumentar calibre si no cumple 310.15'), 'Temperatura y agrupamiento'),
       ))));
 

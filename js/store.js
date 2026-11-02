@@ -70,7 +70,7 @@
     emptyProject() {
       return {
         id: U.uid(), nombre: '', numero: '', ubicacion: '', fecha: U.today(), elaboro: '', revision: '',
-        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', resumenSimple: false, ocupacion: 'comercial', cargaDerivados: 'conectada', pais: 'CR', previstas: [], fuentes: [], tableros: [],
+        cvMaxRamal: 3, cvMaxAlim: 3, cvMaxTotal: 5, desbalanceMax: 10, iccLongMax: 20, marcaDefecto: 'Eaton', reservaEspacios: 20, autoAmpacidad: true, iccRed: '', resumenSimple: false, ocupacion: 'comercial', tierraNorma: '250.122', cargaDerivados: 'conectada', pais: 'CR', previstas: [], fuentes: [], tableros: [],
       };
     },
     migrate() {
@@ -103,7 +103,7 @@
       }
       if (!c.fdiv01) { (c.detallesCarga || []).forEach(d => { d.fdiv = inv(d.fdiv); }); (c.tiposCarga || []).forEach(t => { t.fdiv = inv(t.fdiv); }); c.fdiv01 = true; }
       const p = Store.project;
-      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed', 'resumenSimple', 'ocupacion', 'cargaDerivados', 'pais', 'previstas', 'fuentes'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
+      ['cvMaxRamal', 'cvMaxAlim', 'cvMaxTotal', 'desbalanceMax', 'iccLongMax', 'marcaDefecto', 'reservaEspacios', 'autoAmpacidad', 'iccRed', 'resumenSimple', 'ocupacion', 'tierraNorma', 'cargaDerivados', 'pais', 'previstas', 'fuentes'].forEach(k => { if (p[k] === undefined) p[k] = Store.emptyProject()[k]; });
       p.tableros.forEach(t => Store.completarTablero(t));
       Store.sincronizarFuentes();
       if (!p.fdiv01) {

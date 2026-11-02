@@ -39,6 +39,18 @@
     const al = esAL(mat), f = K.electrodo.find(x => (al ? x.calAL : x.calCU) === calStr(cal));
     return f ? (f[mat] || (al ? f.AL : f.CU)) : '';
   }
+  /** Tabla 250.66 (NEC 2023): conductor del electrodo de puesta a tierra según el mayor conductor de la acometida (o el área equivalente si van en paralelo).
+      lim = límite superior del área del conductor (kcmil) de cada fila; g = calibre de tierra de cada fila. El de tierra sigue el material de los conductores. */
+  const T66 = { CU: { lim: [66.36, 105.6, 167.8, 350, 600, 1100, Infinity], g: ['8', '6', '4', '2', '1/0', '2/0', '3/0'] }, AL: { lim: [105.6, 167.8, 250, 500, 900, 1750, Infinity], g: ['6', '4', '2', '1/0', '3/0', '4/0', '250'] } };
+  const AREA_KCMIL = { '14': 4.11, '12': 6.53, '10': 10.38, '8': 16.51, '6': 26.24, '4': 41.74, '3': 52.62, '2': 66.36, '1': 83.69, '1/0': 105.6, '2/0': 133.1, '3/0': 167.8, '4/0': 211.6 };
+  const areaCal = c => { const k = calStr(c); return AREA_KCMIL[k] || n(k) || 0; };
+  function tierra66(cal, nPar, mat) {
+    const area = areaCal(cal) * Math.max(1, n(nPar) || 1); if (!area) return '';
+    const t = esAL(mat) ? T66.AL : T66.CU;
+    return t.g[t.lim.findIndex(x => area <= x + 1e-9)];
+  }
+  /** Conductor de puesta a tierra según el criterio del proyecto: 250.122 (por la protección) o 250.66 (por el calibre de los conductores). */
+  const tierraDe = (prot, cal, nPar, mat) => (K.tierraNorma === '250.66' && tierra66(cal, nPar, mat)) || tierra(prot, mat);
   /** Diámetro de tubería, tabla C.10 [CONDISEÑO L101:O118]. Igual que el Excel: "XHHW-2" usa la columna THHN. */
   function conduit(cal, mat, ais) {
     if (esMC(mat)) return 'MC';
@@ -345,7 +357,7 @@
     const pre2 = AI === 1 ? ' ' : AI + 'x';
     let AN = Q === 0 ? ' ' : (O >= 208 && P === 3 && Q === 4) ? AL : (P === 3 && Q === 3) ? ' ' : (O >= 208 && P === 1 && Q === 3) ? ' ' : AL;
     if (hijoMan && calStr(hijoMan.calNeutro) && AN !== ' ') AN = calStr(hijoMan.calNeutro);
-    let AP = AF ? tierra(AF, mat) : '';
+    let AP = AF ? tierraDe(AF, AL, AI, mat) : '';
     if (c.tableroHijoId && AP) AP = maxCal(AP, CAL_MIN_TIERRA);   // tierra de un alimentador: mínimo 10 AWG
     if (hijoMan && calStr(hijoMan.calTierra)) AP = calStr(hijoMan.calTierra);
     const AR = AL ? conduit(AL, mat, ais) : '';
@@ -448,8 +460,8 @@
     let AN139 = neutroDe(AL139);
     const AN139a = neutroDe(calAuto);
     if (manN && AN139) AN139 = manN;
-    const reqTierra = AF139 ? tierra(AF139, mat) : '', tierraAuto = maxCal(reqTierra, CAL_MIN_TIERRA);
-    const AP139 = AF139 ? (manT || tierraAuto) : '', AP140 = AL139 ? electrodo(AL139, mat) : '';
+    const reqTierra = AF139 ? tierraDe(AF139, AL139, AI139, mat) : '', tierraAuto = maxCal(reqTierra, CAL_MIN_TIERRA);
+    const AP139 = AF139 ? (manT || tierraAuto) : '', AP140 = AL139 ? tierra66(AL139, AI139, mat) : '';
     const AR139 = AL139 ? conduit(AL139, mat, ais) : '', tuberia = al.tuberia || 'EMT';
     const AS139 = AL139 ? fac(AL139, mat, T139) : null, AT139 = facAjustado(AS139, V, fases, true);
     const Iv = U116[0] > 0 ? AA139[0] : U116[1] > 0 ? AA139[1] : AA139[2];
@@ -559,7 +571,7 @@
       const atsSel = esTr ? transferencia(altD, equipo, AF139, iccAtsKA) : null;
       const wcr = n(altD.sccr) || (atsSel ? n(atsSel.wcr) : 0);
       alterna = { equipo, tipo: altD.tipo || 'generador', origen, origenId: altD.origenId || '', nombre: altD.nombre || '', cal: ac, par: an, mat: am, ais: aa, tuberia: at, longitud: AL, val: av,
-        fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + maxCal(tierra(AF139, am), CAL_MIN_TIERRA) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
+        fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + maxCal(tierraDe(AF139, ac, an, am), CAL_MIN_TIERRA) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
         caida: avd + dropCom, caidaFuente: avd, caidaComun: dropCom, distAts: dAts, distNormal: Math.max(0, M139 - dAts), caidaNormal: M139 ? AV139 * Math.max(0, M139 - dAts) / M139 : 0, vBornes: v0 - avd - dropCom, cv: (V - (v0 - avd - dropCom)) * 100 / V, iccA: iAlt, iccAtsKA,
         ats: atsSel, wcr, wcrOk: !wcr || !iccAtsKA || wcr >= iccAtsKA, transicion: altD.transicion || (equipo === 'MTS' ? 'manual' : 'abierta'), polosAts: n(altD.polosAts) || 3,
         carga, kva: n(altD.kva), xd: n(altD.xd) || 12, fuenteId: gA ? gA.id : '', compartido: !!gA, salidas: gA ? SRC_N[gA.id] || 1 : 1 };
@@ -635,7 +647,7 @@
       if (manF && ci(manF) < ci(CAL_MIN_FASE)) avisos.push('Calibre de fases ' + manF + ' AWG menor que el mínimo de ' + CAL_MIN_FASE + ' AWG para un alimentador');
       if (manN && AN139 && ci(manN) < ci(CAL_MIN_FASE)) avisos.push('Calibre de neutro ' + manN + ' AWG menor que el mínimo de ' + CAL_MIN_FASE + ' AWG para un alimentador');
       if (manT && ci(manT) < ci(CAL_MIN_TIERRA)) avisos.push('Calibre de tierra ' + manT + ' AWG menor que el mínimo de ' + CAL_MIN_TIERRA + ' AWG para un alimentador');
-      if (manT && reqTierra && ci(manT) < ci(reqTierra)) avisos.push('Tierra de ' + manT + ' AWG menor que la requerida por el 250.122 para ' + AF139 + ' A (' + reqTierra + ' AWG)');
+      if (manT && reqTierra && ci(manT) < ci(reqTierra)) avisos.push('Tierra de ' + manT + ' AWG menor que la requerida por el ' + (K.tierraNorma === '250.66' ? '250.66 para conductores de ' + AL139 + ' AWG' : '250.122 para ' + AF139 + ' A') + ' (' + reqTierra + ' AWG)');
     }
     if (ajustado && val && val.ok) avisos.push('Calibre del alimentador aumentado por temperatura/agrupamiento: ' + (parBase > 1 ? parBase + 'x' : '') + calBase + ' → ' + (AI139 > 1 ? AI139 + 'x' : '') + AL139 + ' AWG/kcmil');
     if (cat && espaciosUsados > n(cat.espacios)) avisos.push('Circuitos usan ' + espaciosUsados + ' espacios; el tablero tiene ' + cat.espacios);
@@ -688,7 +700,7 @@
 
   /* ---------- proyecto completo (cascada) ---------- */
   function proyecto(P, catalog) {
-    K = Object.assign({}, catalog, { marcaDefecto: P.marcaDefecto || 'Eaton', ocupacion: P.ocupacion || 'comercial' });
+    K = Object.assign({}, catalog, { marcaDefecto: P.marcaDefecto || 'Eaton', ocupacion: P.ocupacion || 'comercial', tierraNorma: P.tierraNorma || '250.122' });
     FEED = {}; FUENTES = {}; SRC_LOAD = {}; SRC_N = {}; (P.fuentes || []).forEach(x => { FUENTES[x.id] = x; });
     const tabs = P.tableros || [], byId = {}; tabs.forEach(t => { byId[t.id] = t; });
     const hijos = {}; tabs.forEach(t => { if (t.padreId && byId[t.padreId]) (hijos[t.padreId] = hijos[t.padreId] || []).push(t); });
