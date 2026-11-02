@@ -480,9 +480,10 @@
       const kva = n(tr.kva), z = n(tr.z), xr = n(tr.xr) || 4, pR = z / Math.sqrt(1 + xr * xr), pX = pR * xr;
       const sin = Math.sqrt(Math.max(0, 1 - T139 * T139)), carga = kva ? (fTr ? (SRC_LOAD[fTr.id] || L139) : L139) / kva : 0;
       const reg = carga * (pR * T139 + pX * sin);                                  // caída de tensión en el transformador (%)
-      const tap = n(tr.tap);   // derivación (tap) del transformador: sube (+) o baja (−) la tensión del secundario en vacío
+      // derivación (tap) del transformador: sube (+) o baja (−) la tensión del secundario en vacío; en «auto» compensa la regulación y la barra queda a voltaje nominal
+      const tapAuto = tr.tap === undefined || tr.tap === null || tr.tap === '' || tr.tap === 'auto', tap = tapAuto ? reg : n(tr.tap);
       vInicio = V * fp * (1 + tap / 100 - reg / 100);
-      trafo = { kva, z, xr, carga, reg, tap, Vp: n(tr.primario) || Vpadre || n(P && P.vRed) || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139, protPrim: tr.protPrim !== false, protSec: tr.protSec === true };
+      trafo = { kva, z, xr, carga, reg, tap, tapAuto, Vp: n(tr.primario) || Vpadre || n(P && P.vRed) || null, Vs: V, fases: n(tr.fases) || (fases === 3 ? 3 : 1), nombre: tr.nombre || '', compartido: !!fTr, fuenteId: fTr ? fTr.id : '', salidas: fTr ? SRC_N[fTr.id] || 1 : 1, kvaServidos: fTr ? SRC_LOAD[fTr.id] || L139 : L139, protPrim: tr.protPrim !== false, protSec: tr.protSec === true };
     } else if (ctxIn && ctxIn.vInicio) vInicio = Vpadre ? V * fp : ctxIn.vInicio;   // cascada [AU139]
     const upsD = tab.ups && tab.ups.activo && n(tab.ups.kva) ? tab.ups : null;
     let ups = null;

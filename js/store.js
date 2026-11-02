@@ -131,7 +131,8 @@
       t.alim = Object.assign({ material: 'CU', aislamiento: 'XHHW-2', fp: 0.9, mult: 1.25, tuberia: 'EMT', paralelos: '', aumento: 1, tempAmb: '26-30', tempBorne: 75, agrupamiento: '', breakerId: '', prot: '' }, t.alim || {});
       t.circuitos = t.circuitos || []; t.fd = t.fd || {}; t.cambiosRevit = t.cambiosRevit || [];
       // transformador aguas arriba (antes solo datos para la tabla original; primario en kV)
-      t.trafo = Object.assign({ activo: false, kva: '', z: '', xr: '', primario: '', fases: '', nombre: '', tap: 0 }, t.trafo || {});
+      t.trafo = Object.assign({ activo: false, kva: '', z: '', xr: '', primario: '', fases: '', nombre: '', tap: 'auto' }, t.trafo || {});
+      if (t.trafo.tap === 0 && !t.trafo.tapMig) { t.trafo.tap = 'auto'; t.trafo.tapMig = true; }   // el 0 era el valor por omisión anterior: ahora el tap automático deja la barra a voltaje nominal
       if (Number(t.trafo.primario) && Number(t.trafo.primario) < 100) t.trafo.primario = Number(t.trafo.primario) * 1000;
       // versión anterior: transformador de la lista del Excel solo para el Icc → transformador aguas arriba
       if (t.transformadorId && !t.trafo.activo) {

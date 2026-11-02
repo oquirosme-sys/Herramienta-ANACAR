@@ -49,7 +49,7 @@
     const info = id => (R.fuentes || []).find(x => x.fuente.id === id) || { salidas: 0, carga: 0, cargaPct: null, tableros: [] };
     const filas = p.fuentes.map(fu => {
       const k = 'fu:' + fu.id + ':', gen = fu.tipo === 'generador', i = info(fu.id);
-      if (fu.tap === undefined) fu.tap = 0;
+      if (fu.tap === undefined || (fu.tap === 0 && !fu.tapMig)) { fu.tap = 'auto'; fu.tapMig = true; }
       const sis = UI.select(L.sistemas, fu.sistema, v => { fu.sistema = v; Store.sincronizarFuentes(); Store.save(); App.refresh(); }, { fk: k + 'sis', label: 'Secundario' });
       const lista = gen ? null : UI.select(UI.opts(Store.catalog.transformadores.map(x => ({ value: x.id, label: x.nombre + ' · Z ' + x.z + ' %', group: x.tipo })), '— elegir —'), '', v => {
         const x = Store.catalog.transformadores.find(o => String(o.id) === v); if (!x) return;
@@ -63,7 +63,7 @@
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.input(fu, 'z', { type: 'num', fk: k + 'z', class: 'w-num', label: 'Z %' })),
         h('td', null, gen ? UI.input(fu, 'xd', { type: 'num', fk: k + 'xd', class: 'w-num', label: "X''d %", placeholder: '12' }) : UI.input(fu, 'xr', { type: 'num', fk: k + 'xr', class: 'w-num', label: 'X/R', placeholder: '4' })),
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.input(fu, 'primario', { type: 'num', fk: k + 'pri', class: 'w-num', label: 'Primario (V)' })),
-        h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.bind(fu, 'tap', [{ value: -5, label: '−5 %' }, { value: -2.5, label: '−2,5 %' }, { value: 0, label: '0 (nominal)' }, { value: 2.5, label: '+2,5 %' }, { value: 5, label: '+5 %' }], { num: true, fk: k + 'tap', label: 'Derivación (tap)' })),
+        h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.select([{ value: 'auto', label: 'Auto (barra a voltaje nominal)' }, { value: -5, label: '−5 %' }, { value: -2.5, label: '−2,5 %' }, { value: 0, label: '0 (nominal)' }, { value: 2.5, label: '+2,5 %' }, { value: 5, label: '+5 %' }], fu.tap, v => { fu.tap = v === 'auto' ? 'auto' : Number(v); fu.tapMig = true; Store.save(); App.refresh(); }, { fk: k + 'tap', label: 'Derivación (tap)' })),
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : UI.bind(fu, 'fases', [{ value: 3, label: '3F' }, { value: 1, label: '1F' }], { num: true, fk: k + 'fas', label: 'Fases' })),
         h('td', null, gen ? h('span', { class: 'muted' }, '—') : h('div', { class: 'col' },
           h('label', { class: 'chk', title: 'Interruptor en el primario del transformador' }, h('input', { type: 'checkbox', checked: fu.protPrim !== false, onchange: e => { fu.protPrim = e.target.checked; Store.save(); App.refresh(); } }), ' Primario'),

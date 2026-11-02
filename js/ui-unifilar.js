@@ -21,7 +21,7 @@
   /* ---------- transformador ---------- */
   function editarTrafo(t, R) {
     const tr = t.trafo, r = R.res[t.id], padreV = r && r.padre ? r.padre.V : '';
-    const d = { activo: true, kva: tr.kva, z: tr.z, xr: tr.xr, primario: tr.primario || padreV || Store.project.vRed || '', sistema: t.sistema, tap: Number(tr.tap) || 0, fases: tr.fases || (Number(t.fases) === 3 ? 3 : 1), nombre: tr.nombre || '' };
+    const d = { activo: true, kva: tr.kva, z: tr.z, xr: tr.xr, primario: tr.primario || padreV || Store.project.vRed || '', sistema: t.sistema, tap: (tr.tap === undefined || tr.tap === '' || tr.tap === 'auto') ? 'auto' : Number(tr.tap), fases: tr.fases || (Number(t.fases) === 3 ? 3 : 1), nombre: tr.nombre || '' };
     const pres = UI.select(UI.opts(Store.catalog.transformadores.map(x => ({ value: x.id, label: x.nombre + ' · Z ' + x.z + ' %', group: x.tipo })), '— Elegir de la lista (opcional) —'), '', v => {
       const x = Store.catalog.transformadores.find(o => String(o.id) === v); if (!x) return;
       const m = /(\d+(?:[.,]\d+)?)\s*KVA/i.exec(x.nombre); if (m) { d.kva = Number(m[1].replace(',', '.')); kva.value = String(d.kva).replace('.', ','); }
@@ -32,7 +32,7 @@
     const fs = UI.select([{ value: 3, label: 'Trifásico' }, { value: 1, label: 'Monofásico' }], d.fases, v => { d.fases = Number(v); });
     const nom = UI.input(d, 'nombre', { save: false, after: () => {}, placeholder: 'T-1' });
     const sisSel = UI.select(Store.catalog.listas.sistemas, d.sistema, v => { d.sistema = v; });
-    const tapSel = UI.select([{ value: -5, label: '−5 %' }, { value: -2.5, label: '−2,5 %' }, { value: 0, label: '0 (nominal)' }, { value: 2.5, label: '+2,5 %' }, { value: 5, label: '+5 %' }], d.tap, v => { d.tap = Number(v); });
+    const tapSel = UI.select([{ value: 'auto', label: 'Auto (barra a voltaje nominal)' }, { value: -5, label: '−5 %' }, { value: -2.5, label: '−2,5 %' }, { value: 0, label: '0 (nominal)' }, { value: 2.5, label: '+2,5 %' }, { value: 5, label: '+5 %' }], d.tap, v => { d.tap = v === 'auto' ? 'auto' : Number(v); });
     d.protPrim = tr.protPrim !== false; d.protSec = tr.protSec === true; d.protPrimA = tr.protPrimA || ''; d.protSecA = tr.protSecA || '';
     const chk = (k, txt) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !!d[k], onchange: e => { d[k] = e.target.checked; } }), ' ' + txt);
     UI.modal('Transformador que alimenta a ' + Calc.nombreTablero(t), h('div', null,
@@ -48,7 +48,7 @@
       { label: 'Guardar', cls: 'primary', onclick: () => {
         if (!Number(d.kva) || !Number(d.z)) { UI.alert('Indique la capacidad (kVA) y la impedancia (%).'); return false; }
         const sis = d.sistema; delete d.sistema;
-        Object.assign(tr, d, { activo: true });
+        Object.assign(tr, d, { activo: true, tapMig: true });
         if (sis && sis !== t.sistema) { t.sistema = sis; Object.assign(t, Store.voltajeDe(sis, t.tipo)); }
         const padre = Store.tablero(t.padreId), circ = padre && padre.circuitos.find(c => c.tableroHijoId === t.id);
         if (circ && Number(padre.voltaje) !== Number(t.voltaje)) circ.detalleId = Store.detalleTablero(t, padre);
@@ -105,7 +105,7 @@
         huecos.push([y - ht / 2 - 3 * kt, y + ht / 2 + 3 * kt]);
         D.texto(x + 22, y - 12, (tr.nombre ? tr.nombre + ' · ' : '') + f1(tr.kva) + ' kVA · Z ' + f2(tr.z) + ' %' + (tr.compartido ? ' · compartido (' + tr.salidas + ' salidas)' : ''), 'u-t b', 'TEXTO');
         D.texto(x + 22, y + 3, (tr.Vp ? f0(tr.Vp) : '?') + ' / ' + r.tab.sistema + ' V · carga ' + f1(tr.carga * 100) + ' %', 'u-t', 'TEXTO');
-        D.texto(x + 22, y + 18, 'Icc sec. ' + f2(tr.iccSec / 1000) + ' kA · ΔV ' + f2(tr.reg) + ' %' + (tr.tap ? ' · tap ' + (tr.tap > 0 ? '+' : '') + f2(tr.tap) + ' %' : ''), 'u-t', 'TEXTO');
+        D.texto(x + 22, y + 18, 'Icc sec. ' + f2(tr.iccSec / 1000) + ' kA · ΔV ' + f2(tr.reg) + ' %' + (tr.tapAuto ? ' · tap auto +' + f2(tr.tap) + ' %' : tr.tap ? ' · tap ' + (tr.tap > 0 ? '+' : '') + f2(tr.tap) + ' %' : ''), 'u-t', 'TEXTO');
         if (tr.protSec && tr.sec) {   // protección en el secundario del transformador (NEC 450.3(B)); solo se dibuja si el transformador la tiene marcada
           const b = tr.sec.bk, ys = y + ht / 2 + 3 * kt + 34;
           huecos.push(interruptor(x, ys, tr.sec.A + ' A ' + (b ? (b.polos || '') + 'P ' + (b.unidad === 'STD' ? 'TM' : b.unidad || '') + ' · ' + (b.ref || b.modelo || '') : (tr.fases === 3 ? '3' : '2') + 'P · secundario'), b && b.sccrBajo, () => (tr.compartido ? App.go('proyecto') : editarTrafo(r.tab, R)),
