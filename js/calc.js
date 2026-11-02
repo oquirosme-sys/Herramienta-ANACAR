@@ -32,8 +32,9 @@
   const proteccion = amp => { const f = approx(K.protecciones, 'amp', amp); return f ? f.prot : null; };
   /** Calibre por ampacidad [CONDISEÑO C6:D26 CU / C44:D64 AL]. */
   const calibre = (amp, mat) => { const f = approx(esAL(mat) ? K.ampAL : K.ampCU, 'amp', amp); return f ? f.cal : ''; };
-  /** Tierra de equipo, tabla 250.122 [CONDISEÑO L76:P98]. */
-  const tierra = (prot, mat) => { const f = firstGE(K.tierras, 'amp', prot); return f ? (f[mat] || f.CU) : ''; };
+  /** Tierra de equipo, tabla 250.122 (NEC 2023): [ajuste máximo del dispositivo de protección (A), cobre, aluminio]. Cada fila vale hasta su amperaje (30 a 50 A → 10 AWG; 225 y 250 A → 4 AWG). */
+  const T122 = [[15, '14', '12'], [20, '12', '10'], [60, '10', '8'], [100, '8', '6'], [200, '6', '4'], [300, '4', '2'], [400, '3', '1'], [500, '2', '1/0'], [600, '1', '2/0'], [800, '1/0', '3/0'], [1000, '2/0', '4/0'], [1200, '3/0', '250'], [1600, '4/0', '350'], [2000, '250', '400'], [2500, '350', '600'], [3000, '400', '600'], [4000, '500', '750'], [5000, '700', '1200'], [6000, '800', '1200']];
+  const tierra = (prot, mat) => { const t = T122.find(x => n(prot) <= x[0] + 1e-9) || T122[T122.length - 1]; return esAL(mat) ? t[2] : t[1]; };
   /** Conductor del electrodo, tabla 250.66 [CONDISEÑO U76:Z95]. */
   function electrodo(cal, mat) {
     const al = esAL(mat), f = K.electrodo.find(x => (al ? x.calAL : x.calCU) === calStr(cal));

@@ -1,4 +1,5 @@
-/* Datos del bloque Machote de ANACAR 2026.1.xlsm: entradas y resultados que calculó Excel. Generado automáticamente. */
+/* Datos del bloque Machote de ANACAR 2026.1.xlsm: entradas y resultados que calculó Excel. Generado automáticamente.
+   Excepción: la tierra de equipo (AP en c7 y AP139) se ajustó a la tabla 250.122 de la NEC 2023 (8 AWG); el Excel traía una tabla desplazada y daba 10 AWG. */
 window.MACHOTE = {
  "tablero": {
   "id": "t1",
@@ -358,7 +359,7 @@ window.MACHOTE = {
     "AF": 70,
     "AL": 4,
     "AN": 4,
-    "AP": 10,
+    "AP": 8,
     "AR": 31.8,
     "AS": 5.3,
     "AT": 5.3,
@@ -489,7 +490,7 @@ window.MACHOTE = {
    "AF139": 90,
    "AL139": 2,
    "AN139": 2,
-   "AP139": 10,
+   "AP139": 8,
    "AP140": 8,
    "AR139": 38.1,
    "AS139": 3.4,
