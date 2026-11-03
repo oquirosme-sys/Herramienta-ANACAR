@@ -47,6 +47,11 @@
       const hay = new Set((c.tablerosCat || []).map(llave));
       let id = Math.max(0, ...(c.tablerosCat || []).map(x => Number(x.id) || 0));
       (seed.tablerosCat || []).forEach(x => { if (!hay.has(llave(x))) c.tablerosCat.push(Object.assign({}, x, { id: ++id })); });
+      if ((c.catRev || 1) < 3) {   // rev. 3: tablas de la NEC 2020 corregidas (240.6(A), 250.122, 250.66) y KACC de un transformador seco con un valor erróneo
+        ['protecciones', 'tierras', 'electrodo'].forEach(k => { if (seed[k]) c[k] = JSON.parse(JSON.stringify(seed[k])); });
+        (c.transformadores || []).forEach(x => { const s0 = (seed.transformadores || []).find(y => y.nombre === x.nombre); if (s0 && Number(x.kacc240) > 0 && Number(x.kacc240) < 100 && Number(s0.kacc240) >= 100) x.kacc240 = s0.kacc240; });
+        (seed.transformadores || []).forEach(x => { if (!(c.transformadores || []).some(y => y.nombre === x.nombre)) (c.transformadores = c.transformadores || []).push(Object.assign({}, x, { id: Math.max(0, ...(c.transformadores || []).map(y => Number(y.id) || 0)) + 1 })); });   // secos K4 y K13 trifásicos nuevos (Square D y Eaton)
+      }
       c.catRev = seed.catRev; try { localStorage.setItem(K_CATALOG, JSON.stringify(c)); } catch (e) { /* ignora */ }
     },
     proyectos() { try { return JSON.parse(localStorage.getItem(K_PROYECTOS)) || {}; } catch (e) { return {}; } },

@@ -29,11 +29,12 @@
   const esMC = m => m === 'CU-MC' || m === 'AL-MC';
 
   /** Protección (breaker) estándar para una ampacidad requerida [CONDISEÑO L124:M154]. */
+  const protAbajo = amp => { let r = null; (K.protecciones || []).map(x => n(x.prot)).sort((a, b) => a - b).forEach(x => { if (x <= amp + 1e-9) r = x; }); return r; };
   const proteccion = amp => { const f = approx(K.protecciones, 'amp', amp); return f ? f.prot : null; };
   /** Calibre por ampacidad [CONDISEÑO C6:D26 CU / C44:D64 AL]. */
   const calibre = (amp, mat) => { const f = approx(esAL(mat) ? K.ampAL : K.ampCU, 'amp', amp); return f ? f.cal : ''; };
-  /** Tierra de equipo, tabla 250.122 (NEC 2023): [ajuste máximo del dispositivo de protección (A), cobre, aluminio]. Cada fila vale hasta su amperaje (30 a 50 A → 10 AWG; 225 y 250 A → 4 AWG). */
-  const T122 = [[15, '14', '12'], [20, '12', '10'], [60, '10', '8'], [100, '8', '6'], [200, '6', '4'], [300, '4', '2'], [400, '3', '1'], [500, '2', '1/0'], [600, '1', '2/0'], [800, '1/0', '3/0'], [1000, '2/0', '4/0'], [1200, '3/0', '250'], [1600, '4/0', '350'], [2000, '250', '400'], [2500, '350', '600'], [3000, '400', '600'], [4000, '500', '750'], [5000, '700', '1200'], [6000, '800', '1200']];
+  /** Tierra de equipo, tabla 250.122 (NEC 2020): [ajuste máximo del dispositivo de protección (A), cobre, aluminio]. Cada fila vale hasta su amperaje (30 a 50 A → 10 AWG; 225 y 250 A → 4 AWG). */
+  const T122 = [[15, '14', '12'], [20, '12', '10'], [60, '10', '8'], [100, '8', '6'], [200, '6', '4'], [300, '4', '2'], [400, '3', '1'], [500, '2', '1/0'], [600, '1', '2/0'], [800, '1/0', '3/0'], [1000, '2/0', '4/0'], [1200, '3/0', '250'], [1600, '4/0', '350'], [2000, '250', '400'], [2500, '350', '600'], [3000, '400', '600'], [4000, '500', '750'], [5000, '700', '1250'], [6000, '800', '1250']];
   const tierra = (prot, mat) => { const t = T122.find(x => n(prot) <= x[0] + 1e-9) || T122[T122.length - 1]; return esAL(mat) ? t[2] : t[1]; };
   /** Conductor del electrodo, tabla 250.66 [CONDISEÑO U76:Z95]. */
   function electrodo(cal, mat) {
@@ -52,7 +53,22 @@
   }
   /** Conductor de puesta a tierra según el criterio del proyecto: 250.122 (por la protección) o 250.66 (por el calibre de los conductores). */
   let NORMA_TIERRA = '250.122';   // criterio de tierra del tablero que se está calculando (el del tablero o, si no, el del proyecto)
-  const tierraDe = (prot, cal, nPar, mat) => (NORMA_TIERRA === '250.66' && tierra66(cal, nPar, mat)) || tierra(prot, mat);
+  /** 250.122(B): si el conductor de fase se aumentó por otra razón (factor de aumento por caída de tensión), la tierra sube en la misma proporción de área.
+      prop = área del calibre aumentado / área del calibre sin aumento (1 si no hubo aumento). */
+  const propAum = (prot, aj, nPar, mat) => {
+    if (!prot || !(n(aj) > 1)) return 1;
+    const a0 = calibre(prot / (n(nPar) || 1), mat), a1 = calibre(prot * aj / (n(nPar) || 1), mat);
+    return a0 && a1 && areaCal(a0) ? areaCal(a1) / areaCal(a0) : 1;
+  };
+  /** Conductor de puesta a tierra de equipo: 250.122 por la protección (o 250.66 si el tablero lo pide, sin bajar nunca de lo que da la 250.122),
+      aumentado en proporción si las fases se aumentaron (250.122(B)) y sin pasar del calibre de los conductores del circuito (250.122(A)). */
+  const tierraDe = (prot, cal, nPar, mat, prop) => {
+    let g = tierra(prot, mat);
+    if (NORMA_TIERRA === '250.66') { const e = tierra66(cal, nPar, mat); if (e && areaCal(e) > areaCal(g)) g = e; }
+    if (n(prop) > 1.0001 && g) { const t = areaCal(g) * prop, sg = CALIBRES.find(c => areaCal(c) >= t - 1e-9); if (sg) g = sg; }
+    if (g && cal && areaCal(g) > areaCal(cal)) g = calStr(cal);
+    return g;
+  };
   /** Diámetro de tubería, tabla C.10 [CONDISEÑO L101:O118]. Igual que el Excel: "XHHW-2" usa la columna THHN. */
   function conduit(cal, mat, ais) {
     if (esMC(mat)) return 'MC';
@@ -224,7 +240,7 @@
       && lista(c.linea).some(t => tok(t).test(ml)) && lista(c.carga).some(t => tok(t).test(mc)))
       .sort((a, b) => n(a.kA) - n(b.kA))[0] || null;
   }
-  const normV = s => String(s || '').split('/').map(Number).filter(x => x).sort((a, b) => a - b).join('/');
+  const normV = s => (String(s || '').match(/\d+/g) || []).map(Number).filter(x => x).sort((a, b) => a - b).join('/');   // '480Y/277V' y '277/480' son el mismo sistema
   /** kA por fase recomendados para el SPD: acometida 250 kA, tableros de 600–1200 A 120 kA, hasta 400 A 50 kA. */
   const kaSpd = (servicio, barras) => (servicio ? 250 : barras >= 600 ? 120 : 50);
   function supresor(marca, id, sistema, fases, kaMin) {
@@ -274,7 +290,11 @@
   /* Calibres mínimos de un alimentador (acometida de un tablero): 8 AWG en fases y neutro y 10 AWG en tierra; nunca No. 12 AWG. */
   const CAL_MIN_FASE = '8', CAL_MIN_TIERRA = '10';
   const ci = c => CALIBRES.indexOf(calStr(c));
-  const maxCal = (a, b) => (!a ? a : ci(a) < ci(b) ? b : a);
+  const ciG = c => { const i = ci(c); return i >= 0 ? i : n(c) > 1000 ? CALIBRES.length + n(c) / 1000 : -1; };   // 1250 kcmil y mayores quedan por encima de la lista
+  const maxCal = (a, b) => (!a ? a : ciG(a) < ciG(b) ? b : a);
+  /** 240.4(D): protección máxima de los conductores pequeños (cobre 14/12/10 AWG: 15/20/30 A; aluminio 12/10 AWG: 15/25 A). Si la protección la excede, sube el calibre. */
+  const LIM_4D = { CU: { '14': 15, '12': 20, '10': 30 }, AL: { '12': 15, '10': 25 } };
+  const cal4D = (cal, prot, mat) => { const L = LIM_4D[esAL(mat) ? 'AL' : 'CU']; let c = calStr(cal); while (c && L[c] !== undefined && n(prot) > L[c]) c = CALIBRES[CALIBRES.indexOf(c) + 1]; return c; };
   let FUENTES = {}, SRC_LOAD = {}, SRC_N = {};   // fuentes del proyecto (transformadores y generadores compartidos), su carga demandada (kVA) y # de tableros que sirven
   let FEED = {};  // tablero derivado → datos de su alimentador (protección, % de protección, factores, paralelos, aumento) que el circuito del tablero padre toma automáticamente
   let MAN = {};   // circuito que alimenta a un tablero derivado → acometida de ese tablero (para respetar lo fijado a mano)
@@ -353,13 +373,14 @@
     const AJ = c.aumento !== undefined && c.aumento !== '' ? n(c.aumento) : fd ? fd.AJ : 1;
     const hijoMan = c.tableroHijoId ? MAN[c.id] : null;        // acometida del tablero derivado, si el ingeniero la fijó a mano
     let AL = AF ? calibre(AF * AJ / AI, mat) : '';
+    if (AL && AI === 1) AL = cal4D(AL, AF, mat);              // 240.4(D)
     if (c.tableroHijoId) AL = maxCal(AL, CAL_MIN_FASE);       // alimentador de un tablero derivado: mínimo 8 AWG
     if (hijoMan && calStr(hijoMan.calFases)) AL = calStr(hijoMan.calFases);
     const pre = AI === 1 ? (P === 3 ? '3#' : (O >= 208 && O <= 240 ? '2#' : ' ')) : AI + 'x' + (P === 3 ? '3#' : (O >= 208 && O <= 240 ? '2#' : ' '));
     const pre2 = AI === 1 ? ' ' : AI + 'x';
     let AN = Q === 0 ? ' ' : (O >= 208 && P === 3 && Q === 4) ? AL : (P === 3 && Q === 3) ? ' ' : (O >= 208 && P === 1 && Q === 3) ? ' ' : AL;
     if (hijoMan && calStr(hijoMan.calNeutro) && AN !== ' ') AN = calStr(hijoMan.calNeutro);
-    let AP = AF ? tierraDe(AF, AL, AI, mat) : '';
+    let AP = AF ? tierraDe(AF, AL, AI, mat, propAum(AF, AJ, AI, mat)) : '';
     if (c.tableroHijoId && AP) AP = maxCal(AP, CAL_MIN_TIERRA);   // tierra de un alimentador: mínimo 10 AWG
     if (hijoMan && calStr(hijoMan.calTierra)) AP = calStr(hijoMan.calTierra);
     const AR = AL ? conduit(AL, mat, ais) : '';
@@ -463,7 +484,7 @@
     let AN139 = neutroDe(AL139);
     const AN139a = neutroDe(calAuto);
     if (manN && AN139) AN139 = manN;
-    const reqTierra = AF139 ? tierraDe(AF139, AL139, AI139, mat) : '', tierraAuto = maxCal(reqTierra, CAL_MIN_TIERRA);
+    const reqTierra = AF139 ? tierraDe(AF139, AL139, AI139, mat, propAum(AF139, AJ139, AI139, mat)) : '', tierraAuto = maxCal(reqTierra, CAL_MIN_TIERRA);
     const AP139 = AF139 ? (manT || tierraAuto) : '', AP140 = AL139 ? tierra66(AL139, AI139, mat) : '';
     const AR139 = AL139 ? conduit(AL139, mat, ais) : '', tuberia = al.tuberia || 'EMT';
     const AS139 = AL139 ? fac(AL139, mat, T139) : null, AT139 = facAjustado(AS139, V, fases, true);
@@ -577,7 +598,7 @@
       const atsSel = esTr ? transferencia(altD, equipo, AF139, iccAtsKA) : null;
       const wcr = n(altD.sccr) || (atsSel ? n(atsSel.wcr) : 0);
       alterna = { equipo, tipo: altD.tipo || 'generador', origen, origenId: altD.origenId || '', nombre: altD.nombre || '', cal: ac, par: an, mat: am, ais: aa, tuberia: at, longitud: AL, val: av,
-        fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + maxCal(tierraDe(AF139, ac, an, am), CAL_MIN_TIERRA) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
+        fasesTxt: pre + ac, neutroTxt: AN139 ? pN + ac : '', tierraTxt: AP139 ? pN + maxCal(tierraDe(AF139, ac, an, am, propAum(AF139, AJ139, an, am)), CAL_MIN_TIERRA) : '', tubo: ac ? pN + conduit(ac, am, aa) : '',
         caida: avd + dropCom, caidaFuente: avd, caidaComun: dropCom, distAts: dAts, distNormal: Math.max(0, M139 - dAts), caidaNormal: M139 ? AV139 * Math.max(0, M139 - dAts) / M139 : 0, vBornes: v0 - avd - dropCom, cv: (V - (v0 - avd - dropCom)) * 100 / V, iccA: iAlt, iccAtsKA,
         ats: atsSel, wcr, wcrOk: !wcr || !iccAtsKA || wcr >= iccAtsKA, transicion: altD.transicion || (equipo === 'MTS' ? 'manual' : 'abierta'), polosAts: n(altD.polosAts) || 3,
         carga, kva: n(altD.kva), xd: n(altD.xd) || 12, fuenteId: gA ? gA.id : '', compartido: !!gA, salidas: gA ? SRC_N[gA.id] || 1 : 1 };
@@ -611,7 +632,7 @@
       trafo.sec = mk(trafo.Isec, V, trafo.iccSec ? trafo.iccSec / 1000 : null, tr.protSecA);
       trafo.prim = mk(trafo.Iprim, Vp, trafo.iccPrim ? trafo.iccPrim / 1000 : null, tr.protPrimA);
       // límites de 450.3(B): secundario 125 % de la corriente nominal; primario 125 % (250 % si hay protección en el secundario), con el siguiente tamaño estándar
-      const topeS = proteccion(1.25 * trafo.Isec), topeP = trafo.Iprim ? proteccion((trafo.protSec ? 2.5 : 1.25) * trafo.Iprim) : null;
+      const topeS = proteccion(1.25 * trafo.Isec), topeP = trafo.Iprim ? (trafo.protSec ? protAbajo(2.5 * trafo.Iprim) : proteccion(1.25 * trafo.Iprim)) : null;   // 250 %: sin pasar al siguiente tamaño (solo el 125 % lo permite)
       if (trafo.protSec && n(tr.protSecA) && topeS && n(tr.protSecA) > topeS) trafo.avisos.push('Protección del secundario ' + n(tr.protSecA) + ' A mayor que el máximo de 450.3(B): ' + topeS + ' A (125 % de ' + r2(trafo.Isec) + ' A)');
       if (trafo.protPrim && n(tr.protPrimA) && topeP && n(tr.protPrimA) > topeP) trafo.avisos.push('Protección del primario ' + n(tr.protPrimA) + ' A mayor que el máximo de 450.3(B): ' + topeP + ' A (' + (trafo.protSec ? '250' : '125') + ' % de ' + r2(trafo.Iprim) + ' A)');
       if (trafo.protSec && trafo.sec && trafo.sec.bk && trafo.sec.bk.sccrBajo) trafo.avisos.push('SCCR de la protección del secundario ' + (trafo.sec.bk.ref || '') + ' ' + trafo.sec.bk.sccr + ' kA < Icc del secundario ' + r2(trafo.iccSec / 1000) + ' kA');

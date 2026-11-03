@@ -1,5 +1,6 @@
 /* Datos del bloque Machote de ANACAR 2026.1.xlsm: entradas y resultados que calculó Excel. Generado automáticamente.
-   Excepción: la tierra de equipo (AP en c7 y AP139) se ajustó a la tabla 250.122 de la NEC 2023 (8 AWG); el Excel traía una tabla desplazada y daba 10 AWG. */
+   Excepción: la tierra de equipo (AP en c7 y AP139) se ajustó a la tabla 250.122 de la NEC 2020 (8 AWG); el Excel traía una tabla desplazada y daba 10 AWG.
+   Excepción: la tierra del circuito c2 (AP) sube a 10 AWG porque el factor de aumento agranda las fases de 12 a 10 AWG y la 250.122(B) pide aumentar la tierra en la misma proporción (el Excel no lo hace). */
 window.MACHOTE = {
  "tablero": {
   "id": "t1",
@@ -274,7 +275,7 @@ window.MACHOTE = {
     "AF": 20,
     "AL": 10,
     "AN": 10,
-    "AP": 12,
+    "AP": 10,
     "AR": 13,
     "AS": 20,
     "AT": 23.094,
