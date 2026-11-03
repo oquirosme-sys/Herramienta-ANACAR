@@ -302,3 +302,11 @@ th.dev, td.dev { background: var(--brand-soft); }
 .mem-principal { min-width: 0; }
 @media (max-width: 900px) { .mem-layout { grid-template-columns: 1fr; } .mem-lado { position: static; max-height: 12rem; } }
 @media print { .mem-layout { display: block; } .mem-lado { display: none; } }
+
+/* ---------- Láminas con cajetín (PDF 1100 × 750 mm, js/cajetin.js) ---------- */
+#pdf-doc.pdf-lamina { overflow: hidden; line-height: 0; font-size: 0; background: #fff; }
+#pdf-doc.pdf-lamina .pdf-lam { overflow: hidden; break-after: page; page-break-after: always; }
+#pdf-doc.pdf-lamina .pdf-lam:last-child { break-after: auto; page-break-after: auto; }
+@media screen { #pdf-doc { position: absolute; left: -99999px; top: 0; } }
+@media print { body.pdf-imprime > *:not(#pdf-doc) { display: none !important; } body.pdf-imprime { margin: 0; background: #fff; } }
+#pdf-doc { --ink: #1d2733; --muted: #64707d; --line: #dde3ea; --surface: #fff; --brand: #0b5cab; --ok: #1b7f4b; --bad: #b42318; --bad-bg: #fdecea; --warn: #8a5a00; color-scheme: light; }

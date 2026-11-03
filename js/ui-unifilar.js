@@ -323,12 +323,22 @@
   }
 
   /* ---------- salida DXF (AutoCAD R12, abre en AutoCAD / AutoCAD LT y se guarda como DWG) ---------- */
-  const CAPAS = { TABLERO: 5, ALIMENTADOR: 7, PROTECCION: 1, TRAFO: 3, EQUIPOS: 6, TEXTO: 2, TABLA: 8 };
-  function dxf(R) {
-    let H = 0; const ent = [];
-    const yy = y => +(H - y).toFixed(2), xx = x => +x.toFixed(2);
-    const esc = t => String(t).replace(/[^\x20-\x7e]/g, ch => (ch === 'Δ' ? 'D' : ch === '⚠' ? '!' : ch === '↑' ? '^' : '\\U+' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')));
-    const linea = (x1, y1, x2, y2, capa) => ent.push(['0', 'LINE', '8', capa, '10', xx(x1), '20', yy(y1), '30', 0, '11', xx(x2), '21', yy(y2), '31', 0]);
+  const CAPAS = { TABLERO: 5, ALIMENTADOR: 7, PROTECCION: 1, TRAFO: 3, EQUIPOS: 6, TEXTO: 2, TABLA: 8, CAJETIN: 7, 'CAJETIN-TEXTO': 7 };
+  const esc = t => String(t).replace(/[^\x20-\x7e]/g, ch => (ch === 'Δ' ? 'D' : ch === '⚠' ? '!' : ch === '↑' ? '^' : '\\U+' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')));
+  /** Entidades DXF del diagrama. op = { s, ox, oy, ya, yb }: solo la franja ya..yb del diagrama, a escala s (mm por unidad del dibujo), con su esquina superior izquierda en (ox, oy);
+      sin op: todo el diagrama en unidades del dibujo. */
+  function dxfEnt(R, op) {
+    let H = 0; const ent = [], s = op ? op.s : 1;
+    const yy = y => +(op ? op.oy - (y - op.ya) * s : H - y).toFixed(3), xx = x => +(op ? op.ox + x * s : x).toFixed(3), dentro = y => !op || (y >= op.ya - 1e-6 && y <= op.yb + 1e-6);
+    const linea = (x1, y1, x2, y2, capa) => {
+      if (op) {   // se recorta a la franja de la lámina
+        const dy = y2 - y1, dx = x2 - x1; let t0 = 0, t1 = 1;
+        if (Math.abs(dy) < 1e-9) { if (!dentro(y1)) return; }
+        else { let a = (op.ya - y1) / dy, b = (op.yb - y1) / dy; if (a > b) { const q = a; a = b; b = q; } t0 = Math.max(0, a); t1 = Math.min(1, b); if (t0 >= t1) return; }
+        const nx1 = x1 + dx * t0, ny1 = y1 + dy * t0, nx2 = x1 + dx * t1, ny2 = y1 + dy * t1; x1 = nx1; y1 = ny1; x2 = nx2; y2 = ny2;
+      }
+      ent.push(['0', 'LINE', '8', capa, '10', xx(x1), '20', yy(y1), '30', 0, '11', xx(x2), '21', yy(y2), '31', 0]);
+    };
     const ALTO = { 'u-n': 11, 'u-t s': 7, 'u-t s b': 7 };
     const L = llaves(), pos = posiciones();
     const D = {
@@ -336,25 +346,31 @@
       tamano: (w, hh) => { H = hh; },
       linea: (x1, y1, x2, y2, cls, capa) => linea(x1, y1, x2, y2, capa || 'ALIMENTADOR'),
       rect: (x, y, w, hh, cls, capa) => { const c = capa || 'EQUIPOS'; linea(x, y, x + w, y, c); linea(x + w, y, x + w, y + hh, c); linea(x + w, y + hh, x, y + hh, c); linea(x, y + hh, x, y, c); if (cls === 'u-red') for (let i = 8; i < w + hh; i += 8) linea(x + Math.max(0, i - hh), y + Math.min(hh, i), x + Math.min(w, i), y + Math.max(0, i - w), c); },
-      circulo: (cx, cy, r, cls, capa) => ent.push(['0', 'CIRCLE', '8', capa || 'EQUIPOS', '10', xx(cx), '20', yy(cy), '30', 0, '40', r]),
+      circulo: (cx, cy, r, cls, capa) => { if (dentro(cy)) ent.push(['0', 'CIRCLE', '8', capa || 'EQUIPOS', '10', xx(cx), '20', yy(cy), '30', 0, '40', +(r * s).toFixed(3)]); },
       texto: (x, y, t, cls, capa, al) => {
         if (capa === 'TEXTO') { const o = pos[L.key()]; if (o) { x += o.dx; y += o.dy; } }
-        const hgt = ALTO[cls] || 8.5, e = ['0', 'TEXT', '8', capa || 'TEXTO', '7', 'SINERGIA', '10', xx(x), '20', yy(y), '30', 0, '40', hgt, '1', esc(t)];
+        if (!dentro(y)) return;
+        const hgt = +((ALTO[cls] || 8.5) * s).toFixed(3), e = ['0', 'TEXT', '8', capa || 'TEXTO', '7', 'SINERGIA', '10', xx(x), '20', yy(y), '30', 0, '40', hgt, '1', esc(t)];
         if (al === 'c' || al === 'e') e.push('72', al === 'c' ? 1 : 2, '11', xx(x), '21', yy(y), '31', 0);
         ent.push(e);
       },
       barra: (x1, x2, y) => { [-2, 0, 2].forEach(d => linea(x1, y + d, x2, y + d, 'TABLERO')); },
       boton: () => {},
       simbolo: (nombre, x, y, vals) => {
-        const Y = SIMB[nombre], conAtr = (Y.attrs || []).length > 0, e = ['0', 'INSERT', '8', Y.capa].concat(conAtr ? ['66', 1] : [], ['2', nombre, '10', xx(x), '20', yy(y), '30', 0, '41', Y.k, '42', Y.k, '43', Y.k, '50', 0]);
+        const Y = SIMB[nombre]; if (op && !dentro(y + Y.alto * Y.k / 2)) return;
+        const conAtr = (Y.attrs || []).length > 0, ks = +(Y.k * s).toFixed(5), e = ['0', 'INSERT', '8', Y.capa].concat(conAtr ? ['66', 1] : [], ['2', nombre, '10', xx(x), '20', yy(y), '30', 0, '41', ks, '42', ks, '43', ks, '50', 0]);
         ent.push(e);
         if (conAtr) {
-          (Y.attrs || []).forEach(([tag, , ax, ay, ah, vis]) => ent.push(['0', 'ATTRIB', '8', Y.capa, '10', xx(x + ax * Y.k), '20', yy(y) + +(ay * Y.k).toFixed(2), '30', 0, '40', +(ah * Y.k).toFixed(2), '1', esc((vals || {})[tag] || ' '), '7', 'SINERGIA', '2', tag, '70', vis ? 0 : 1]));
+          (Y.attrs || []).forEach(([tag, , ax, ay, ah, vis]) => ent.push(['0', 'ATTRIB', '8', Y.capa, '10', xx(x + ax * Y.k), '20', +(yy(y) + ay * ks).toFixed(3), '30', 0, '40', +(ah * ks).toFixed(3), '1', esc((vals || {})[tag] || ' '), '7', 'SINERGIA', '2', tag, '70', vis ? 0 : 1]));
           ent.push(['0', 'SEQEND', '8', Y.capa]);
         }
       },
     };
     dibujar(R, D);
+    return ent;
+  }
+  /** Archivo DXF (R12) con las entidades dadas y los bloques de los símbolos. */
+  function dxfArchivo(ent) {
     // definiciones de bloque (capa 0: toman la capa del INSERT)
     const bloques = [];
     Object.entries(SIMB).forEach(([nombre, Y]) => {
@@ -377,10 +393,40 @@
       '0', 'TABLE', '2', 'LAYER', '70', Object.keys(CAPAS).length].concat(...Object.entries(CAPAS).map(([k, c]) => ['0', 'LAYER', '2', 'E-' + k, '70', 0, '62', c, '6', 'CONTINUOUS']), ['0', 'ENDTAB',
       '0', 'TABLE', '2', 'STYLE', '70', 1, '0', 'STYLE', '2', 'SINERGIA', '70', 0, '40', 0, '41', 1, '50', 0, '71', 0, '42', 8, '3', 'GOTHIC.TTF', '4', '', '0', 'ENDTAB',
       '0', 'ENDSEC', '0', 'SECTION', '2', 'BLOCKS'].concat(bloques, ['0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES']));
-    ent.forEach(e => { const k = e.slice(); if (k[2] === '8') k[3] = 'E-' + k[3]; out.push(...k); });
+    ent.forEach(e => { const k = e.slice(); if (k[2] === '8' && !/^E-/.test(k[3])) k[3] = 'E-' + k[3]; out.push(...k); });
     out.push('0', 'ENDSEC', '0', 'EOF');
     const txt = []; for (let i = 0; i < out.length; i += 2) txt.push(String(out[i]).padStart(3, ' '), String(out[i + 1]));
     return txt.join('\r\n') + '\r\n';
+  }
+  const dxf = R => dxfArchivo(dxfEnt(R));
+
+  /* ---------- láminas de 1100 × 750 mm con cajetín (DXF y PDF): ver js/cajetin.js ---------- */
+  /** Tamaño del dibujo y posiciones donde se puede cortar entre láminas (Y sin equipos ni textos). */
+  function medir(R) {
+    let W0 = 0, H0 = 0; const oc = [], L = llaves(), pos = posiciones();
+    dibujar(R, {
+      ctx: L.ctx, tamano: (w, hh) => { W0 = w; H0 = hh; }, linea() {}, boton() {},
+      rect: (x, y, w, hh) => oc.push([y, y + hh]), circulo: (cx, cy, r) => oc.push([cy - r, cy + r]), barra: (x1, x2, y) => oc.push([y - 5, y + 5]),
+      texto: (x, y, t, cls, capa) => { let yt = y; if (capa === 'TEXTO') { const o = pos[L.key()]; if (o) yt += o.dy; } oc.push([yt - 13, yt + 5]); },
+      simbolo: (nombre, x, y) => { const Y = SIMB[nombre]; oc.push([y - 3, y + Y.alto * Y.k + 3]); },
+    });
+    oc.sort((a, b) => a[0] - b[0]);
+    const cortes = []; let fin = -Infinity;
+    oc.forEach(([a, b]) => { if (fin > -Infinity && a - fin >= 16) cortes.push((a + fin) / 2); fin = Math.max(fin, b); });
+    return { W: W0, H: H0, cortes };
+  }
+  Cajetin.config = () => { const P = Store.project; return { lamina: 'DU-01', titulo: 'Diagrama unifilar' + (P.nombre ? ' - ' + P.nombre : ''), propietario: P.propietario || P.cliente || '', fecha: P.fecha || '', rev: P.revision || 'A' }; };
+  function dxfLaminas(R) {
+    const m = medir(R), plan = Cajetin.repartir(m.W, m.H, m.cortes), ent = [];
+    plan.partes.forEach(([ya, yb], i) => {
+      const ox = i * (Cajetin.SW + Cajetin.SEP);
+      ent.push(...Cajetin.dxf(i, plan.partes.length, ox), ...dxfEnt(R, { s: Cajetin.MM * plan.esc, ox: ox + Cajetin.AREA.x0, oy: Cajetin.AREA.y1, ya, yb }));
+    });
+    return { texto: dxfArchivo(ent), laminas: plan.partes.length, esc: plan.esc };
+  }
+  function pdfLaminas(R) {
+    const m = medir(R), plan = Cajetin.repartir(m.W, m.H, m.cortes);
+    return Cajetin.pdf(svgDibujo(R), plan, App.fileBase() + ' - unifilar', 'img/logo-sinergia.png');
   }
 
   function nuevoDerivado(padre) {
@@ -415,6 +461,8 @@
         UI.btn('+ Tablero principal', async () => { const n = await UI.prompt('Nuevo tablero principal', 'Nombre', '', v => (v ? '' : 'Escriba un nombre')); if (n) { Store.nuevoTablero({ nombre: n }); App.refresh(); } }, 'small'),
         UI.btn('Restablecer textos', async () => { if (!Object.keys(posiciones()).length) { UI.toast('No hay textos movidos', 'ok'); return; } if (await UI.confirm('¿Devolver todos los textos del unifilar a su posición automática?', 'Restablecer')) { Store.project.unifilarPos = {}; Store.save(); App.refresh(); } }, 'small', 'Arrastre cualquier texto del diagrama para acomodarlo; esto los devuelve a su lugar'),
         UI.btn('Descargar DXF (AutoCAD)', () => { U.download(App.fileBase() + ' - unifilar.dxf', dxf(R), 'application/dxf'); UI.toast('DXF generado: ábralo en AutoCAD y use Guardar como… DWG', 'ok'); }, 'primary small', 'AutoCAD abre el DXF directamente; con "Guardar como" queda en DWG'),
+        UI.btn('Láminas 1100×750 (DXF)', () => { const r = dxfLaminas(R); U.download(App.fileBase() + ' - unifilar láminas.dxf', r.texto, 'application/dxf'); UI.toast(r.laminas + ' lámina(s) 1100 × 750 mm a escala ' + r.esc.toFixed(3) + ' con cajetín Sinergia', 'ok'); }, 'small', 'Reparte el diagrama en láminas de 1100 × 750 mm con el cajetín Sinergia'),
+        UI.btn('Láminas 1100×750 (PDF)', () => { const n = pdfLaminas(R); UI.toast(n + ' lámina(s): en Imprimir elija Guardar como PDF, papel 1100 × 750 mm (o A0 horizontal), márgenes Ninguno y Gráficos de fondo', 'ok'); }, 'small', 'Imprime las láminas con cajetín: Guardar como PDF'),
         UI.btn('Descargar SVG', () => { const s = document.querySelector('svg.unifilar'); if (s) U.download(App.fileBase() + ' - unifilar.svg', '<?xml version="1.0" encoding="UTF-8"?>' + s.outerHTML.replace(/ width="\d+"/, ' width="' + s.dataset.w + '"').replace(/ height="\d+"/, ' height="' + s.dataset.h + '"').replace('<svg', '<svg style="font-family:Arial;background:#fff"'), 'image/svg+xml'); }, 'small'),
         h('span', { class: 'zoom-u', title: 'Ctrl + rueda del ratón también acerca y aleja' },
           UI.btn('−', () => poner(zoomU / 1.25), 'small', 'Alejar'), etqZoom = h('span', { class: 'zoom-v' }, Math.round(zoomU * 100) + ' %'), UI.btn('+', () => poner(zoomU * 1.25), 'small', 'Acercar'),
