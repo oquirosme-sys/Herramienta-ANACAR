@@ -323,7 +323,7 @@
   }
 
   /* ---------- salida DXF (AutoCAD R12, abre en AutoCAD / AutoCAD LT y se guarda como DWG) ---------- */
-  const CAPAS = { TABLERO: 5, ALIMENTADOR: 7, PROTECCION: 1, TRAFO: 3, EQUIPOS: 6, TEXTO: 2, TABLA: 8, CAJETIN: 7, 'CAJETIN-TEXTO': 7 };
+  const CAPAS = { TABLERO: 5, ALIMENTADOR: 7, PROTECCION: 1, TRAFO: 3, EQUIPOS: 6, TEXTO: 2, TABLA: 8, CAJETIN: 7, 'CAJETIN-TEXTO': 7, LAMINA: 1 };
   const esc = t => String(t).replace(/[^\x20-\x7e]/g, ch => (ch === 'Δ' ? 'D' : ch === '⚠' ? '!' : ch === '↑' ? '^' : '\\U+' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')));
   /** Entidades DXF del diagrama. op = { s, ox, oy, xa, xb, ya, yb }: solo el recuadro xa..xb × ya..yb del diagrama, a escala s (mm por unidad del dibujo), con su esquina superior izquierda en (ox, oy);
       sin op: todo el diagrama en unidades del dibujo. El texto nunca baja de Cajetin.TEXTO_MIN mm (2 mm) en las láminas. */
@@ -403,7 +403,11 @@
     const txt = []; for (let i = 0; i < out.length; i += 2) txt.push(String(out[i]).padStart(3, ' '), String(out[i + 1]));
     return txt.join('\r\n') + '\r\n';
   }
-  const dxf = R => dxfArchivo(dxfEnt(R));
+  /** DXF del diagrama completo, sin cajetín, a la misma escala de las láminas (mm; el texto nunca baja de 2 mm). */
+  function dxf(R) {
+    const m = medir(R), esc = Cajetin.repartir(m.W, m.H, m.cajas).esc, s = Cajetin.MM * esc;
+    return dxfArchivo(dxfEnt(R, { s, ox: 0, oy: m.H * s, xa: 0, xb: m.W, ya: 0, yb: m.H }));
+  }
 
   /* ---------- láminas de 1100 × 750 mm con cajetín (DXF y PDF): ver js/cajetin.js ---------- */
   /** Tamaño del dibujo y posiciones donde se puede cortar entre láminas (Y sin equipos ni textos). */
@@ -429,10 +433,19 @@
   }
   Cajetin.config = () => { const P = Store.project; return { lamina: 'DU-01', titulo: 'Diagrama unifilar' + (P.nombre ? ' - ' + P.nombre : ''), propietario: P.propietario || P.cliente || '', fecha: P.fecha || '', rev: P.revision || 'A' }; };
   function dxfLaminas(R) {
-    const m = medir(R), plan = Cajetin.repartir(m.W, m.H, m.cajas), ent = [];
+    const m = medir(R), plan = Cajetin.repartir(m.W, m.H, m.cajas), ent = [], s = Cajetin.MM * plan.esc, n = plan.laminas.length;
+    /* Modelo: el diagrama completo (sin partir) en mm a la escala de las láminas, con el recuadro de cada lámina encima para ver cómo se reparte. */
+    ent.push(...dxfEnt(R, { s, ox: 0, oy: m.H * s, xa: 0, xb: m.W, ya: 0, yb: m.H }));
+    plan.laminas.forEach(({ xa, xb, ya, yb }, i) => {
+      const x0 = xa * s, x1 = xb * s, y0 = (m.H - yb) * s, y1 = (m.H - ya) * s, c = 'LAMINA', r = v => +v.toFixed(3);
+      [[x0, y0, x1, y0], [x1, y0, x1, y1], [x1, y1, x0, y1], [x0, y1, x0, y0]].forEach(([a, b, d, e]) => ent.push(['0', 'LINE', '8', c, '10', r(a), '20', r(b), '30', 0, '11', r(d), '21', r(e), '31', 0]));
+      ent.push(['0', 'TEXT', '8', c, '7', 'SINERGIA', '10', r(x0 + 4), '20', r(y1 - 9), '30', 0, '40', 5, '1', Cajetin.datos(i, n).lamina]);
+    });
+    /* Láminas listas para trazar (marco, cajetín y su parte del diagrama), debajo del modelo completo */
+    const dy = -(Cajetin.SH + 250);
     plan.laminas.forEach(({ xa, xb, ya, yb }, i) => {
       const ox = i * (Cajetin.SW + Cajetin.SEP);
-      ent.push(...Cajetin.dxf(i, plan.laminas.length, ox), ...dxfEnt(R, { s: Cajetin.MM * plan.esc, ox: ox + Cajetin.AREA.x0, oy: Cajetin.AREA.y1, xa, xb, ya, yb }));
+      ent.push(...Cajetin.dxf(i, n, ox, dy), ...dxfEnt(R, { s, ox: ox + Cajetin.AREA.x0, oy: Cajetin.AREA.y1 + dy, xa, xb, ya, yb }));
     });
     return { texto: dxfArchivo(ent), laminas: plan.laminas.length, esc: plan.esc };
   }
@@ -472,8 +485,8 @@
         h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: conTabla, onchange: e => { conTabla = e.target.checked; App.refresh(); } }), ' Tabla de datos junto a cada tablero'),
         UI.btn('+ Tablero principal', async () => { const n = await UI.prompt('Nuevo tablero principal', 'Nombre', '', v => (v ? '' : 'Escriba un nombre')); if (n) { Store.nuevoTablero({ nombre: n }); App.refresh(); } }, 'small'),
         UI.btn('Restablecer textos', async () => { if (!Object.keys(posiciones()).length) { UI.toast('No hay textos movidos', 'ok'); return; } if (await UI.confirm('¿Devolver todos los textos del unifilar a su posición automática?', 'Restablecer')) { Store.project.unifilarPos = {}; Store.save(); App.refresh(); } }, 'small', 'Arrastre cualquier texto del diagrama para acomodarlo; esto los devuelve a su lugar'),
-        UI.btn('Descargar DXF (AutoCAD)', () => { U.download(App.fileBase() + ' - unifilar.dxf', dxf(R), 'application/dxf'); UI.toast('DXF generado: ábralo en AutoCAD y use Guardar como… DWG', 'ok'); }, 'primary small', 'AutoCAD abre el DXF directamente; con "Guardar como" queda en DWG'),
-        UI.btn('Láminas 1100×750 (DXF)', () => { const r = dxfLaminas(R); U.download(App.fileBase() + ' - unifilar láminas.dxf', r.texto, 'application/dxf'); UI.toast(r.laminas + ' lámina(s) 1100 × 750 mm a escala ' + r.esc.toFixed(3) + ' con cajetín Sinergia', 'ok'); }, 'small', 'Reparte el diagrama en láminas de 1100 × 750 mm con el cajetín Sinergia'),
+        UI.btn('Descargar DXF (AutoCAD)', () => { U.download(App.fileBase() + ' - unifilar.dxf', dxf(R), 'application/dxf'); UI.toast('DXF generado en mm, a la escala de las láminas (texto desde 2 mm): ábralo en AutoCAD y use Guardar como… DWG', 'ok'); }, 'primary small', 'AutoCAD abre el DXF directamente; con "Guardar como" queda en DWG'),
+        UI.btn('Láminas 1100×750 (DXF)', () => { const r = dxfLaminas(R); U.download(App.fileBase() + ' - unifilar láminas.dxf', r.texto, 'application/dxf'); UI.toast('Diagrama completo en el modelo y ' + r.laminas + ' lámina(s) 1100 × 750 mm debajo, a escala ' + r.esc.toFixed(3) + ' con cajetín Sinergia', 'ok'); }, 'small', 'Reparte el diagrama en láminas de 1100 × 750 mm con el cajetín Sinergia'),
         UI.btn('Láminas 1100×750 (PDF)', () => { const n = pdfLaminas(R); UI.toast(n + ' lámina(s): en Imprimir elija Guardar como PDF, papel 1100 × 750 mm (o A0 horizontal), márgenes Ninguno y Gráficos de fondo', 'ok'); }, 'small', 'Imprime las láminas con cajetín: Guardar como PDF'),
         UI.btn('Descargar SVG', () => { const s = document.querySelector('svg.unifilar'); if (s) U.download(App.fileBase() + ' - unifilar.svg', '<?xml version="1.0" encoding="UTF-8"?>' + s.outerHTML.replace(/ width="\d+"/, ' width="' + s.dataset.w + '"').replace(/ height="\d+"/, ' height="' + s.dataset.h + '"').replace('<svg', '<svg style="font-family:Arial;background:#fff"'), 'image/svg+xml'); }, 'small'),
         h('span', { class: 'zoom-u', title: 'Ctrl + rueda del ratón también acerca y aleja' },

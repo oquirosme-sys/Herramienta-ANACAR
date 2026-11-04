@@ -89,15 +89,16 @@
     return mejor;
   }
 
-  /** Entidades DXF (en el formato de ui-unifilar: listas código/valor) del cajetín de la lámina i, con su esquina inferior izquierda en x = ox. */
-  function dxf(i, n, ox) {
+  /** Entidades DXF (en el formato de ui-unifilar: listas código/valor) del cajetín de la lámina i, con su esquina inferior izquierda en (ox, oy). */
+  function dxf(i, n, ox, oy) {
+    oy = oy || 0;
     const c = cajetin(datos(i, n)), f = v => Math.round(v * 10000) / 10000, ent = [];
     c.lineas.forEach(l => {
       if (l.w) ent.push(['0', 'POLYLINE', '8', 'E-CAJETIN', '66', 1, '70', 0, '10', 0, '20', 0, '30', 0, '40', l.w, '41', l.w,
-        '0', 'VERTEX', '8', 'E-CAJETIN', '10', f(ox + l.x1), '20', f(l.y1), '30', 0, '0', 'VERTEX', '8', 'E-CAJETIN', '10', f(ox + l.x2), '20', f(l.y2), '30', 0, '0', 'SEQEND', '8', 'E-CAJETIN']);
-      else ent.push(['0', 'LINE', '8', 'E-CAJETIN', '10', f(ox + l.x1), '20', f(l.y1), '30', 0, '11', f(ox + l.x2), '21', f(l.y2), '31', 0]);
+        '0', 'VERTEX', '8', 'E-CAJETIN', '10', f(ox + l.x1), '20', f(oy + l.y1), '30', 0, '0', 'VERTEX', '8', 'E-CAJETIN', '10', f(ox + l.x2), '20', f(oy + l.y2), '30', 0, '0', 'SEQEND', '8', 'E-CAJETIN']);
+      else ent.push(['0', 'LINE', '8', 'E-CAJETIN', '10', f(ox + l.x1), '20', f(oy + l.y1), '30', 0, '11', f(ox + l.x2), '21', f(oy + l.y2), '31', 0]);
     });
-    const txt = (x, y, h, t) => ent.push(['0', 'TEXT', '8', 'E-CAJETIN-TEXTO', '7', 'SINERGIA', '10', f(x), '20', f(y), '30', 0, '40', h, '1', escDxf(t), '41', 0.95]);
+    const txt = (x, y, h, t) => ent.push(['0', 'TEXT', '8', 'E-CAJETIN-TEXTO', '7', 'SINERGIA', '10', f(x), '20', f(oy + y), '30', 0, '40', h, '1', escDxf(t), '41', 0.95]);
     c.textos.forEach(t => txt(ox + t.x, t.y - t.h, t.h, t.t));
     const lg = T(LOGO.x, LOGO.y);   // el logo es una imagen; en el DXF se rotula con texto
     txt(ox + lg[0] + 2, lg[1] + 22, 9, 'SINERGIA'); txt(ox + lg[0] + 2, lg[1] + 10, 9, 'INGENIERÍA');
