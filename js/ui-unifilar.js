@@ -325,16 +325,21 @@
   /* ---------- salida DXF (AutoCAD R12, abre en AutoCAD / AutoCAD LT y se guarda como DWG) ---------- */
   const CAPAS = { TABLERO: 5, ALIMENTADOR: 7, PROTECCION: 1, TRAFO: 3, EQUIPOS: 6, TEXTO: 2, TABLA: 8, CAJETIN: 7, 'CAJETIN-TEXTO': 7 };
   const esc = t => String(t).replace(/[^\x20-\x7e]/g, ch => (ch === 'Δ' ? 'D' : ch === '⚠' ? '!' : ch === '↑' ? '^' : '\\U+' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')));
-  /** Entidades DXF del diagrama. op = { s, ox, oy, ya, yb }: solo la franja ya..yb del diagrama, a escala s (mm por unidad del dibujo), con su esquina superior izquierda en (ox, oy);
-      sin op: todo el diagrama en unidades del dibujo. */
+  /** Entidades DXF del diagrama. op = { s, ox, oy, xa, xb, ya, yb }: solo el recuadro xa..xb × ya..yb del diagrama, a escala s (mm por unidad del dibujo), con su esquina superior izquierda en (ox, oy);
+      sin op: todo el diagrama en unidades del dibujo. El texto nunca baja de Cajetin.TEXTO_MIN mm (2 mm) en las láminas. */
   function dxfEnt(R, op) {
     let H = 0; const ent = [], s = op ? op.s : 1;
-    const yy = y => +(op ? op.oy - (y - op.ya) * s : H - y).toFixed(3), xx = x => +(op ? op.ox + x * s : x).toFixed(3), dentro = y => !op || (y >= op.ya - 1e-6 && y <= op.yb + 1e-6);
+    const yy = y => +(op ? op.oy - (y - op.ya) * s : H - y).toFixed(3), xx = x => +(op ? op.ox + (x - op.xa) * s : x).toFixed(3);
+    const dentro = (y, x) => !op || (y >= op.ya - 1e-6 && y <= op.yb + 1e-6 && (x === undefined || (x >= op.xa - 1e-6 && x <= op.xb + 1e-6)));
+    const altoMin = h => (op ? Math.max(Cajetin.TEXTO_MIN, h) : h);
     const linea = (x1, y1, x2, y2, capa) => {
-      if (op) {   // se recorta a la franja de la lámina
+      if (op) {   // se recorta al recuadro de la lámina
         const dy = y2 - y1, dx = x2 - x1; let t0 = 0, t1 = 1;
-        if (Math.abs(dy) < 1e-9) { if (!dentro(y1)) return; }
-        else { let a = (op.ya - y1) / dy, b = (op.yb - y1) / dy; if (a > b) { const q = a; a = b; b = q; } t0 = Math.max(0, a); t1 = Math.min(1, b); if (t0 >= t1) return; }
+        const eje = (p, d, lo, hi) => {
+          if (Math.abs(d) < 1e-9) return p >= lo - 1e-6 && p <= hi + 1e-6;
+          let a = (lo - p) / d, b = (hi - p) / d; if (a > b) { const q = a; a = b; b = q; } t0 = Math.max(t0, a); t1 = Math.min(t1, b); return t0 < t1;
+        };
+        if (!eje(y1, dy, op.ya, op.yb) || !eje(x1, dx, op.xa, op.xb)) return;
         const nx1 = x1 + dx * t0, ny1 = y1 + dy * t0, nx2 = x1 + dx * t1, ny2 = y1 + dy * t1; x1 = nx1; y1 = ny1; x2 = nx2; y2 = ny2;
       }
       ent.push(['0', 'LINE', '8', capa, '10', xx(x1), '20', yy(y1), '30', 0, '11', xx(x2), '21', yy(y2), '31', 0]);
@@ -346,22 +351,22 @@
       tamano: (w, hh) => { H = hh; },
       linea: (x1, y1, x2, y2, cls, capa) => linea(x1, y1, x2, y2, capa || 'ALIMENTADOR'),
       rect: (x, y, w, hh, cls, capa) => { const c = capa || 'EQUIPOS'; linea(x, y, x + w, y, c); linea(x + w, y, x + w, y + hh, c); linea(x + w, y + hh, x, y + hh, c); linea(x, y + hh, x, y, c); if (cls === 'u-red') for (let i = 8; i < w + hh; i += 8) linea(x + Math.max(0, i - hh), y + Math.min(hh, i), x + Math.min(w, i), y + Math.max(0, i - w), c); },
-      circulo: (cx, cy, r, cls, capa) => { if (dentro(cy)) ent.push(['0', 'CIRCLE', '8', capa || 'EQUIPOS', '10', xx(cx), '20', yy(cy), '30', 0, '40', +(r * s).toFixed(3)]); },
+      circulo: (cx, cy, r, cls, capa) => { if (dentro(cy, cx)) ent.push(['0', 'CIRCLE', '8', capa || 'EQUIPOS', '10', xx(cx), '20', yy(cy), '30', 0, '40', +(r * s).toFixed(3)]); },
       texto: (x, y, t, cls, capa, al) => {
         if (capa === 'TEXTO') { const o = pos[L.key()]; if (o) { x += o.dx; y += o.dy; } }
-        if (!dentro(y)) return;
-        const hgt = +((ALTO[cls] || 8.5) * s).toFixed(3), e = ['0', 'TEXT', '8', capa || 'TEXTO', '7', 'SINERGIA', '10', xx(x), '20', yy(y), '30', 0, '40', hgt, '1', esc(t)];
+        if (!dentro(y, x)) return;
+        const hgt = +altoMin((ALTO[cls] || 8.5) * s).toFixed(3), e = ['0', 'TEXT', '8', capa || 'TEXTO', '7', 'SINERGIA', '10', xx(x), '20', yy(y), '30', 0, '40', hgt, '1', esc(t)];
         if (al === 'c' || al === 'e') e.push('72', al === 'c' ? 1 : 2, '11', xx(x), '21', yy(y), '31', 0);
         ent.push(e);
       },
       barra: (x1, x2, y) => { [-2, 0, 2].forEach(d => linea(x1, y + d, x2, y + d, 'TABLERO')); },
       boton: () => {},
       simbolo: (nombre, x, y, vals) => {
-        const Y = SIMB[nombre]; if (op && !dentro(y + Y.alto * Y.k / 2)) return;
+        const Y = SIMB[nombre]; if (op && !dentro(y + Y.alto * Y.k / 2, x)) return;
         const conAtr = (Y.attrs || []).length > 0, ks = +(Y.k * s).toFixed(5), e = ['0', 'INSERT', '8', Y.capa].concat(conAtr ? ['66', 1] : [], ['2', nombre, '10', xx(x), '20', yy(y), '30', 0, '41', ks, '42', ks, '43', ks, '50', 0]);
         ent.push(e);
         if (conAtr) {
-          (Y.attrs || []).forEach(([tag, , ax, ay, ah, vis]) => ent.push(['0', 'ATTRIB', '8', Y.capa, '10', xx(x + ax * Y.k), '20', +(yy(y) + ay * ks).toFixed(3), '30', 0, '40', +(ah * ks).toFixed(3), '1', esc((vals || {})[tag] || ' '), '7', 'SINERGIA', '2', tag, '70', vis ? 0 : 1]));
+          (Y.attrs || []).forEach(([tag, , ax, ay, ah, vis]) => ent.push(['0', 'ATTRIB', '8', Y.capa, '10', xx(x + ax * Y.k), '20', +(yy(y) + ay * ks).toFixed(3), '30', 0, '40', +altoMin(ah * ks).toFixed(3), '1', esc((vals || {})[tag] || ' '), '7', 'SINERGIA', '2', tag, '70', vis ? 0 : 1]));
           ent.push(['0', 'SEQEND', '8', Y.capa]);
         }
       },
@@ -403,29 +408,36 @@
   /* ---------- láminas de 1100 × 750 mm con cajetín (DXF y PDF): ver js/cajetin.js ---------- */
   /** Tamaño del dibujo y posiciones donde se puede cortar entre láminas (Y sin equipos ni textos). */
   function medir(R) {
-    let W0 = 0, H0 = 0; const oc = [], L = llaves(), pos = posiciones();
+    let W0 = 0, H0 = 0; const cajas = [], L = llaves(), pos = posiciones();
+    const FS = { 'u-n': 14, 'u-t s': 10, 'u-t s b': 10 };
     dibujar(R, {
       ctx: L.ctx, tamano: (w, hh) => { W0 = w; H0 = hh; }, linea() {}, boton() {},
-      rect: (x, y, w, hh) => oc.push([y, y + hh]), circulo: (cx, cy, r) => oc.push([cy - r, cy + r]), barra: (x1, x2, y) => oc.push([y - 5, y + 5]),
-      texto: (x, y, t, cls, capa) => { let yt = y; if (capa === 'TEXTO') { const o = pos[L.key()]; if (o) yt += o.dy; } oc.push([yt - 13, yt + 5]); },
-      simbolo: (nombre, x, y) => { const Y = SIMB[nombre]; oc.push([y - 3, y + Y.alto * Y.k + 3]); },
+      rect: (x, y, w, hh) => cajas.push([x, x + w, y, y + hh]), circulo: (cx, cy, r) => cajas.push([cx - r, cx + r, cy - r, cy + r]),
+      barra: (x1, x2, y) => cajas.push([(x1 + x2) / 2, (x1 + x2) / 2 + 1, y - 5, y + 5]),   // las barras se pueden cortar a lo ancho; a lo alto no
+      texto: (x, y, t, cls, capa, al) => {
+        let xt = x, yt = y; if (capa === 'TEXTO') { const o = pos[L.key()]; if (o) { xt += o.dx; yt += o.dy; } }
+        const w = String(t).length * (FS[cls] || 11.5) * 0.62, x0 = al === 'c' ? xt - w / 2 : al === 'e' ? xt - w : xt;
+        cajas.push([x0, x0 + w, yt - 13, yt + 5]);
+      },
+      simbolo: (nombre, x, y) => {
+        const Y = SIMB[nombre]; let a = 0, b = 0;
+        Y.prims.forEach(m => { const xs = m[0] === 'L' ? [m[1], m[3]] : m[0] === 'T' ? [m[1] - 6, m[1] + 6] : [m[1] - m[3], m[1] + m[3]]; a = Math.min(a, ...xs); b = Math.max(b, ...xs); });
+        cajas.push([x + a * Y.k - 3, x + b * Y.k + 3, y - 3, y + Y.alto * Y.k + 3]);
+      },
     });
-    oc.sort((a, b) => a[0] - b[0]);
-    const cortes = []; let fin = -Infinity;
-    oc.forEach(([a, b]) => { if (fin > -Infinity && a - fin >= 16) cortes.push((a + fin) / 2); fin = Math.max(fin, b); });
-    return { W: W0, H: H0, cortes };
+    return { W: W0, H: H0, cajas };
   }
   Cajetin.config = () => { const P = Store.project; return { lamina: 'DU-01', titulo: 'Diagrama unifilar' + (P.nombre ? ' - ' + P.nombre : ''), propietario: P.propietario || P.cliente || '', fecha: P.fecha || '', rev: P.revision || 'A' }; };
   function dxfLaminas(R) {
-    const m = medir(R), plan = Cajetin.repartir(m.W, m.H, m.cortes), ent = [];
-    plan.partes.forEach(([ya, yb], i) => {
+    const m = medir(R), plan = Cajetin.repartir(m.W, m.H, m.cajas), ent = [];
+    plan.laminas.forEach(({ xa, xb, ya, yb }, i) => {
       const ox = i * (Cajetin.SW + Cajetin.SEP);
-      ent.push(...Cajetin.dxf(i, plan.partes.length, ox), ...dxfEnt(R, { s: Cajetin.MM * plan.esc, ox: ox + Cajetin.AREA.x0, oy: Cajetin.AREA.y1, ya, yb }));
+      ent.push(...Cajetin.dxf(i, plan.laminas.length, ox), ...dxfEnt(R, { s: Cajetin.MM * plan.esc, ox: ox + Cajetin.AREA.x0, oy: Cajetin.AREA.y1, xa, xb, ya, yb }));
     });
-    return { texto: dxfArchivo(ent), laminas: plan.partes.length, esc: plan.esc };
+    return { texto: dxfArchivo(ent), laminas: plan.laminas.length, esc: plan.esc };
   }
   function pdfLaminas(R) {
-    const m = medir(R), plan = Cajetin.repartir(m.W, m.H, m.cortes);
+    const m = medir(R), plan = Cajetin.repartir(m.W, m.H, m.cajas);
     return Cajetin.pdf(svgDibujo(R), plan, App.fileBase() + ' - unifilar', 'img/logo-sinergia.png');
   }
 

@@ -51,22 +51,40 @@
     return { lineas, textos };
   }
 
-  /** Reparte un diagrama de W × H (px a 72 dpi) en láminas. Usa una sola escala para todo (la más grande, de 1:1 hacia abajo hasta 88 %, que dé menos láminas)
-      y corta en las posiciones de `cortes` (Y libres de equipos y textos). Devuelve { esc, partes: [[ya, yb], …] }. */
-  function repartir(W, H, cortes) {
-    const cs = (cortes || []).filter(c => c > 0 && c < H);
-    const base = Math.min(1, AW / (W * MM));   // nunca se agranda por encima de 1:1
+  /* Escala mínima: el texto más pequeño del diagrama (cota de 8,5 px) debe medir al menos 2 mm en CAD; si el diagrama no cabe a esa escala se reparte también a lo ancho. */
+  const TEXTO_MIN = 2, ESC_MIN = 0.7;
+
+  /** Posiciones donde se puede cortar a lo largo del eje ('x' o 'y') en la franja [a, b] del otro eje: huecos de al menos 16 sin ninguna de las cajas [x0, x1, y0, y1]. */
+  function cortesDe(cajas, eje, a, b) {
+    const i0 = eje === 'y' ? 2 : 0, o0 = eje === 'y' ? 0 : 2;
+    const iv = cajas.filter(c => c[o0 + 1] > a && c[o0] < b).map(c => [c[i0], c[i0 + 1]]).sort((p, q) => p[0] - q[0]);
+    const cs = []; let fin = -Infinity;
+    iv.forEach(([u, v]) => { if (fin > -Infinity && u - fin >= 16) cs.push((u + fin) / 2); fin = Math.max(fin, v); });
+    return cs;
+  }
+  /** Parte [0, L] en tramos de a lo más `tope`, cortando en el último corte libre que quepa (o a la fuerza si no hay). */
+  function tramos(L, tope, cs) {
+    const out = []; let ini = 0;
+    while (L - ini > 1) {
+      let fn;
+      if (L - ini <= tope) fn = L;
+      else { const c = cs.filter(v => v > ini + tope * 0.3 && v <= ini + tope); fn = c.length ? Math.max(...c) : ini + tope; }
+      out.push([ini, fn]); ini = fn;
+    }
+    return out;
+  }
+  /** Reparte un diagrama de W × H (px a 72 dpi) en láminas con una sola escala (1:1 como máximo; la mayor que dé menos láminas, sin bajar de ESC_MIN),
+      cortando donde no hay equipos ni textos (cajas [x0, x1, y0, y1]). Devuelve { esc, laminas: [{ xa, xb, ya, yb }, …] } por filas de arriba abajo y de izquierda a derecha. */
+  function repartir(W, H, cajas) {
+    cajas = cajas || [];
+    const csY = cortesDe(cajas, 'y', -Infinity, Infinity), ajuste = Math.min(1, AW / (W * MM));
     let mejor = null;
-    [1, 0.98, 0.96, 0.94, 0.92, 0.9, 0.88].forEach(k => {
-      const esc = base * k, tope = AH / (MM * esc), partes = [];
-      let ini = 0;
-      while (H - ini > 1) {
-        let fn;
-        if (H - ini <= tope) fn = H;
-        else { const c = cs.filter(v => v > ini + tope * 0.3 && v <= ini + tope); fn = c.length ? Math.max(...c) : ini + tope; }
-        partes.push([ini, fn]); ini = fn;
-      }
-      if (!mejor || partes.length < mejor.partes.length) mejor = { esc, partes };
+    [1, 0.95, 0.9, 0.85, 0.8, 0.75, ESC_MIN].forEach(c => {
+      const esc = Math.max(ESC_MIN, Math.min(ajuste, c));
+      if (mejor && esc >= mejor.esc - 1e-9 && esc <= mejor.esc + 1e-9) return;
+      const lams = [];
+      tramos(H, AH / (MM * esc), csY).forEach(([ya, yb]) => tramos(W, AW / (MM * esc), cortesDe(cajas, 'x', ya, yb)).forEach(([xa, xb]) => lams.push({ xa, xb, ya, yb })));
+      if (!mejor || lams.length < mejor.laminas.length) mejor = { esc, laminas: lams };
     });
     return mejor;
   }
@@ -90,13 +108,13 @@
   const NS = 'http://www.w3.org/2000/svg';
   const el = (n, a, hijos) => { const e = document.createElementNS(NS, n); Object.entries(a || {}).forEach(([k, v]) => e.setAttribute(k, v)); (hijos || []).forEach(h => e.append(h)); return e; };
   function hojas(svg, plan, logoUrl) {
-    const { esc, partes } = plan, W = svg.viewBox.baseVal.width;
-    return partes.map(([ya, yb], i) => {
-      const c = cajetin(datos(i, partes.length)), Y = y => SH - y;
+    const { esc, laminas } = plan;
+    return laminas.map(({ xa, xb, ya, yb }, i) => {
+      const c = cajetin(datos(i, laminas.length)), Y = y => SH - y;
       const hoja = el('svg', { xmlns: NS, viewBox: '0 0 ' + SW + ' ' + SH, width: SW + 'mm', height: SH + 'mm', 'font-family': 'Century Gothic, Montserrat, Arial, sans-serif' });
       hoja.append(el('rect', { width: SW, height: SH, fill: '#fff' }));
       const dib = svg.cloneNode(true); dib.removeAttribute('style');
-      Object.entries({ x: AREA.x0, y: Y(AREA.y1), width: W * MM * esc, height: (yb - ya) * MM * esc, viewBox: '0 ' + ya + ' ' + W + ' ' + (yb - ya), preserveAspectRatio: 'xMinYMin meet', overflow: 'hidden' }).forEach(([k, v]) => dib.setAttribute(k, v));
+      Object.entries({ x: AREA.x0, y: Y(AREA.y1), width: (xb - xa) * MM * esc, height: (yb - ya) * MM * esc, viewBox: xa + ' ' + ya + ' ' + (xb - xa) + ' ' + (yb - ya), preserveAspectRatio: 'xMinYMin meet', overflow: 'hidden' }).forEach(([k, v]) => dib.setAttribute(k, v));
       hoja.append(dib);
       c.lineas.forEach(l => hoja.append(el('line', { x1: l.x1, y1: Y(l.y1), x2: l.x2, y2: Y(l.y2), stroke: '#000', 'stroke-width': l.w || 0.25 })));
       c.textos.forEach(t => { const e = el('text', { x: t.x, y: Y(t.y - t.h), 'font-size': t.h / 0.72, fill: '#000' }); e.textContent = t.t; hoja.append(e); });
@@ -119,6 +137,6 @@
     return hs.length;
   }
 
-  const Cajetin = { MM, SW, SH, SEP, AREA, repartir, dxf, pdf, datos, config: null };
+  const Cajetin = { MM, SW, SH, SEP, AREA, TEXTO_MIN, ESC_MIN, repartir, dxf, pdf, datos, config: null };
   window.Cajetin = Cajetin;
 })();
