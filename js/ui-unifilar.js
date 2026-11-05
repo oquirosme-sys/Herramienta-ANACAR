@@ -176,7 +176,8 @@
     function tablaDatos(r, x, y) {
       const A = r.alim, w1 = 170, w2 = 140, hh = 15;
       const filas = [['EQUIPO', r.nombre], ['CORRIENTE CORTOCIRCUITO', r.iccKA ? f2(r.iccKA) + ' kA' : '—'], ['kVA TOTALES', f2(r.W130)], ['FACTOR DE DEMANDA', f2(A.R139)], ['kVA DEMANDADOS', f2(A.L139)],
-        ['FACTOR DE POTENCIA', f2(A.T139)], ['ACOMETIDA', ''], ['FASES', A.fasesTxt], ['NEUTRO', A.neutroTxt || '—'], ['TIERRA', A.tierraTxt || '—'], ['AISLAMIENTO / COND.', A.ais + ' / ' + A.mat],
+        ['FACTOR DE POTENCIA', f2(A.T139)], ['PROTECCIÓN DEL TABLERO', r.zapatas ? 'Zapatas (sin interruptor)' : (A.AF139 || '–') + ' A · ' + (r.bkMain ? (r.bkMain.polos || '') + 'P ' + (r.bkMain.unidad === 'STD' || !r.bkMain.unidad ? 'TM' : r.bkMain.unidad) : fasesPolos(r) + 'P')],
+        ['MODELO / SCCR', r.bkMain ? (r.bkMain.ref || r.bkMain.modelo || '—') + (r.bkMain.sccr ? ' · ' + r.bkMain.sccr + ' kA' : '') : '—'], ['ACOMETIDA', ''], ['FASES', A.fasesTxt], ['NEUTRO', A.neutroTxt || '—'], ['TIERRA', A.tierraTxt || '—'], ['AISLAMIENTO / COND.', A.ais + ' / ' + A.mat],
         ['CANALIZACIÓN', (A.preN || '') + A.AR139 + ' mm ' + A.tuberia], ['LONGITUD', f1(A.M139) + ' m'], ['VOLTAJE NOMINAL', r.tab.sistema + ' V'], ['VOLTAJE CALCULADO', f2(A.AW139) + ' V'], ['% CAÍDA DE VOLTAJE', f2(A.AY139) + ' %']];
       if (r.alterna) {
         const a = r.alterna;
