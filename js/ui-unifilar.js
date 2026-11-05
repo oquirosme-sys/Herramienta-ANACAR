@@ -57,6 +57,23 @@
     ].filter(Boolean));
   }
 
+  /** Filas [etiqueta, valor] de la tabla de datos de un tablero (las 18 primeras son la base; después, ATS/generador, MTS y UPS si los hay). */
+  function filasDatos(r) {
+    const A = r.alim;
+    const filas = [['EQUIPO', r.nombre], ['CORRIENTE CORTOCIRCUITO', r.iccKA ? f2(r.iccKA) + ' kA' : '—'], ['kVA TOTALES', f2(r.W130)], ['FACTOR DE DEMANDA', f2(A.R139)], ['kVA DEMANDADOS', f2(A.L139)],
+      ['FACTOR DE POTENCIA', f2(A.T139)], ['PROTECCIÓN DEL TABLERO', r.zapatas ? 'Zapatas (sin interruptor)' : (A.AF139 || '–') + ' A · ' + (r.bkMain ? (r.bkMain.polos || '') + 'P ' + (r.bkMain.unidad === 'STD' || !r.bkMain.unidad ? 'TM' : r.bkMain.unidad) : fasesPolos(r) + 'P')],
+      ['MODELO / SCCR', r.bkMain ? (r.bkMain.ref || r.bkMain.modelo || '—') + (r.bkMain.sccr ? ' · ' + r.bkMain.sccr + ' kA' : '') : '—'], ['ACOMETIDA', ''], ['FASES', A.fasesTxt], ['NEUTRO', A.neutroTxt || '—'], ['TIERRA', A.tierraTxt || '—'], ['AISLAMIENTO / COND.', A.ais + ' / ' + A.mat],
+      ['CANALIZACIÓN', (A.preN || '') + A.AR139 + ' mm ' + A.tuberia], ['LONGITUD', f1(A.M139) + ' m'], ['VOLTAJE NOMINAL', r.tab.sistema + ' V'], ['VOLTAJE CALCULADO', f2(A.AW139) + ' V'], ['% CAÍDA DE VOLTAJE', f2(A.AY139) + ' %']];
+    if (r.alterna) {
+      const a = r.alterna;
+      filas.push([a.equipo + ' / ' + (a.tipo === 'generador' ? 'GENERADOR' : 'BYPASS'), ''], ['MODELO ' + a.equipo, a.ats ? a.ats.modelo + ' · ' + a.ats.amperios + ' A' : (A.AF139 || '–') + ' A'], ['TRANSICIÓN / POLOS', (a.equipo === 'MTS' ? 'manual' : a.transicion || '—') + ' · ' + (a.polosAts || '—') + 'P'],
+        ['WCR / Icc EN EL ' + a.equipo, (a.wcr || '—') + ' / ' + (a.iccAtsKA ? f2(a.iccAtsKA) : '—') + ' kA'], ['NORMAL → ' + a.equipo, f1(a.distNormal) + ' m'], [(a.tipo === 'generador' ? 'GENERADOR' : 'BYPASS') + ' → ' + a.equipo, f1(a.longitud) + ' m'],
+        [a.equipo + ' → TABLERO', f1(a.distAts) + ' m'], ['GENERADOR', a.tipo === 'generador' ? (a.kva ? f1(a.kva) + ' kVA' : '—') : (a.origen || '—')], ['CALIBRE 2ª ACOMETIDA', a.fasesTxt + ' ' + a.mat], ['CAÍDA 2ª ACOMETIDA', f2(a.cv) + ' %']);
+    }
+    if (r.upsMts) filas.push(['MTS (BYPASS UPS)', ''], ['MODELO MTS', r.upsMts.ats ? r.upsMts.ats.modelo + ' · ' + r.upsMts.ats.amperios + ' A' : (A.AF139 || '–') + ' A'], ['WCR / Icc EN EL MTS', (r.upsMts.wcr || '—') + ' / ' + (r.iccKA ? f2(r.iccKA) : '—') + ' kA']);
+    if (r.ups) filas.push(['UPS', r.ups.nombre || ''], ['CAPACIDAD UPS', f1(r.ups.kva) + ' kVA'], ['Icc DEL INVERSOR', f2(r.ups.icc / 1000) + ' kA']);
+    return filas;
+  }
   /* ---------- dibujo abstracto (lo usan SVG y DXF) ---------- */
   /** Recorre el proyecto y emite primitivas: linea, rect, circulo, texto (con capa, clase y acción al hacer clic). */
   function dibujar(R, D) {
@@ -174,27 +191,15 @@
 
     /** Tabla de datos del tablero (como las tablas de los DU). */
     function tablaDatos(r, x, y) {
-      const A = r.alim, w1 = 170, w2 = 140, hh = 15;
-      const filas = [['EQUIPO', r.nombre], ['CORRIENTE CORTOCIRCUITO', r.iccKA ? f2(r.iccKA) + ' kA' : '—'], ['kVA TOTALES', f2(r.W130)], ['FACTOR DE DEMANDA', f2(A.R139)], ['kVA DEMANDADOS', f2(A.L139)],
-        ['FACTOR DE POTENCIA', f2(A.T139)], ['PROTECCIÓN DEL TABLERO', r.zapatas ? 'Zapatas (sin interruptor)' : (A.AF139 || '–') + ' A · ' + (r.bkMain ? (r.bkMain.polos || '') + 'P ' + (r.bkMain.unidad === 'STD' || !r.bkMain.unidad ? 'TM' : r.bkMain.unidad) : fasesPolos(r) + 'P')],
-        ['MODELO / SCCR', r.bkMain ? (r.bkMain.ref || r.bkMain.modelo || '—') + (r.bkMain.sccr ? ' · ' + r.bkMain.sccr + ' kA' : '') : '—'], ['ACOMETIDA', ''], ['FASES', A.fasesTxt], ['NEUTRO', A.neutroTxt || '—'], ['TIERRA', A.tierraTxt || '—'], ['AISLAMIENTO / COND.', A.ais + ' / ' + A.mat],
-        ['CANALIZACIÓN', (A.preN || '') + A.AR139 + ' mm ' + A.tuberia], ['LONGITUD', f1(A.M139) + ' m'], ['VOLTAJE NOMINAL', r.tab.sistema + ' V'], ['VOLTAJE CALCULADO', f2(A.AW139) + ' V'], ['% CAÍDA DE VOLTAJE', f2(A.AY139) + ' %']];
-      if (r.alterna) {
-        const a = r.alterna;
-        filas.push([a.equipo + ' / ' + (a.tipo === 'generador' ? 'GENERADOR' : 'BYPASS'), ''], ['MODELO ' + a.equipo, a.ats ? a.ats.modelo + ' · ' + a.ats.amperios + ' A' : (A.AF139 || '–') + ' A'], ['TRANSICIÓN / POLOS', (a.equipo === 'MTS' ? 'manual' : a.transicion || '—') + ' · ' + (a.polosAts || '—') + 'P'],
-          ['WCR / Icc EN EL ' + a.equipo, (a.wcr || '—') + ' / ' + (a.iccAtsKA ? f2(a.iccAtsKA) : '—') + ' kA'], ['NORMAL → ' + a.equipo, f1(a.distNormal) + ' m'], [(a.tipo === 'generador' ? 'GENERADOR' : 'BYPASS') + ' → ' + a.equipo, f1(a.longitud) + ' m'],
-          [a.equipo + ' → TABLERO', f1(a.distAts) + ' m'], ['GENERADOR', a.tipo === 'generador' ? (a.kva ? f1(a.kva) + ' kVA' : '—') : (a.origen || '—')], ['CALIBRE 2ª ACOMETIDA', a.fasesTxt + ' ' + a.mat], ['CAÍDA 2ª ACOMETIDA', f2(a.cv) + ' %']);
-      }
-      if (r.upsMts) filas.push(['MTS (BYPASS UPS)', ''], ['MODELO MTS', r.upsMts.ats ? r.upsMts.ats.modelo + ' · ' + r.upsMts.ats.amperios + ' A' : (A.AF139 || '–') + ' A'], ['WCR / Icc EN EL MTS', (r.upsMts.wcr || '—') + ' / ' + (r.iccKA ? f2(r.iccKA) : '—') + ' kA']);
-      if (r.ups) filas.push(['UPS', r.ups.nombre || ''], ['CAPACIDAD UPS', f1(r.ups.kva) + ' kVA'], ['Icc DEL INVERSOR', f2(r.ups.icc / 1000) + ' kA']);
+      const w1 = 170, w2 = 140, hh = 15, filas = filasDatos(r);
       D.rect(x, y, w1 + w2, hh * (filas.length + 1), 'u-tab', 'TABLA');
-      D.texto(x + (w1 + w2) / 2, y + 11, 'TABLA RESUMEN DEL TABLERO', 'u-t b', 'TABLA', 'c');
+      D.texto(x + 4, y + 11, 'TABLA RESUMEN DEL TABLERO', 'u-t s b', 'TABLA');   // título a la izquierda, en la primera columna (como las tablas de los DU)
       filas.forEach((f, i) => {
         const yy = y + hh * (i + 1);
         D.linea(x, yy, x + w1 + w2, yy, 'u-tabl', 'TABLA');
         D.texto(x + 4, yy + 11, f[0], 'u-t s', 'TABLA'); D.texto(x + w1 + 4, yy + 11, f[1], 'u-t s b', 'TABLA');
       });
-      D.linea(x + w1, y + hh, x + w1, y + hh * (filas.length + 1), 'u-tabl', 'TABLA');
+      D.linea(x + w1, y, x + w1, y + hh * (filas.length + 1), 'u-tabl', 'TABLA');   // el divisor de columnas también pasa por la fila del título
     }
 
     /** UPS del tablero principal: dos interruptores en la barra (UPS y bypass) → UPS → MTS → interruptor de salida, aguas abajo del principal. */
@@ -284,26 +289,30 @@
       kids.flat().forEach(k => { if (k === null || k === undefined) return; el.appendChild(typeof k === 'string' || typeof k === 'number' ? document.createTextNode(String(k)) : k); });
       return el;
     };
-    let svg = null, g0 = null;
+    let svg = null, g0 = null, W0 = 0, H0 = 0, maxY = 0;   // maxY: lo más bajo que se dibuja (las tablas pueden pasar de la altura calculada)
+    const mY = y => { if (y > maxY) maxY = y; };
     const tit = t => (t ? S('title', null, t) : null);
     const L = llaves(), pos = posiciones();
     const D = {
       ctx: L.ctx,
       tamano(w, hh) {
+        W0 = w; H0 = hh;
         svg = S('svg', { class: 'unifilar', viewBox: '0 0 ' + w + ' ' + hh, width: w, height: hh, xmlns: NS, role: 'img', 'aria-label': 'Diagrama unifilar' });
         svg.appendChild(S('defs', null, S('pattern', { id: 'rayas', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, S('line', { x1: 0, y1: 0, x2: 0, y2: 6, class: 'u-ray' }))));
         g0 = S('g'); svg.appendChild(g0);
       },
-      linea: (x1, y1, x2, y2, cls) => g0.appendChild(S('line', { x1, y1, x2, y2, class: cls })),
-      rect: (x, y, w, hh, cls, capa, ir) => g0.appendChild(S('rect', { x, y, width: w, height: hh, class: cls + (ir ? ' clic' : ''), onclick: ir })),
-      circulo: (cx, cy, r, cls, capa, ir) => g0.appendChild(S('circle', { cx, cy, r, class: cls + (ir ? ' clic' : ''), onclick: ir })),
+      linea: (x1, y1, x2, y2, cls) => mY(Math.max(y1, y2)) || g0.appendChild(S('line', { x1, y1, x2, y2, class: cls })),
+      rect: (x, y, w, hh, cls, capa, ir) => mY(y + hh) || g0.appendChild(S('rect', { x, y, width: w, height: hh, class: cls + (ir ? ' clic' : ''), onclick: ir })),
+      circulo: (cx, cy, r, cls, capa, ir) => mY(cy + r) || g0.appendChild(S('circle', { cx, cy, r, class: cls + (ir ? ' clic' : ''), onclick: ir })),
       texto: (x, y, t, cls, capa, al, ir, title) => {
+        mY(y + 6);
         const k = capa === 'TEXTO' ? L.key() : null, o = k && pos[k];
         return g0.appendChild(S('text', { x, y, class: cls + (ir ? ' clic' : '') + (k ? ' u-mov' : ''), 'text-anchor': al === 'c' ? 'middle' : al === 'e' ? 'end' : null, 'data-k': k, transform: o ? 'translate(' + o.dx + ' ' + o.dy + ')' : null, onclick: ir }, t, tit(title || (k ? 'Arrastre para mover este texto' : null))));
       },
-      barra: (x1, x2, y, color, ir, nombre) => g0.appendChild(S('line', { x1, y1: y, x2, y2: y, class: 'u-bus', stroke: color, onclick: ir }, tit('Abrir memoria de cálculo de ' + nombre))),
+      barra: (x1, x2, y, color, ir, nombre) => mY(y + 4) || g0.appendChild(S('line', { x1, y1: y, x2, y2: y, class: 'u-bus', stroke: color, onclick: ir }, tit('Abrir memoria de cálculo de ' + nombre))),
       simbolo: (nombre, x, y, vals, o) => {
-        o = o || {}; const Y = SIMB[nombre], k = Y.k, X = px => +(x + px * k).toFixed(2), V = py => +(y - py * k).toFixed(2);
+        o = o || {}; const Y = SIMB[nombre], k = Y.k; mY(y + Y.alto * k);
+        const X = px => +(x + px * k).toFixed(2), V = py => +(y - py * k).toFixed(2);
         const el = S('g', { class: 'u-sim' + (o.mal ? ' mal' : '') + (o.ir ? ' clic' : ''), onclick: o.ir }, tit(o.title));
         Y.prims.forEach(m => {
           if (m[0] === 'L') el.appendChild(S('line', { x1: X(m[1]), y1: V(m[2]), x2: X(m[3]), y2: V(m[4]) }));
@@ -317,9 +326,11 @@
         });
         g0.appendChild(el);
       },
-      boton: (cx, cy, t, ir) => g0.appendChild(S('g', { class: 'u-add no-print', onclick: ir }, S('rect', { x: cx - 32, y: cy - 10, width: 64, height: 18, rx: 9 }), S('text', { x: cx, y: cy + 3, 'text-anchor': 'middle' }, t))),
+      boton: (cx, cy, t, ir) => mY(cy + 14) || g0.appendChild(S('g', { class: 'u-add no-print', onclick: ir }, S('rect', { x: cx - 32, y: cy - 10, width: 64, height: 18, rx: 9 }), S('text', { x: cx, y: cy + 3, 'text-anchor': 'middle' }, t))),
     };
     dibujar(R, D);
+    const hh = Math.max(H0, Math.ceil(maxY + 30));   // que nada quede cortado por abajo (p. ej. las tablas de datos con más filas)
+    if (hh > H0) { svg.setAttribute('viewBox', '0 0 ' + W0 + ' ' + hh); svg.setAttribute('height', hh); }
     return svg;
   }
 
@@ -413,24 +424,24 @@
   /* ---------- láminas de 1100 × 750 mm con cajetín (DXF y PDF): ver js/cajetin.js ---------- */
   /** Tamaño del dibujo y posiciones donde se puede cortar entre láminas (Y sin equipos ni textos). */
   function medir(R) {
-    let W0 = 0, H0 = 0; const cajas = [], L = llaves(), pos = posiciones();
+    let W0 = 0, H0 = 0, maxY = 0; const cajas = [], L = llaves(), pos = posiciones();
     const FS = { 'u-n': 14, 'u-t s': 10, 'u-t s b': 10 };
     dibujar(R, {
-      ctx: L.ctx, tamano: (w, hh) => { W0 = w; H0 = hh; }, linea() {}, boton() {},
-      rect: (x, y, w, hh) => cajas.push([x, x + w, y, y + hh]), circulo: (cx, cy, r) => cajas.push([cx - r, cx + r, cy - r, cy + r]),
+      ctx: L.ctx, tamano: (w, hh) => { W0 = w; H0 = hh; }, linea: (x1, y1, x2, y2) => { maxY = Math.max(maxY, y1, y2); }, boton: (cx, cy) => { maxY = Math.max(maxY, cy + 14); },
+      rect: (x, y, w, hh) => { maxY = Math.max(maxY, y + hh); cajas.push([x, x + w, y, y + hh]); }, circulo: (cx, cy, r) => { maxY = Math.max(maxY, cy + r); cajas.push([cx - r, cx + r, cy - r, cy + r]); },
       barra: (x1, x2, y) => cajas.push([(x1 + x2) / 2, (x1 + x2) / 2 + 1, y - 5, y + 5]),   // las barras se pueden cortar a lo ancho; a lo alto no
       texto: (x, y, t, cls, capa, al) => {
         let xt = x, yt = y; if (capa === 'TEXTO') { const o = pos[L.key()]; if (o) { xt += o.dx; yt += o.dy; } }
         const w = String(t).length * (FS[cls] || 11.5) * 0.62, x0 = al === 'c' ? xt - w / 2 : al === 'e' ? xt - w : xt;
-        cajas.push([x0, x0 + w, yt - 13, yt + 5]);
+        maxY = Math.max(maxY, yt + 6); cajas.push([x0, x0 + w, yt - 13, yt + 5]);
       },
       simbolo: (nombre, x, y) => {
         const Y = SIMB[nombre]; let a = 0, b = 0;
         Y.prims.forEach(m => { const xs = m[0] === 'L' ? [m[1], m[3]] : m[0] === 'T' ? [m[1] - 6, m[1] + 6] : [m[1] - m[3], m[1] + m[3]]; a = Math.min(a, ...xs); b = Math.max(b, ...xs); });
-        cajas.push([x + a * Y.k - 3, x + b * Y.k + 3, y - 3, y + Y.alto * Y.k + 3]);
+        maxY = Math.max(maxY, y + Y.alto * Y.k); cajas.push([x + a * Y.k - 3, x + b * Y.k + 3, y - 3, y + Y.alto * Y.k + 3]);
       },
     });
-    return { W: W0, H: H0, cajas };
+    return { W: W0, H: Math.max(H0, Math.ceil(maxY + 30)), cajas };
   }
   Cajetin.config = () => { const P = Store.project; return { lamina: 'DU-01', titulo: 'Diagrama unifilar' + (P.nombre ? ' - ' + P.nombre : ''), propietario: P.propietario || P.cliente || '', fecha: P.fecha || '', rev: P.revision || 'A' }; };
   function dxfLaminas(R) {
@@ -489,6 +500,7 @@
         UI.btn('Descargar DXF (AutoCAD)', () => { U.download(App.fileBase() + ' - unifilar.dxf', dxf(R), 'application/dxf'); UI.toast('DXF generado en mm, a la escala de las láminas (texto desde 2 mm): ábralo en AutoCAD y use Guardar como… DWG', 'ok'); }, 'primary small', 'AutoCAD abre el DXF directamente; con "Guardar como" queda en DWG'),
         UI.btn('Láminas 1100×750 (DXF)', () => { const r = dxfLaminas(R); U.download(App.fileBase() + ' - unifilar láminas.dxf', r.texto, 'application/dxf'); UI.toast('Diagrama completo en el modelo y ' + r.laminas + ' lámina(s) 1100 × 750 mm debajo, a escala ' + r.esc.toFixed(3) + ' con cajetín Sinergia', 'ok'); }, 'small', 'Reparte el diagrama en láminas de 1100 × 750 mm con el cajetín Sinergia'),
         UI.btn('Láminas 1100×750 (PDF)', () => { const n = pdfLaminas(R); UI.toast(n + ' lámina(s): en Imprimir elija Guardar como PDF, papel 1100 × 750 mm (o A0 horizontal), márgenes Ninguno y Gráficos de fondo', 'ok'); }, 'small', 'Imprime las láminas con cajetín: Guardar como PDF'),
+        UI.btn('Tablas a CAD', () => CadTablas.dialogo(R), 'small', 'Exporta las tablas de datos para actualizarlas en AutoCAD (bloques con atributos)'),
         UI.btn('Descargar SVG', () => { const s = document.querySelector('svg.unifilar'); if (s) U.download(App.fileBase() + ' - unifilar.svg', '<?xml version="1.0" encoding="UTF-8"?>' + s.outerHTML.replace(/ width="\d+"/, ' width="' + s.dataset.w + '"').replace(/ height="\d+"/, ' height="' + s.dataset.h + '"').replace('<svg', '<svg style="font-family:Arial;background:#fff"'), 'image/svg+xml'); }, 'small'),
         h('span', { class: 'zoom-u', title: 'Ctrl + rueda del ratón también acerca y aleja' },
           UI.btn('−', () => poner(zoomU / 1.25), 'small', 'Alejar'), etqZoom = h('span', { class: 'zoom-v' }, Math.round(zoomU * 100) + ' %'), UI.btn('+', () => poner(zoomU * 1.25), 'small', 'Acercar'),
@@ -546,5 +558,5 @@
     view.appendChild(h('div', { class: 'u-ley' }, h('span', null, h('i', { style: { background: '#c0392b' } }), '480 V'), h('span', null, h('i', { style: { background: '#1b7f4b' } }), '240 V'), h('span', null, h('i', { style: { background: '#0b5cab' } }), '208 V y menos'),
       h('span', null, '□ interruptor · ◎ transformador · G generador · ATS/MTS transferencia · Icc punto a punto (Bussmann) · ΔV acumulada desde la acometida · DXF con capas E-TABLERO, E-ALIMENTADOR, E-PROTECCION, E-TRAFO, E-EQUIPOS, E-TEXTO, E-TABLA')));
   };
-  window.Unifilar = { editarTrafo, dxf };
+  window.Unifilar = { editarTrafo, dxf, filasDatos };
 })();
