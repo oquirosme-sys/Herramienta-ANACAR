@@ -13,8 +13,7 @@
     ['AISLAMIENTO / COND.', 'AISLAMIENTO'], ['CANALIZACIÓN', 'CANALIZACION'], ['LONGITUD', 'LONGITUD'], ['VOLTAJE NOMINAL', 'V_NOMINAL'], ['VOLTAJE CALCULADO', 'V_CALCULADO'], ['% CAÍDA DE VOLTAJE', 'CAIDA'],
   ];
   const TAGS = FILAS.map(f => f[1]).filter(Boolean);
-  const CAPA = 'C-E-D.UNIFILAR';
-  const W1 = 54, W2 = 40, H = 3.6, TH = 2, SEP = 0, GAP = 20;   // mm: ancho de la columna de rótulos y de la de datos, alto de fila, alto del texto, separación entre bloques de datos y entre los rótulos y el primer bloque de datos
+    const W1 = 54, W2 = 40, H = 3.6, TH = 2, SEP = 0, GAP = 20;   // mm: ancho de la columna de rótulos y de la de datos, alto de fila, alto del texto, separación entre bloques de datos y entre los rótulos y el primer bloque de datos
 
   /** Texto a bytes de Windows-1252 (lo que lee AutoLISP de AutoCAD LT); lo que no cabe se escribe «?». */
   const ansi = t => { const s = String(t), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); b[i] = c < 256 ? c : 63; } return b; };
@@ -31,14 +30,14 @@
   function bloquesLsp() {
     const n = FILAS.length + 1, r = v => (Math.round(v * 1000) / 1000).toFixed(3);
     const lsa = t => String(t).replace(/[^\x20-\x7e]/g, c => '\\U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0'));
-    const c8 = '(cons 8 "' + CAPA + '")';
+    const c8 = '(cons 8 "0") (cons 62 256) (cons 6 "BYLAYER")';   // capa 0 y color/tipo de línea PorCapa: el bloque toma la capa y el color de donde se inserte
     const o = [
       '(defun anacar:ln (x1 y1 x2 y2) (entmake (list (quote (0 . "LINE")) ' + c8 + ' (list 10 x1 y1 0.0) (list 11 x2 y2 0.0))))',
-      '(defun anacar:tx (x y s) (entmake (list (quote (0 . "TEXT")) ' + c8 + ' (list 10 x y 0.0) (cons 40 ' + TH + '.0) (cons 1 s))))',
-      '(defun anacar:ad (x y tg) (entmake (list (quote (0 . "ATTDEF")) (quote (100 . "AcDbEntity")) ' + c8 + ' (quote (100 . "AcDbText")) (list 10 x y 0.0) (cons 40 ' + TH + '.0) (cons 1 "-") (quote (100 . "AcDbAttributeDefinition")) (cons 3 tg) (cons 2 tg) (quote (70 . 0)))))',
-      '(defun anacar:capa ()',
-      '  (if (null (tblsearch "LAYER" "' + CAPA + '"))',
-      '    (entmake (list (quote (0 . "LAYER")) (quote (100 . "AcDbSymbolTableRecord")) (quote (100 . "AcDbLayerTableRecord")) (cons 2 "' + CAPA + '") (quote (70 . 0)) (quote (62 . 7)) (quote (6 . "Continuous"))))))',
+      '(defun anacar:tx (x y s) (entmake (list (quote (0 . "TEXT")) ' + c8 + ' (list 10 x y 0.0) (cons 40 ' + TH + '.0) (cons 1 s) (cons 7 "CENTURY"))))',
+      '(defun anacar:ad (x y tg) (entmake (list (quote (0 . "ATTDEF")) (quote (100 . "AcDbEntity")) ' + c8 + ' (quote (100 . "AcDbText")) (list 10 x y 0.0) (cons 40 ' + TH + '.0) (cons 1 "-") (cons 7 "CENTURY") (quote (100 . "AcDbAttributeDefinition")) (cons 3 tg) (cons 2 tg) (quote (70 . 0)))))',
+      '(defun anacar:estilo ()',
+      '  (if (null (tblsearch "STYLE" "CENTURY"))',
+      '    (entmake (list (quote (0 . "STYLE")) (quote (100 . "AcDbSymbolTableRecord")) (quote (100 . "AcDbTextStyleTableRecord")) (cons 2 "CENTURY") (quote (70 . 0)) (quote (40 . 0.0)) (quote (41 . 1.0)) (quote (50 . 0.0)) (quote (71 . 0)) (quote (42 . 2.0)) (cons 3 "GOTHIC.TTF") (cons 4 "")))))',
       '(defun anacar:marco (w / i)',
       '  (setq i 0)',
       '  (while (<= i ' + n + ')',
@@ -47,14 +46,14 @@
       '  (anacar:ln 0.0 0.0 0.0 ' + r(-n * H) + ')',
       '  (anacar:ln w 0.0 w ' + r(-n * H) + '))',
       '(defun anacar:bloque-datos ()',
-      '  (anacar:capa)',
+      '  (anacar:estilo)',
       '  (entmake (list (quote (0 . "BLOCK")) (quote (2 . "ANACAR_DATOS")) (quote (70 . 2)) (list 10 0.0 0.0 0.0)))',
       '  (anacar:marco ' + r(W2) + ')',
     ];
     FILAS.forEach(([, tag], i) => { if (tag) o.push('  (anacar:ad 1.200 ' + r(-(i + 2) * H + 1) + ' "' + tag + '")'); });
     o.push('  (entmake (list (quote (0 . "ENDBLK"))))', '  (princ "\\nBloque ANACAR_DATOS creado."))',
       '(defun anacar:bloque-etiquetas ()',
-      '  (anacar:capa)',
+      '  (anacar:estilo)',
       '  (entmake (list (quote (0 . "BLOCK")) (quote (2 . "ANACAR_ETIQUETAS")) (quote (70 . 0)) (list 10 0.0 0.0 0.0)))',
       '  (anacar:marco ' + r(W1) + ')',
       '  (anacar:tx 1.200 ' + r(-H + 1) + ' "TABLA RESUMEN DEL TABLERO")');
