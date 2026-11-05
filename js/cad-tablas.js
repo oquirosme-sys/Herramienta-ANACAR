@@ -1,12 +1,12 @@
 /* Tablas de datos del unifilar para AutoCAD / AutoCAD LT, enlazadas por bloques con atributos (como el flujo de TagAcometida con ATTOUT/ATTIN, pero sin Excel).
-   Dos bloques, como se arma el diagrama en CAD: TABLA_ETIQUETAS (la columna de rótulos, una sola vez) y TABLA_DATOS (la columna de valores, uno por tablero, con atributos).
+   Dos bloques, como se arma el diagrama en CAD: ANACAR_ETIQUETAS (la columna de rótulos, una sola vez) y ANACAR_DATOS (la columna de valores, uno por tablero, con atributos).
    1. Una vez por proyecto se carga la rutina ANACAR-TABLAS.lsp (APPLOAD); ella crea los dos bloques en el dibujo si faltan.
    2. Cada vez que cambia el proyecto: ANACAR exporta el .txt de las tablas (con las casillas de los tableros que se quieren) y en CAD se corre ACTUALIZARTABLAS:
-      busca cada bloque TABLA_DATOS por el atributo NOMBRE (o por el nombre corto del tablero), actualiza sus valores y ofrece insertar los tableros nuevos. */
+      busca cada bloque ANACAR_DATOS por el atributo NOMBRE (o por el nombre corto del tablero), actualiza sus valores y ofrece insertar los tableros nuevos. */
 (function () {
   'use strict';
   const h = U.h;
-  /* filas base de la tabla (las 18 primeras de Unifilar.filasDatos): rótulo de TABLA_ETIQUETAS y etiqueta (tag) del atributo de TABLA_DATOS; '' = fila sin valor */
+  /* filas base de la tabla (las 18 primeras de Unifilar.filasDatos): rótulo de ANACAR_ETIQUETAS y etiqueta (tag) del atributo de ANACAR_DATOS; '' = fila sin valor */
   const FILAS = [
     ['EQUIPO', 'NOMBRE'], ['CORRIENTE CORTOCIRCUITO', 'ICC'], ['kVA TOTALES', 'KVA_TOTAL'], ['FACTOR DE DEMANDA', 'FACTOR_DEM'], ['kVA DEMANDADOS', 'KVA_DEM'], ['FACTOR DE POTENCIA', 'FP'],
     ['PROTECCIÓN DEL TABLERO', 'PROTECCION'], ['MODELO / SCCR', 'MODELO'], ['ACOMETIDA', ''], ['FASES', 'FASES'], ['NEUTRO', 'NEUTRO'], ['TIERRA', 'TIERRA'],
@@ -14,7 +14,7 @@
   ];
   const TAGS = FILAS.map(f => f[1]).filter(Boolean);
   const CAPA = 'C-E-D.UNIFILAR';
-  const W1 = 44, W2 = 44, H = 3.6, TH = 2, SEP = 10;   // mm: ancho de la columna de rótulos y de la de datos, alto de fila, alto del texto y separación entre bloques de datos
+  const W1 = 54, W2 = 50, H = 3.6, TH = 2, SEP = 10, GAP = 20;   // mm: ancho de la columna de rótulos y de la de datos, alto de fila, alto del texto, separación entre bloques de datos y entre los rótulos y el primer bloque de datos
 
   /** Texto a bytes de Windows-1252 (lo que lee AutoLISP de AutoCAD LT); lo que no cabe se escribe «?». */
   const ansi = t => { const s = String(t), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); b[i] = c < 256 ? c : 63; } return b; };
@@ -48,24 +48,24 @@
       '  (anacar:ln w 0.0 w ' + r(-n * H) + '))',
       '(defun anacar:bloque-datos ()',
       '  (anacar:capa)',
-      '  (entmake (list (quote (0 . "BLOCK")) (quote (2 . "TABLA_DATOS")) (quote (70 . 2)) (list 10 0.0 0.0 0.0)))',
+      '  (entmake (list (quote (0 . "BLOCK")) (quote (2 . "ANACAR_DATOS")) (quote (70 . 2)) (list 10 0.0 0.0 0.0)))',
       '  (anacar:marco ' + r(W2) + ')',
     ];
     FILAS.forEach(([, tag], i) => { if (tag) o.push('  (anacar:ad 1.200 ' + r(-(i + 2) * H + 1) + ' "' + tag + '")'); });
-    o.push('  (entmake (list (quote (0 . "ENDBLK"))))', '  (princ "\\nBloque TABLA_DATOS creado."))',
+    o.push('  (entmake (list (quote (0 . "ENDBLK"))))', '  (princ "\\nBloque ANACAR_DATOS creado."))',
       '(defun anacar:bloque-etiquetas ()',
       '  (anacar:capa)',
-      '  (entmake (list (quote (0 . "BLOCK")) (quote (2 . "TABLA_ETIQUETAS")) (quote (70 . 0)) (list 10 0.0 0.0 0.0)))',
+      '  (entmake (list (quote (0 . "BLOCK")) (quote (2 . "ANACAR_ETIQUETAS")) (quote (70 . 0)) (list 10 0.0 0.0 0.0)))',
       '  (anacar:marco ' + r(W1) + ')',
       '  (anacar:tx 1.200 ' + r(-H + 1) + ' "TABLA RESUMEN DEL TABLERO")');
     FILAS.forEach(([etq], i) => o.push('  (anacar:tx 1.200 ' + r(-(i + 2) * H + 1) + ' "' + lsa(etq) + '")'));
-    o.push('  (entmake (list (quote (0 . "ENDBLK"))))', '  (princ "\\nBloque TABLA_ETIQUETAS creado."))');
+    o.push('  (entmake (list (quote (0 . "ENDBLK"))))', '  (princ "\\nBloque ANACAR_ETIQUETAS creado."))');
     return o;
   }
 
   /* ---------- ANACAR-TABLAS.lsp (AutoCAD LT 2024 o más nuevo; solo funciones básicas de AutoLISP, sin vla-/vl-) ---------- */
   const LSP = [
-    ';;; ANACAR-TABLAS.lsp - actualiza los bloques TABLA_DATOS con el .txt que exporta ANACAR (Diagrama unifilar > Tablas a CAD).',
+    ';;; ANACAR-TABLAS.lsp - actualiza los bloques ANACAR_DATOS con el .txt que exporta ANACAR (Diagrama unifilar > Tablas a CAD).',
     ';;; Cargar una vez con APPLOAD. Comandos: ACTUALIZARTABLAS (actualiza e inserta los tableros nuevos) y TABLAETIQUETAS (inserta la columna de rotulos).',
     ';;; AutoCAD LT 2024 o mas nuevo.',
     '(defun anacar:campos (s / i n r ini)',
@@ -119,12 +119,12 @@
     '  res)',
     ...bloquesLsp(),
     '(defun c:TABLAETIQUETAS (/ pt old2)',
-    '  (if (null (tblsearch "BLOCK" "TABLA_ETIQUETAS")) (anacar:bloque-etiquetas))',
+    '  (if (null (tblsearch "BLOCK" "ANACAR_ETIQUETAS")) (anacar:bloque-etiquetas))',
     '  (setq pt (getpoint "\\nPunto de insercion de la columna de etiquetas (esquina superior izquierda): "))',
     '  (if pt',
     '    (progn',
     '      (setq old2 (getvar "OSMODE"))',
-    '      (command "_.-INSERT" "TABLA_ETIQUETAS" pt 1 1 0)',
+    '      (command "_.-INSERT" "ANACAR_ETIQUETAS" pt 1 1 0)',
     '      (setvar "OSMODE" old2)))',
     '  (princ))',
     '(defun c:ACTUALIZARTABLAS (/ ruta datos ss i en nom reg hechos vistos nuevos pt pt0 resp old1 old2 old3 e)',
@@ -143,7 +143,7 @@
     '              (setq i 0)',
     '              (while (< i (sslength ss))',
     '                (setq en (ssname ss i) i (1+ i))',
-    '                (if (= (strcase (cdr (assoc 2 (entget en)))) "TABLA_DATOS")',
+    '                (if (= (strcase (cdr (assoc 2 (entget en)))) "ANACAR_DATOS")',
     '                  (progn',
     '                    (setq nom (anacar:nombre en))',
     '                    (if nom',
@@ -168,17 +168,17 @@
     '                    (progn',
     '                      (setq pt0 pt old1 (getvar "ATTREQ") old2 (getvar "OSMODE") old3 (getvar "CMDECHO"))',
     '                      (setvar "ATTREQ" 0) (setvar "OSMODE" 0) (setvar "CMDECHO" 0)',
-    '                      (if (null (tblsearch "BLOCK" "TABLA_DATOS")) (anacar:bloque-datos))',
+    '                      (if (null (tblsearch "BLOCK" "ANACAR_DATOS")) (anacar:bloque-datos))',
     '                      (foreach reg nuevos',
-    '                        (command "_.-INSERT" "TABLA_DATOS" pt 1 1 0)',
+    '                        (command "_.-INSERT" "ANACAR_DATOS" pt 1 1 0)',
     '                        (setq e (entlast))',
     '                        (if (= (cdr (assoc 0 (entget e))) "SEQEND") (setq e (cdr (assoc -2 (entget e)))))',
     '                        (anacar:poner e reg)',
     '                        (setq pt (list (+ (car pt) ' + (W2 + SEP) + '.0) (cadr pt) 0.0)))',
-    '                      (if (null (ssget "_X" (quote ((0 . "INSERT") (2 . "TABLA_ETIQUETAS")))))',
+    '                      (if (null (ssget "_X" (quote ((0 . "INSERT") (2 . "ANACAR_ETIQUETAS")))))',
     '                        (progn',
-    '                          (if (null (tblsearch "BLOCK" "TABLA_ETIQUETAS")) (anacar:bloque-etiquetas))',
-    '                          (command "_.-INSERT" "TABLA_ETIQUETAS" (list (- (car pt0) ' + W1 + '.0) (cadr pt0) 0.0) 1 1 0)))',
+    '                          (if (null (tblsearch "BLOCK" "ANACAR_ETIQUETAS")) (anacar:bloque-etiquetas))',
+    '                          (command "_.-INSERT" "ANACAR_ETIQUETAS" (list (- (car pt0) ' + (W1 + GAP) + '.0) (cadr pt0) 0.0) 1 1 0)))',
     '                      (setvar "ATTREQ" old1) (setvar "OSMODE" old2) (setvar "CMDECHO" old3)',
     '                      (princ (strcat "\\nBloques insertados: " (itoa (length nuevos)) "."))))))))))))',
     '  (princ))',
@@ -195,11 +195,11 @@
     });
     const todos = v => () => { filas.forEach(l => { l.querySelector('input').checked = v; }); R.orden.forEach(r => { marcas[r.tab.id] = v; }); };
     UI.modal('Tablas del unifilar a AutoCAD', h('div', null,
-      h('p', { class: 'muted' }, 'Elija los tableros cuyas tablas quiere exportar. En CAD, ACTUALIZARTABLAS actualiza los bloques TABLA_DATOS (la columna de valores de cada tablero) por el nombre del tablero y ofrece insertar los que no existan; la columna de rótulos (TABLA_ETIQUETAS) va una sola vez.'),
+      h('p', { class: 'muted' }, 'Elija los tableros cuyas tablas quiere exportar. En CAD, ACTUALIZARTABLAS actualiza los bloques ANACAR_DATOS (la columna de valores de cada tablero) por el nombre del tablero y ofrece insertar los que no existan; la columna de rótulos (ANACAR_ETIQUETAS) va una sola vez.'),
       h('div', { class: 'toolbar' }, UI.btn('Marcar todos', todos(true), 'small'), UI.btn('Quitar todos', todos(false), 'small')),
       h('div', { style: 'max-height:260px;overflow:auto;margin:6px 0' }, filas),
       h('details', null, h('summary', null, 'Primera vez en un dibujo'),
-        h('ol', { class: 'muted' }, h('li', null, 'Bajar y cargar la rutina (APPLOAD): ANACAR-TABLAS.lsp.'), h('li', null, 'Correr ACTUALIZARTABLAS: crea los bloques que falten, inserta los tableros nuevos (con la columna de rótulos a la izquierda del primero) y actualiza los que ya existen. No hace falta insertar ningún archivo.'), h('li', null, 'TABLAETIQUETAS inserta otra columna de rótulos donde la necesite.')),
+        h('ol', { class: 'muted' }, h('li', null, 'Bajar y cargar la rutina (APPLOAD): ANACAR-TABLAS.lsp.'), h('li', null, 'Correr ACTUALIZARTABLAS: crea los bloques que falten, inserta los tableros nuevos (con la columna de rótulos una sola vez, separada a la izquierda del primero) y actualiza los que ya existen. No hace falta insertar ningún archivo.'), h('li', null, 'TABLAETIQUETAS inserta otra columna de rótulos donde la necesite.')),
         h('div', { class: 'toolbar' }, UI.btn('Rutina ANACAR-TABLAS.lsp', () => U.download('ANACAR-TABLAS.lsp', LSP, 'text/plain'), 'small')))), [
       { label: 'Cerrar' },
       { label: 'Exportar tablas (.txt)', cls: 'primary', onclick: () => {
