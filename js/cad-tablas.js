@@ -14,7 +14,7 @@
   ];
   const TAGS = FILAS.map(f => f[1]).filter(Boolean);
   const CAPA = 'C-E-D.UNIFILAR';
-  const W1 = 54, W2 = 40, H = 3.6, TH = 2, SEP = 10, GAP = 20;   // mm: ancho de la columna de rótulos y de la de datos, alto de fila, alto del texto, separación entre bloques de datos y entre los rótulos y el primer bloque de datos
+  const W1 = 54, W2 = 40, H = 3.6, TH = 2, SEP = 0, GAP = 20;   // mm: ancho de la columna de rótulos y de la de datos, alto de fila, alto del texto, separación entre bloques de datos y entre los rótulos y el primer bloque de datos
 
   /** Texto a bytes de Windows-1252 (lo que lee AutoLISP de AutoCAD LT); lo que no cabe se escribe «?». */
   const ansi = t => { const s = String(t), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); b[i] = c < 256 ? c : 63; } return b; };
