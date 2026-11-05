@@ -374,13 +374,15 @@
     const hijoMan = c.tableroHijoId ? MAN[c.id] : null;        // acometida del tablero derivado, si el ingeniero la fijó a mano
     let AL = AF ? calibre(AF * AJ / AI, mat) : '';
     if (AL && AI === 1) AL = cal4D(AL, AF, mat);              // 240.4(D)
+    const calFijo = AF && calStr(c.calibreFijo) ? calStr(c.calibreFijo) : '';   // calibre escrito a mano (p. ej. el del Excel importado)
+    if (calFijo) AL = calFijo;
     if (c.tableroHijoId) AL = maxCal(AL, CAL_MIN_FASE);       // alimentador de un tablero derivado: mínimo 8 AWG
     if (hijoMan && calStr(hijoMan.calFases)) AL = calStr(hijoMan.calFases);
     const pre = AI === 1 ? (P === 3 ? '3#' : (O >= 208 && O <= 240 ? '2#' : ' ')) : AI + 'x' + (P === 3 ? '3#' : (O >= 208 && O <= 240 ? '2#' : ' '));
     const pre2 = AI === 1 ? ' ' : AI + 'x';
     let AN = Q === 0 ? ' ' : (O >= 208 && P === 3 && Q === 4) ? AL : (P === 3 && Q === 3) ? ' ' : (O >= 208 && P === 1 && Q === 3) ? ' ' : AL;
     if (hijoMan && calStr(hijoMan.calNeutro) && AN !== ' ') AN = calStr(hijoMan.calNeutro);
-    let AP = AF ? tierraDe(AF, AL, AI, mat, propAum(AF, AJ, AI, mat)) : '';
+    let AP = AF ? tierraDe(AF, AL, AI, mat, calFijo ? Math.max(1, areaCal(AL) / (areaCal(calibre(AF / AI, mat)) || 1)) : propAum(AF, AJ, AI, mat)) : '';
     if (c.tableroHijoId && AP) AP = maxCal(AP, CAL_MIN_TIERRA);   // tierra de un alimentador: mínimo 10 AWG
     if (hijoMan && calStr(hijoMan.calTierra)) AP = calStr(hijoMan.calTierra);
     const AR = AL ? conduit(AL, mat, ais) : '';

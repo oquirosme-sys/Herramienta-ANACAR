@@ -60,13 +60,22 @@
     const rRes = buscar('Tablero / Equipo', rAcom < 0 ? ultima : rAcom), rTub = rRes < 0 ? -1 : rRes + 2;
     const rTot = buscar('kVA Conectados totales', ultima), rFd = buscar('Factor demanda', ultima), rDv = buscar('Factor diversidad', ultima), rDm = buscar('kVA Demandados', ultima), rTd = buscar('Total kVA Demandados', ultima);
     let rCab = -1; for (let i = ultima; i < fin; i++) if (txt(R(i)[ci('D')]) === 'ID' && /ILUMINACI/i.test(txt(R(i)[ci('E')]))) { rCab = i; break; }
-    const nFases = num(R(r0 + 1)[ci('G')]) || 3;
+    // «Fases» = 1 en un tablero de 120/240 V no dice cuántas fases hay (el Excel lo usa para dividir el voltaje entre 2): se deduce de las fases con carga de los circuitos
+    // (A, B y C → trifásico 120/240 de 4 hilos; solo A y B → monofásico de 3 hilos con dos fases)
+    let nFases = num(R(r0 + 1)[ci('G')]) || 3;
+    if (nFases === 1 && num(R(r0 + 1)[ci('E')]) >= 208) {
+      const usa = [false, false, false];
+      circ.forEach(i => { const f = R(i); if (num(f[ci('F')]) > 0) ['O', 'P', 'Q'].forEach((c, k) => { if (num(f[ci(c)]) > 0) usa[k] = true; }); });
+      nFases = usa[2] ? 3 : usa[0] && usa[1] ? 2 : 1;
+    }
     // polos de cada circuito: la fila no trae polos, solo un número correlativo; se asignan según las fases con carga (A, B, C)
     const usados = new Set(), polos = {};
     const fasePolo = p => { const kk = Math.floor((p - 1) / 2); return nFases === 3 ? kk % 3 : nFases === 2 ? kk % 2 : 0; };
     circ.forEach(i => {
       const f = R(i); if (!(num(f[ci('F')]) > 0)) return;
-      const np = Math.max(1, Math.min(3, num(f[ci('J')]) || 1)), ph = [num(f[ci('O')]), num(f[ci('P')]), num(f[ci('Q')])].map(x => x > 0), con = [0, 1, 2].filter(x => ph[x]);
+      const ph = [num(f[ci('O')]), num(f[ci('P')]), num(f[ci('Q')])].map(x => x > 0), con = [0, 1, 2].filter(x => ph[x]);
+      // polos: la columna «Fases» del circuito no basta (en los tableros monofásicos de 240 V trae 1 aunque la carga esté en dos fases); también cuentan las fases con carga y el voltaje del circuito
+      const np = Math.max(1, Math.min(3, Math.max(num(f[ci('J')]) || 1, con.length, nFases !== 3 && num(f[ci('I')]) >= 208 ? 2 : 1)));
       const base = con.length ? con[0] : (num(f[2]) - 1) % 3;
       let sel = null;
       if (nFases !== 3) { for (let p = 1; !sel && p < 200; p++) { const l = []; for (let q = 0; q < np; q++) l.push(p + 2 * q); if (l.every(x => !usados.has(x))) sel = l; } }
@@ -80,6 +89,7 @@
       sel.forEach(x => usados.add(x)); polos[i] = sel;
     });
     const resuelve = (rel, c) => {   // → { i: fila (0-based), col: letra } o { valor }
+      if (rel === 10 && c === 'L') return { valor: nFases };
       if (rel === 10) return MAP_ENC[c] ? { i: r0 + 1, col: MAP_ENC[c] } : null;
       if (rel === 11) return MAP_CAT[c] ? { i: r0 + 2, col: MAP_CAT[c] } : null;
       if (rel >= 16 && rel <= 115) {
@@ -116,6 +126,8 @@
     if (!todos.length) throw new Error('No se encontraron tableros en la hoja ANACAR.');
     const esTab = b => /^TABLERO$/i.test(b.prefijo);
     const cl = x => String(x || '').toUpperCase().split(' ').filter(Boolean).join(' ');   // nombre sin diferencias de mayúsculas ni espacios
+    // dos bloques con el mismo nombre (una copia del tablero): el segundo se importa como «NOMBRE (2)» para que no choquen
+    const repetidos = []; { const vistos = {}; todos.forEach(b => { const k = cl(b.nombre); vistos[k] = (vistos[k] || 0) + 1; if (vistos[k] > 1) { const nuevo = b.nombre + ' (' + vistos[k] + ')'; repetidos.push('«' + b.nombre + '» (bloque en la fila ' + (b.off + 9) + ') se importó como «' + nuevo + '»'); b.nombre = nuevo; } }); }
     const porNombre = {}; todos.forEach(b => { porNombre[cl(b.nombre)] = b; });
     // circuitos de un bloque (fila con detalle de carga y posición) y a qué bloque alimenta cada uno (descripción «TABLERO <nombre>»)
     const filas = b => { const out = []; for (let rel = 16; rel <= 115; rel++) if (num(b.v(rel, 'K')) > 0 && ['D', 'F', 'H'].some(c => num(b.v(rel, c)) > 0)) out.push(rel); return out; };
@@ -145,14 +157,17 @@
     const vacio = b => nC(b) === 0 && !(padresDe[cl(b.nombre)] || []).length && !equipoSet.has(b);   // bloque sin circuitos al que nadie alimenta (p. ej. un bloque en blanco)
     const equipos = todos.filter(b => equipoSet.has(b) || !esTab(b) || vacio(b));
     const tabs = todos.filter(b => !equipos.includes(b));
-    const aviso = [];
+    const aviso = repetidos.length ? ['Hay tableros con el mismo nombre en el Excel: ' + repetidos.join('; ') + '.'] : [];
     const mapa = {};   // nombre del bloque → tablero de la herramienta
 
     tabs.forEach(b => {
-      const sist = txt(b.v(10, 'V')) || '120/208', fases = num(b.v(10, 'L')) || 3;
+      const vNom = num(b.v(10, 'J')), fases = num(b.v(10, 'L')) || 3;
+      // sistema: el texto «Voltaje Sistema» del Excel (a veces quedó el de la plantilla, 120/208, aunque el tablero sea de 240 V): si no coincide con el voltaje nominal se deduce de él
+      const sistTxt = txt(b.v(10, 'V')), vmaxTxt = Math.max(0, ...sistTxt.split('/').map(Number).filter(x => x));
+      const sist = sistTxt && (!vNom || vmaxTxt === vNom) ? sistTxt : ({ 208: '120/208', 240: '120/240', 220: '120/220', 480: '277/480', 400: '230/400' }[vNom] || sistTxt || '120/208');
       const t = {
         id: U.uid(), prefijo: 'TABLERO', nombre: b.nombre, tipo: fases === 3 ? '3F' : '1F', sistema: sist, padreId: '', conectadoA: txt(b.v(10, 'P')), circuitos: [],
-        voltaje: num(b.v(10, 'J')) || 208, fases, hilos: num(b.v(10, 'M')) || (fases === 3 ? 4 : 3), reserva: num(b.v(10, 'O')), longitud: num(b.v(10, 'R')),
+        voltaje: num(b.v(10, 'J')) || 208, fases, hilos: fases === 2 ? 3 : num(b.v(10, 'M')) || (fases === 3 ? 4 : 3), reserva: num(b.v(10, 'O')), longitud: num(b.v(10, 'R')),
         montaje: txt(b.v(11, 'BP')) || 'Superficial', marca: txt(b.v(11, 'BK')) || undefined,
       };
       if (txt(b.v(10, 'T')) !== '') t.iccManual = num(b.v(10, 'T'));
@@ -176,8 +191,9 @@
         const det = num(b.v(rel, 'K')); if (det <= 0) continue;
         const polos = ['D', 'F', 'H'].map(c => num(b.v(rel, c))).filter(x => x > 0);
         if (!polos.length) continue;
+        // distribución antigua: la columna «Aumento de calibre» no entra en la fórmula del calibre (es informativa), así que no se toma como factor
         const c = { id: U.uid(), polos, detalleId: det, descripcion: '', kva: 0, longitud: num(b.v(rel, 'M')), material: txt(b.v(rel, 'AG')) || 'CU', aislamiento: txt(b.v(rel, 'AH')) || 'THHN',
-          mult: num(b.v(rel, 'AD')) || '', paralelos: '', aumento: num(b.v(rel, 'AJ')) || 1, breakerId: '', prot: '', tableroHijoId: '', _rel: rel };
+          mult: num(b.v(rel, 'AD')) || '', paralelos: '', aumento: b.version === '2024' ? 1 : num(b.v(rel, 'AJ')) || 1, breakerId: '', prot: '', tableroHijoId: '', _rel: rel };
         const desc = txt(b.v(rel, 'I'));
         c._descExcel = desc;
         if (!b.f(rel, 'I')) c.descripcion = desc;
@@ -295,7 +311,7 @@
       if (!e._ok && tipoWeb[e.tipo]) { e.tipo = tipoWeb[e.tipo]; e._ok = true; }
       if (memo[id] === undefined) {
         // mismo número y descripción → es el mismo detalle (se actualiza si el Excel cambió sus datos); si no, mismo texto, voltaje, fases y tipo; si no, se agrega
-        let d = C.detallesCarga.find(x => x.id === id && norm(x.descripcion) === norm(e.desc)) || C.detallesCarga.find(x => norm(x.descripcion) === norm(e.desc) && Number(x.v) === e.v && Number(x.fases) === e.fases && x.tipo === e.tipo);
+        let d = C.detallesCarga.find(x => x.id === id && norm(x.descripcion) === norm(e.desc) && Number(x.v) === e.v && Number(x.fases) === e.fases) || C.detallesCarga.find(x => norm(x.descripcion) === norm(e.desc) && Number(x.v) === e.v && Number(x.fases) === e.fases && x.tipo === e.tipo);
         if (!d) {
           d = { id: Math.max(0, ...C.detallesCarga.map(x => x.id)) + 1, tipo: e.tipo, descripcion: e.desc, v: e.v, fases: e.fases, hilos: e.hilos, fd: e.fd, fdiv: diversidad(e.fdiv).web || 1, fp: e.fp, continua: false, mult: 1.25, fundamento: 'Importado de un Excel de ANACAR', claves: '' };
           C.detallesCarga.push(d); nuevos.push(e.desc);
@@ -380,6 +396,8 @@
     R = Calc.proyecto(P, Store.catalog);
     conciliarAlimentadores(res, R, nota, 'cable');
     R = Calc.proyecto(P, Store.catalog);
+    conciliarCalibres(res, R, nota);
+    R = Calc.proyecto(P, Store.catalog);
     conciliarBreakers(res, R, nota);
     R = Calc.proyecto(P, Store.catalog);
     const dif = comparar(res, R);
@@ -424,6 +442,21 @@
       });
     });
     if (n) nota.push('Protección de ' + n + ' circuito(s) ramal(es) fijada con el valor del Excel (' + ej.join('; ') + (n > ej.length ? '; …' : '') + ').');
+  }
+
+  /** Calibre de las fases de cada ramal: si el Excel lo trae escrito a mano (celda sin fórmula) y la herramienta calcula otro, se respeta el del Excel. */
+  function conciliarCalibres(res, R, nota) {
+    let n = 0; const ej = [];
+    res.tabs.forEach(t => {
+      const b = t._bloque, r = R.res[t.id]; if (!r) return;
+      t.circuitos.forEach(c => {
+        if (c.tableroHijoId) return;
+        const x = r.rows.find(z => z.c === c); if (!x) return;
+        const e = txt(b.v(c._rel, 'AL'));
+        if (e && !b.f(c._rel, 'AL') && x.AL && x.AL !== e) { c.calibreFijo = e; n++; if (ej.length < 5) ej.push(nombreTab(t) + ' [' + c.polos.join(',') + '] ' + e + ' AWG'); }
+      });
+    });
+    if (n) nota.push('Calibre de ' + n + ' circuito(s) ramal(es) fijado con el escrito a mano en el Excel (' + ej.join('; ') + (n > ej.length ? '; …' : '') + ').');
   }
 
   /** Interruptores: se compara el que eligió Excel con el de la herramienta (polos, unidad, kA); si no coinciden se fija el del Excel (del catálogo o escrito a mano). */
