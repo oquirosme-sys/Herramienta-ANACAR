@@ -55,6 +55,31 @@
   }
 
   /* ---------- ANACAR-TABLAS.lsp (AutoCAD LT 2024 o más nuevo; solo funciones básicas de AutoLISP, sin vla-/vl-) ---------- */
+  /** Líneas de AutoLISP que crean el bloque TABLA_TABLERO en el dibujo (entmake), con la misma geometría de TABLA_TABLERO.dxf: así no hay que insertar ningún archivo. */
+  function bloqueLsp() {
+    const W1 = 44, W2 = 36, H = 3.6, TH = 2, n = FILAS.length + 1, r = v => (Math.round(v * 1000) / 1000).toFixed(3);
+    const lsa = t => String(t).replace(/[^\x20-\x7e]/g, c => '\\U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0'));
+    const o = [
+      '(defun anacar:ln (x1 y1 x2 y2) (entmake (list (quote (0 . "LINE")) (cons 8 "' + CAPA + '") (list 10 x1 y1 0.0) (list 11 x2 y2 0.0))))',
+      '(defun anacar:tx (x y s) (entmake (list (quote (0 . "TEXT")) (cons 8 "' + CAPA + '") (list 10 x y 0.0) (cons 40 ' + TH + '.0) (cons 1 s))))',
+      '(defun anacar:ad (x y tg) (entmake (list (quote (0 . "ATTDEF")) (quote (100 . "AcDbEntity")) (cons 8 "' + CAPA + '") (quote (100 . "AcDbText")) (list 10 x y 0.0) (cons 40 ' + TH + '.0) (cons 1 "-") (quote (100 . "AcDbAttributeDefinition")) (cons 3 tg) (cons 2 tg) (quote (70 . 0)))))',
+      '(defun anacar:bloque ()',
+      '  (if (null (tblsearch "LAYER" "' + CAPA + '"))',
+      '    (entmake (list (quote (0 . "LAYER")) (quote (100 . "AcDbSymbolTableRecord")) (quote (100 . "AcDbLayerTableRecord")) (cons 2 "' + CAPA + '") (quote (70 . 0)) (quote (62 . 7)) (quote (6 . "Continuous")))))',
+      '  (entmake (list (quote (0 . "BLOCK")) (quote (2 . "TABLA_TABLERO")) (quote (70 . 2)) (list 10 0.0 0.0 0.0)))',
+    ];
+    for (let i = 0; i <= n; i++) o.push('  (anacar:ln 0.0 ' + r(-i * H) + ' ' + r(W1 + W2) + ' ' + r(-i * H) + ')');
+    [0, W1, W1 + W2].forEach(x => o.push('  (anacar:ln ' + r(x) + ' 0.0 ' + r(x) + ' ' + r(-n * H) + ')'));
+    o.push('  (anacar:tx 1.200 ' + r(-H + 1) + ' "TABLA RESUMEN DEL TABLERO")');
+    FILAS.forEach(([etq, tag], i) => {
+      const y = r(-(i + 2) * H + 1);
+      o.push('  (anacar:tx 1.200 ' + y + ' "' + lsa(etq) + '")');
+      if (tag) o.push('  (anacar:ad ' + r(W1 + 1.2) + ' ' + y + ' "' + tag + '")');
+    });
+    o.push('  (entmake (list (quote (0 . "ENDBLK"))))', '  (princ "\\nBloque TABLA_TABLERO creado."))');
+    return o;
+  }
+
   const LSP = [
     ';;; ANACAR-TABLAS.lsp - actualiza los bloques TABLA_TABLERO con el .txt que exporta ANACAR (Diagrama unifilar > Tablas a CAD).',
     ';;; Cargar una vez con APPLOAD. Comando: ACTUALIZARTABLAS (AutoCAD LT 2024 o mas nuevo).',
@@ -104,6 +129,7 @@
     '  (foreach r datos',
     '    (if (and (null res) (= (strcase (cdr (assoc "NOMBRE" r))) (strcase nom))) (setq res r)))',
     '  res)',
+    ...bloqueLsp(),
     '(defun c:ACTUALIZARTABLAS (/ ruta datos ss i en nom reg hechos vistos nuevos pt resp old1 old2 old3 e)',
     '  (setq ruta (getfiled "Tablas exportadas por ANACAR" "" "txt" 4))',
     '  (if (null ruta)',
@@ -134,9 +160,8 @@
     '              (setq nuevos (cons reg nuevos))))',
     '          (setq nuevos (reverse nuevos))',
     '          (princ (strcat "\\nBloques actualizados: " (itoa hechos) ". Tableros del archivo sin bloque en el dibujo: " (itoa (length nuevos)) "."))',
+    '          (if (and nuevos (null (tblsearch "BLOCK" "TABLA_TABLERO"))) (anacar:bloque))',
     '          (cond',
-    '            ((and nuevos (null (tblsearch "BLOCK" "TABLA_TABLERO")))',
-    '              (princ "\\nFalta el bloque TABLA_TABLERO: inserte TABLA_TABLERO.dxf una vez y repita el comando."))',
     '            (nuevos',
     '              (initget "Si No")',
     '              (setq resp (getkword "\\nInsertar los bloques de los tableros nuevos? [Si/No] <Si>: "))',
@@ -173,7 +198,7 @@
       h('div', { class: 'toolbar' }, UI.btn('Marcar todos', todos(true), 'small'), UI.btn('Quitar todos', todos(false), 'small')),
       h('div', { style: 'max-height:260px;overflow:auto;margin:6px 0' }, filas),
       h('details', null, h('summary', null, 'Primera vez en un dibujo'),
-        h('ol', { class: 'muted' }, h('li', null, 'Bajar y cargar la rutina (APPLOAD): ANACAR-TABLAS.lsp.'), h('li', null, 'Insertar una vez el bloque TABLA_TABLERO.dxf (comando INSERT › Examinar). Copiarlo para cada tablero o dejar que ACTUALIZARTABLAS lo inserte.')),
+        h('ol', { class: 'muted' }, h('li', null, 'Bajar y cargar la rutina (APPLOAD): ANACAR-TABLAS.lsp.'), h('li', null, 'Correr ACTUALIZARTABLAS: si el dibujo no tiene el bloque TABLA_TABLERO, la rutina lo crea y, si hay tableros sin bloque, ofrece insertarlos. No hace falta insertar ningún archivo.'), h('li', { class: 'muted' }, 'Opcional: TABLA_TABLERO.dxf es el mismo bloque; se abre con OPEN (tipo de archivo DXF), se guarda como DWG y se inserta con INSERT.')),
         h('div', { class: 'toolbar' },
           UI.btn('Bloque TABLA_TABLERO.dxf', () => U.download('TABLA_TABLERO.dxf', bloqueDxf(), 'application/dxf'), 'small'),
           UI.btn('Rutina ANACAR-TABLAS.lsp', () => U.download('ANACAR-TABLAS.lsp', LSP, 'text/plain'), 'small')))), [
