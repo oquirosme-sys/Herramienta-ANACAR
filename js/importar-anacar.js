@@ -161,7 +161,14 @@
     const mapa = {};   // nombre del bloque → tablero de la herramienta
 
     tabs.forEach(b => {
-      const vNom = num(b.v(10, 'J')), fases = num(b.v(10, 'L')) || 3;
+      const vNom = num(b.v(10, 'J'));
+      let fases = num(b.v(10, 'L')) || 3;
+      // tablero monofásico de 120/240 V con «Fases = 1»: el Excel reparte la carga en las fases A y B (240 V: mitad y mitad; 120 V: según la posición); la herramienta lo trata como 2 fases
+      if (fases === 1 && vNom >= 208 && b.version !== '2024') {
+        const usa = [false, false, false];
+        for (let rel = 16; rel <= 115; rel++) ['U', 'V', 'W'].forEach((c, k) => { if (num(b.v(rel, c)) > 0) usa[k] = true; });
+        fases = usa[2] ? 3 : usa[1] ? 2 : 1;
+      }
       // sistema: el texto «Voltaje Sistema» del Excel (a veces quedó el de la plantilla, 120/208, aunque el tablero sea de 240 V): si no coincide con el voltaje nominal se deduce de él
       const sistTxt = txt(b.v(10, 'V')), vmaxTxt = Math.max(0, ...sistTxt.split('/').map(Number).filter(x => x));
       const sist = sistTxt && (!vNom || vmaxTxt === vNom) ? sistTxt : ({ 208: '120/208', 240: '120/240', 220: '120/220', 480: '277/480', 400: '230/400' }[vNom] || sistTxt || '120/208');
