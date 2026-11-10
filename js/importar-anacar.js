@@ -388,7 +388,7 @@
 
   /** Importa el archivo: crea el proyecto en la herramienta y devuelve el reporte. */
   async function importar(buf, nombreArchivo) {
-    const sheets = await XlsxRead.read(buf, { hojas: ['ANACAR', 'DCARGAS', 'ORDEN TABLEROS'] });
+    const sheets = await XlsxRead.read(buf, { hojas: ['ANACAR', 'DCARGAS', 'ORDEN TABLEROS', 'TABLEROS 3F', 'TABLEROS 1F'] });
     const res = construir(sheets, nombreArchivo);
     Store.newProject();
     const P = Store.project; P.nombre = res.proy.nombre;
@@ -412,7 +412,8 @@
     if (noCumple.length) nota.push('Según la herramienta, ' + noCumple.length + ' alimentador(es) del Excel no cumplen la ampacidad corregida por temperatura y agrupamiento (310.15): ' + noCumple.join(', ') + '. Se conservó el cableado del Excel; revise el aviso en la memoria de cada tablero.');
     res.tabs.forEach(t => { delete t._bloque; delete t._cat; delete t._spdId; delete t._padreFijo; t.circuitos.forEach(c => { delete c._rel; delete c._descExcel; delete c._kvaF; delete c._jConst; delete c._jVal; }); });
     Store.save();
-    return { tableros: res.tabs.length, circuitos: res.tabs.reduce((a, t) => a + t.circuitos.length, 0), equipos: res.equipos.map(e => e.nombre), aviso: res.aviso.concat(nota), dif };
+    let rev = null; try { if (g.RevisorAnacar) rev = g.RevisorAnacar.revisar(sheets, P, Calc.proyecto(P, Store.catalog), nombreArchivo); } catch (e) { rev = null; }   // revisión contra las pestañas 3F / 1F (no cambia el proyecto)
+    return { rev, tableros: res.tabs.length, circuitos: res.tabs.reduce((a, t) => a + t.circuitos.length, 0), equipos: res.equipos.map(e => e.nombre), aviso: res.aviso.concat(nota), dif };
   }
 
   /** Alimentador de cada tablero: se respeta lo que dejó el Excel (protección y calibres). Si la herramienta calcula otra cosa se fija el valor del Excel;

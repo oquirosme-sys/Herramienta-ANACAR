@@ -59,6 +59,7 @@
         UI.btn('Proyectos guardados…', () => App.proyectosGuardados(), 'ghost'),
         UI.btn('Abrir proyecto (.json)…', async () => { const f = await UI.pickFile('.json,application/json'); if (!f) return; try { Store.importProject(await UI.readText(f)); App.render(); UI.toast('Proyecto abierto', 'ok'); } catch (e) { UI.alert(e.message); } }, 'ghost'),
         UI.btn('Importar proyecto de ANACAR en Excel (.xlsm)…', () => App.importarExcel(), 'ghost'),
+        UI.btn('Revisar el proyecto contra las pestañas 3F / 1F de un Excel…', () => App.revisarExcel(), 'ghost'),
         UI.btn('Guardar proyecto (.json)', () => U.download(App.fileBase() + '.json', Store.exportProject(), 'application/json'), 'ghost'),
         h('hr'),
         UI.btn('Exportar a Excel (tablas resumen y tableros)', () => ExportExcel.download(App.R), 'ghost'),
@@ -83,9 +84,14 @@
         UI.modal('Proyecto importado: ' + Store.project.nombre, h('div', null,
           h('p', null, rep.tableros + ' tablero(s) y ' + rep.circuitos + ' circuito(s) copiados. Cargas, longitudes, posiciones, protecciones, calibres, interruptores y tableros se tomaron del Excel; caídas de voltaje, balanceo, avisos y cortocircuito los recalculó la herramienta.'),
           rep.aviso.length ? h('div', null, h('h4', null, 'Para revisar (' + rep.aviso.length + ')'), h('ul', null, rep.aviso.map(a => h('li', null, a)))) : null,
-          h('h4', null, 'Comparación con el Excel' + (rep.dif.length ? ' (' + otras.length + ' diferencia(s) de cálculo' + (otras.length > 80 ? ', se muestran 80' : '') + (cv.length ? ' y ' + cv.length + ' de caída de voltaje' : '') + ')' : '')), tabla), [{ label: 'Cerrar', cls: 'primary' }]);
+          h('h4', null, 'Comparación con el Excel' + (rep.dif.length ? ' (' + otras.length + ' diferencia(s) de cálculo' + (otras.length > 80 ? ', se muestran 80' : '') + (cv.length ? ' y ' + cv.length + ' de caída de voltaje' : '') + ')' : '')), tabla), [rep.rev && rep.rev.hayFichas ? { label: 'Revisión contra pestañas 3F / 1F (' + rep.rev.resumen.revisar + ' para revisar)', onclick: () => { RevisorAnacar.mostrar(rep.rev); return false; } } : null, { label: 'Cerrar', cls: 'primary' }].filter(Boolean));
         App.go('proyecto');
       } catch (e) { UI.alert('No se pudo importar: ' + e.message); }
+    },
+    /** Revisa los tableros del proyecto abierto contra las fichas de las pestañas 3F / 1F de un Excel de ANACAR. */
+    async revisarExcel() {
+      const f = await UI.pickFile('.xlsm,.xlsx'); if (!f) return;
+      try { UI.toast('Leyendo ' + f.name + '…', 'ok'); await new Promise(r => setTimeout(r, 60)); RevisorAnacar.mostrar(await RevisorAnacar.revisarArchivo(await UI.readBuffer(f), f.name)); } catch (e) { UI.alert('No se pudo revisar: ' + e.message); }
     },
     /** Lista de proyectos guardados en este navegador (abrir o eliminar). */
     proyectosGuardados(contenedor) {
